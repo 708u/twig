@@ -5,4 +5,4 @@ out/
 .claude/settings.local.json
 
 # gwt local config
-.gwt.local.toml
+.gwt/settings.local.toml

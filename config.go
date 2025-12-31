@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	configFileName      = ".gwt.toml"
-	localConfigFileName = ".gwt.local.toml"
+	configDir           = ".gwt"
+	configFileName      = "settings.toml"
+	localConfigFileName = "settings.local.toml"
 )
 
 type Config struct {
@@ -20,7 +21,7 @@ func LoadConfig(dir string) (*Config, error) {
 	seen := make(map[string]bool)
 	var includes []string
 
-	projectConfig, err := loadConfigFile(filepath.Join(dir, configFileName))
+	projectConfig, err := loadConfigFile(filepath.Join(dir, configDir, configFileName))
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +34,7 @@ func LoadConfig(dir string) (*Config, error) {
 		}
 	}
 
-	localConfig, err := loadConfigFile(filepath.Join(dir, localConfigFileName))
+	localConfig, err := loadConfigFile(filepath.Join(dir, configDir, localConfigFileName))
 	if err != nil {
 		return nil, err
 	}
