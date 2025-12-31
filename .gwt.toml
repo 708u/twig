@@ -1,0 +1,4 @@
+# symlink targets
+include = [
+    "out",
+]

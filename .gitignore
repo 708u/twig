@@ -3,3 +3,6 @@ out/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# gwt local config
+.gwt.local.toml
