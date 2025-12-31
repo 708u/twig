@@ -3,6 +3,10 @@ description: git commit & push
 allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*)
 ---
 
+# commit-push
+
+変更内容をConventional Commits形式でコミットし、リモートへプッシュする。
+
 ## コンテキスト
 
 ### 現在のgit status
@@ -28,7 +32,7 @@ allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git a
 ### コミット
 
 1. 変更内容を分析し、適切なファイルをステージング
-2. Conventional Commits形式（feat:, fix:, refactor:, docs:, test:, chore:）でコミットメッセージを作成
+2. Conventional Commits形式でコミットメッセージを作成
 3. コミット実行
 
 ### プッシュ
