@@ -17,7 +17,7 @@ var addCmd = &cobra.Command{
 	Short: "Create a new worktree with a new branch",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return gwt.Add(args[0])
+		return gwt.NewAddCommand().Run(args[0])
 	},
 }
 

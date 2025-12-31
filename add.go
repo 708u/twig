@@ -8,8 +8,19 @@ import (
 	"strings"
 )
 
-func Add(name string) error {
-	cwd, err := os.Getwd()
+// AddCommand creates git worktrees with symlinks.
+type AddCommand struct {
+	FS FileSystem
+}
+
+// NewAddCommand creates a new AddCommand with default OS filesystem.
+func NewAddCommand() *AddCommand {
+	return &AddCommand{FS: osFS{}}
+}
+
+// Run creates a new worktree for the given branch name.
+func (c *AddCommand) Run(name string) error {
+	cwd, err := c.FS.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
@@ -22,11 +33,11 @@ func Add(name string) error {
 	dirName := strings.ReplaceAll(name, "/", "-")
 	worktreePath := filepath.Join(cwd, "..", dirName)
 
-	if err := createWorktree(name, worktreePath); err != nil {
+	if err := c.createWorktree(name, worktreePath); err != nil {
 		return err
 	}
 
-	if err := createSymlinks(cwd, worktreePath, config.Include); err != nil {
+	if err := c.createSymlinks(cwd, worktreePath, config.Include); err != nil {
 		return err
 	}
 
@@ -34,8 +45,8 @@ func Add(name string) error {
 	return nil
 }
 
-func createWorktree(branch, path string) error {
-	if _, err := os.Stat(path); err == nil {
+func (c *AddCommand) createWorktree(branch, path string) error {
+	if _, err := c.FS.Stat(path); err == nil {
 		return fmt.Errorf("directory already exists: %s", path)
 	}
 
@@ -80,17 +91,17 @@ func branchInUse(name string) bool {
 	return false
 }
 
-func createSymlinks(srcDir, dstDir string, targets []string) error {
+func (c *AddCommand) createSymlinks(srcDir, dstDir string, targets []string) error {
 	for _, target := range targets {
 		srcPath := filepath.Join(srcDir, target)
 		dstPath := filepath.Join(dstDir, target)
 
-		if _, err := os.Stat(srcPath); os.IsNotExist(err) {
+		if _, err := c.FS.Stat(srcPath); os.IsNotExist(err) {
 			fmt.Fprintf(os.Stderr, "warning: %s does not exist, skipping\n", target)
 			continue
 		}
 
-		if err := os.Symlink(srcPath, dstPath); err != nil {
+		if err := c.FS.Symlink(srcPath, dstPath); err != nil {
 			return fmt.Errorf("failed to create symlink for %s: %w", target, err)
 		}
 
