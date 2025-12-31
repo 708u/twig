@@ -37,3 +37,8 @@ go mod tidy
 - Use `gofmt` for formatting
 - Error handling: return errors rather than panicking
 - Naming: use camelCase for unexported, PascalCase for exported identifiers
+
+## Git Commit
+
+- Use Conventional Commits format
+- Example: `feat: add new feature`, `fix: resolve bug`, `docs: update README`
