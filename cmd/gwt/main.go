@@ -101,8 +101,10 @@ var addCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		verbose, _ := cmd.Flags().GetBool("verbose")
+		sync, _ := cmd.Flags().GetBool("sync")
 
-		result, err := gwt.NewAddCommand(cfg).Run(args[0])
+		addCmd := gwt.NewAddCommand(cfg, gwt.AddOptions{Sync: sync})
+		result, err := addCmd.Run(args[0])
 		if err != nil {
 			return err
 		}
@@ -201,6 +203,8 @@ stop processing of remaining branches.`,
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&dirFlag, "directory", "C", "", "Run as if gwt was started in <path>")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
+
+	addCmd.Flags().BoolP("sync", "s", false, "Sync uncommitted changes to new worktree")
 	rootCmd.AddCommand(addCmd)
 
 	listCmd.Flags().BoolP("path", "p", false, "Show full paths instead of branch names")

@@ -460,4 +460,129 @@ worktree_destination_base_dir = %q
 			}
 		}
 	})
+
+	t.Run("SyncUncommittedChanges", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Commit .gwt/settings.toml first
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		// Create uncommitted changes in source
+		modifiedFile := filepath.Join(mainDir, "modified.txt")
+		if err := os.WriteFile(modifiedFile, []byte("uncommitted content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: result.Config,
+			Sync:   true,
+		}
+
+		addResult, err := cmd.Run("feature/sync-test")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify ChangesSynced is true
+		if !addResult.ChangesSynced {
+			t.Error("expected ChangesSynced to be true")
+		}
+
+		// Verify worktree was created
+		wtPath := filepath.Join(repoDir, "feature", "sync-test")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+
+		// Verify the file exists in new worktree
+		syncedFile := filepath.Join(wtPath, "modified.txt")
+		content, err := os.ReadFile(syncedFile)
+		if err != nil {
+			t.Fatalf("failed to read synced file: %v", err)
+		}
+		if string(content) != "uncommitted content" {
+			t.Errorf("synced file content = %q, want %q", string(content), "uncommitted content")
+		}
+
+		// Verify the file still exists in source (restored via stash pop)
+		sourceContent, err := os.ReadFile(modifiedFile)
+		if err != nil {
+			t.Fatalf("failed to read source file: %v", err)
+		}
+		if string(sourceContent) != "uncommitted content" {
+			t.Errorf("source file content = %q, want %q", string(sourceContent), "uncommitted content")
+		}
+	})
+
+	t.Run("SyncWithNoChanges", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Commit .gwt/settings.toml to ensure no uncommitted changes
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: result.Config,
+			Sync:   true,
+		}
+
+		addResult, err := cmd.Run("feature/no-changes")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify ChangesSynced is false (no changes to sync)
+		if addResult.ChangesSynced {
+			t.Error("expected ChangesSynced to be false when no changes")
+		}
+
+		// Verify worktree was created
+		wtPath := filepath.Join(repoDir, "feature", "no-changes")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+	})
 }

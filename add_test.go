@@ -16,12 +16,14 @@ func TestAddCommand_Run(t *testing.T) {
 		name        string
 		branch      string
 		config      *Config
+		sync        bool
 		setupFS     func(t *testing.T) *testutil.MockFS
 		setupGit    func(t *testing.T, captured *[]string) *testutil.MockGitExecutor
 		wantErr     bool
 		errContains string
 		wantBFlag   bool
 		checkPath   string
+		wantSynced  bool
 	}{
 		{
 			name:   "new_branch",
@@ -139,6 +141,104 @@ func TestAddCommand_Run(t *testing.T) {
 			wantErr:   false,
 			wantBFlag: true,
 		},
+		{
+			name:   "sync_with_changes",
+			branch: "feature/sync",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", Symlinks: []string{".envrc"}},
+			sync:   true,
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					CapturedArgs: captured,
+					HasChanges:   true,
+				}
+			},
+			wantErr:    false,
+			wantBFlag:  true,
+			wantSynced: true,
+		},
+		{
+			name:   "sync_no_changes",
+			branch: "feature/sync-no-changes",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", Symlinks: []string{".envrc"}},
+			sync:   true,
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					CapturedArgs: captured,
+					HasChanges:   false,
+				}
+			},
+			wantErr:    false,
+			wantBFlag:  true,
+			wantSynced: false,
+		},
+		{
+			name:   "sync_stash_push_error",
+			branch: "feature/sync-push-err",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
+			sync:   true,
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					HasChanges:   true,
+					StashPushErr: errors.New("stash push failed"),
+				}
+			},
+			wantErr:     true,
+			errContains: "failed to stash changes",
+		},
+		{
+			name:   "sync_stash_apply_error",
+			branch: "feature/sync-apply-err",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
+			sync:   true,
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					HasChanges:    true,
+					StashApplyErr: errors.New("stash apply failed"),
+				}
+			},
+			wantErr:     true,
+			errContains: "failed to apply changes",
+		},
+		{
+			name:   "sync_disabled_with_changes",
+			branch: "feature/no-sync",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", Symlinks: []string{".envrc"}},
+			sync:   false,
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					CapturedArgs: captured,
+					HasChanges:   true,
+				}
+			},
+			wantErr:    false,
+			wantBFlag:  true,
+			wantSynced: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -154,9 +254,10 @@ func TestAddCommand_Run(t *testing.T) {
 				FS:     mockFS,
 				Git:    &GitRunner{Executor: mockGit},
 				Config: tt.config,
+				Sync:   tt.sync,
 			}
 
-			_, err := cmd.Run(tt.branch)
+			result, err := cmd.Run(tt.branch)
 
 			if tt.wantErr {
 				if err == nil {
@@ -182,6 +283,10 @@ func TestAddCommand_Run(t *testing.T) {
 
 			if tt.checkPath != "" && !slices.Contains(captured, tt.checkPath) {
 				t.Errorf("expected path %q in args, got: %v", tt.checkPath, captured)
+			}
+
+			if result.ChangesSynced != tt.wantSynced {
+				t.Errorf("ChangesSynced = %v, want %v", result.ChangesSynced, tt.wantSynced)
 			}
 		})
 	}

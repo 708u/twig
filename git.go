@@ -13,25 +13,34 @@ type GitExecutor interface {
 	Run(args ...string) ([]byte, error)
 }
 
-type osGitExecutor struct {
-	dir string
-}
+type osGitExecutor struct{}
 
 func (e osGitExecutor) Run(args ...string) ([]byte, error) {
-	fullArgs := append([]string{"-C", e.dir}, args...)
-	return exec.Command("git", fullArgs...).Output()
+	return exec.Command("git", args...).Output()
 }
 
 // GitRunner provides git operations using GitExecutor.
 type GitRunner struct {
 	Executor GitExecutor
+	Dir      string
 }
 
 // NewGitRunner creates a new GitRunner with the default executor.
 func NewGitRunner(dir string) *GitRunner {
 	return &GitRunner{
-		Executor: osGitExecutor{dir: dir},
+		Executor: osGitExecutor{},
+		Dir:      dir,
 	}
+}
+
+// InDir returns a GitRunner that executes commands in the specified directory.
+func (g *GitRunner) InDir(dir string) *GitRunner {
+	return &GitRunner{Executor: g.Executor, Dir: dir}
+}
+
+// Run executes git command with -C flag.
+func (g *GitRunner) Run(args ...string) ([]byte, error) {
+	return g.Executor.Run(append([]string{"-C", g.Dir}, args...)...)
 }
 
 type worktreeAddOptions struct {
@@ -63,13 +72,13 @@ func (g *GitRunner) WorktreeAdd(path, branch string, opts ...WorktreeAddOption) 
 
 // BranchExists checks if a branch exists in the local repository.
 func (g *GitRunner) BranchExists(branch string) bool {
-	_, err := g.Executor.Run("rev-parse", "--verify", "refs/heads/"+branch)
+	_, err := g.Run("rev-parse", "--verify", "refs/heads/"+branch)
 	return err == nil
 }
 
 // BranchList returns all local branch names.
 func (g *GitRunner) BranchList() ([]string, error) {
-	output, err := g.Executor.Run("branch", "--format=%(refname:short)")
+	output, err := g.Run("branch", "--format=%(refname:short)")
 	if err != nil {
 		return nil, err
 	}
@@ -220,18 +229,42 @@ func (g *GitRunner) BranchDelete(branch string, opts ...BranchDeleteOption) ([]b
 	return out, nil
 }
 
+// HasChanges checks if there are any uncommitted changes (staged, unstaged, or untracked).
+func (g *GitRunner) HasChanges() (bool, error) {
+	output, err := g.Run("status", "--porcelain")
+	if err != nil {
+		return false, fmt.Errorf("failed to check git status: %w", err)
+	}
+	return len(output) > 0, nil
+}
+
+// StashPush stashes all changes including untracked files.
+func (g *GitRunner) StashPush(message string) ([]byte, error) {
+	return g.Run("stash", "push", "-u", "-m", message)
+}
+
+// StashApply applies the latest stash without dropping it.
+func (g *GitRunner) StashApply() ([]byte, error) {
+	return g.Run("stash", "apply", "stash@{0}")
+}
+
+// StashPop pops the latest stash.
+func (g *GitRunner) StashPop() ([]byte, error) {
+	return g.Run("stash", "pop")
+}
+
 // private methods for git command execution
 
 func (g *GitRunner) worktreeAdd(path, branch string) ([]byte, error) {
-	return g.Executor.Run("worktree", "add", path, branch)
+	return g.Run("worktree", "add", path, branch)
 }
 
 func (g *GitRunner) worktreeAddWithNewBranch(branch, path string) ([]byte, error) {
-	return g.Executor.Run("worktree", "add", "-b", branch, path)
+	return g.Run("worktree", "add", "-b", branch, path)
 }
 
 func (g *GitRunner) worktreeListPorcelain() ([]byte, error) {
-	return g.Executor.Run("worktree", "list", "--porcelain")
+	return g.Run("worktree", "list", "--porcelain")
 }
 
 func (g *GitRunner) worktreeRemove(path string, force bool) ([]byte, error) {
@@ -240,7 +273,7 @@ func (g *GitRunner) worktreeRemove(path string, force bool) ([]byte, error) {
 		args = append(args, "-f")
 	}
 	args = append(args, path)
-	return g.Executor.Run(args...)
+	return g.Run(args...)
 }
 
 func (g *GitRunner) branchDelete(branch string, force bool) ([]byte, error) {
@@ -248,5 +281,5 @@ func (g *GitRunner) branchDelete(branch string, force bool) ([]byte, error) {
 	if force {
 		flag = "-D"
 	}
-	return g.Executor.Run("branch", flag, branch)
+	return g.Run("branch", flag, branch)
 }

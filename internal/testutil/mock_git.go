@@ -35,6 +35,18 @@ type MockGitExecutor struct {
 
 	// CapturedArgs captures the args passed to git commands.
 	CapturedArgs *[]string
+
+	// HasChanges indicates if git status --porcelain returns output.
+	HasChanges bool
+
+	// StashPushErr is returned when stash push is called.
+	StashPushErr error
+
+	// StashApplyErr is returned when stash apply is called.
+	StashApplyErr error
+
+	// StashPopErr is returned when stash pop is called.
+	StashPopErr error
 }
 
 func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
@@ -45,6 +57,11 @@ func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
 }
 
 func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
+	// Skip -C <dir> option (directory specification, not a command)
+	for len(args) >= 2 && args[0] == "-C" {
+		args = args[2:]
+	}
+
 	if len(args) == 0 {
 		return nil, nil
 	}
@@ -65,6 +82,10 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 		}
 	case "branch":
 		return m.handleBranch(args)
+	case "status":
+		return m.handleStatus(args)
+	case "stash":
+		return m.handleStash(args)
 	}
 	return nil, nil
 }
@@ -128,6 +149,32 @@ func (m *MockGitExecutor) handleBranch(args []string) ([]byte, error) {
 	// args: ["branch", "-d"/"-D", "branch-name"]
 	if len(args) >= 3 && (args[1] == "-d" || args[1] == "-D") {
 		return nil, m.BranchDeleteErr
+	}
+	return nil, nil
+}
+
+func (m *MockGitExecutor) handleStatus(args []string) ([]byte, error) {
+	// args: ["status", "--porcelain"]
+	if len(args) >= 2 && args[1] == "--porcelain" {
+		if m.HasChanges {
+			return []byte("M  modified.go\n"), nil
+		}
+		return []byte{}, nil
+	}
+	return nil, nil
+}
+
+func (m *MockGitExecutor) handleStash(args []string) ([]byte, error) {
+	if len(args) < 2 {
+		return nil, nil
+	}
+	switch args[1] {
+	case "push":
+		return nil, m.StashPushErr
+	case "apply":
+		return nil, m.StashApplyErr
+	case "pop":
+		return nil, m.StashPopErr
 	}
 	return nil, nil
 }
