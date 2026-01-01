@@ -28,7 +28,7 @@ var addCmd = &cobra.Command{
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		return gwt.NewAddCommand(cfg).Run(args[0])
+		return gwt.NewAddCommand(cfg, gwt.NewGitRunner()).Run(args[0])
 	},
 }
 

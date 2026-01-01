@@ -3,21 +3,23 @@ package gwt
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
 // AddCommand creates git worktrees with symlinks.
 type AddCommand struct {
 	FS     FileSystem
+	Git    *GitRunner
 	Config *Config
 }
 
-// NewAddCommand creates a new AddCommand with the given config.
-func NewAddCommand(cfg *Config) *AddCommand {
+// NewAddCommand creates a new AddCommand with the given config and git runner.
+func NewAddCommand(cfg *Config, git *GitRunner) *AddCommand {
 	return &AddCommand{
 		FS:     osFS{},
+		Git:    git,
 		Config: cfg,
 	}
 }
@@ -49,45 +51,24 @@ func (c *AddCommand) createWorktree(branch, path string) error {
 		return fmt.Errorf("directory already exists: %s", path)
 	}
 
-	var cmd *exec.Cmd
-	if branchExists(branch) {
-		if branchInUse(branch) {
+	if c.Git.BranchExists(branch) {
+		branches, err := c.Git.WorktreeListBranches()
+		if err != nil {
+			return fmt.Errorf("failed to list worktree branches: %w", err)
+		}
+		if slices.Contains(branches, branch) {
 			return fmt.Errorf("branch %s is already checked out in another worktree", branch)
 		}
-		cmd = exec.Command("git", "worktree", "add", path, branch)
+		if err := c.Git.WorktreeAdd(path, branch, false); err != nil {
+			return fmt.Errorf("failed to create worktree: %w", err)
+		}
 	} else {
-		cmd = exec.Command("git", "worktree", "add", "-b", branch, path)
-	}
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create worktree: %w", err)
+		if err := c.Git.WorktreeAdd(path, branch, true); err != nil {
+			return fmt.Errorf("failed to create worktree: %w", err)
+		}
 	}
 
 	return nil
-}
-
-func branchExists(name string) bool {
-	cmd := exec.Command("git", "rev-parse", "--verify", "refs/heads/"+name)
-	return cmd.Run() == nil
-}
-
-func branchInUse(name string) bool {
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
-	output, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "branch refs/heads/"+name) {
-			return true
-		}
-	}
-	return false
 }
 
 func (c *AddCommand) createSymlinks(srcDir, dstDir string, targets []string) error {
