@@ -9,6 +9,139 @@ import (
 	"github.com/708u/gwt/internal/testutil"
 )
 
+func TestRemoveResult_HasErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		result RemoveResult
+		want   bool
+	}{
+		{
+			name:   "no_errors",
+			result: RemoveResult{},
+			want:   false,
+		},
+		{
+			name: "success_only",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{{Branch: "feature/a"}},
+			},
+			want: false,
+		},
+		{
+			name: "error_only",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{{Branch: "feature/b", Err: errors.New("failed")}},
+			},
+			want: true,
+		},
+		{
+			name: "mixed",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{
+					{Branch: "feature/a"},
+					{Branch: "feature/b", Err: errors.New("failed")},
+				},
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.result.HasErrors(); got != tt.want {
+				t.Errorf("HasErrors() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRemoveResult_Format(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		result     RemoveResult
+		opts       FormatOptions
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name:       "empty",
+			result:     RemoveResult{},
+			opts:       FormatOptions{},
+			wantStdout: "",
+			wantStderr: "",
+		},
+		{
+			name: "single_success",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{{Branch: "feature/a", WorktreePath: "/repo/feature/a"}},
+			},
+			opts:       FormatOptions{},
+			wantStdout: "gwt remove: feature/a\n",
+			wantStderr: "",
+		},
+		{
+			name: "multiple_success",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{
+					{Branch: "feature/a", WorktreePath: "/repo/feature/a"},
+					{Branch: "feature/b", WorktreePath: "/repo/feature/b"},
+				},
+			},
+			opts:       FormatOptions{},
+			wantStdout: "gwt remove: feature/a\ngwt remove: feature/b\n",
+			wantStderr: "",
+		},
+		{
+			name: "single_error",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{{Branch: "feature/c", Err: errors.New("not found")}},
+			},
+			opts:       FormatOptions{},
+			wantStdout: "",
+			wantStderr: "error: feature/c: not found\n",
+		},
+		{
+			name: "mixed_success_and_error",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{
+					{Branch: "feature/a", WorktreePath: "/repo/feature/a"},
+					{Branch: "feature/b", Err: errors.New("failed")},
+				},
+			},
+			opts:       FormatOptions{},
+			wantStdout: "gwt remove: feature/a\n",
+			wantStderr: "error: feature/b: failed\n",
+		},
+		{
+			name: "dry_run",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{{Branch: "feature/a", WorktreePath: "/repo/feature/a", DryRun: true}},
+			},
+			opts:       FormatOptions{},
+			wantStdout: "Would remove worktree: /repo/feature/a\nWould delete branch: feature/a\n",
+			wantStderr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := tt.result.Format(tt.opts)
+			if got.Stdout != tt.wantStdout {
+				t.Errorf("Stdout = %q, want %q", got.Stdout, tt.wantStdout)
+			}
+			if got.Stderr != tt.wantStderr {
+				t.Errorf("Stderr = %q, want %q", got.Stderr, tt.wantStderr)
+			}
+		})
+	}
+}
+
 func TestRemoveCommand_Run(t *testing.T) {
 	t.Parallel()
 

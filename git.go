@@ -91,6 +91,40 @@ func (g *GitRunner) BranchList() ([]string, error) {
 	return branches, nil
 }
 
+// WorktreeInfo holds worktree path and branch information.
+type WorktreeInfo struct {
+	Path   string
+	Branch string
+}
+
+// WorktreeList returns all worktrees with their paths and branches.
+func (g *GitRunner) WorktreeList() ([]WorktreeInfo, error) {
+	out, err := g.worktreeListPorcelain()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	// porcelain format:
+	// worktree /path/to/worktree
+	// HEAD abc123
+	// branch refs/heads/branch-name
+	// (blank line)
+
+	var worktrees []WorktreeInfo
+	var current WorktreeInfo
+	for _, line := range strings.Split(string(out), "\n") {
+		if path, ok := strings.CutPrefix(line, "worktree "); ok {
+			current = WorktreeInfo{Path: path}
+		} else if branch, ok := strings.CutPrefix(line, "branch refs/heads/"); ok {
+			current.Branch = branch
+		} else if line == "" && current.Path != "" {
+			worktrees = append(worktrees, current)
+			current = WorktreeInfo{}
+		}
+	}
+	return worktrees, nil
+}
+
 // WorktreeListBranches returns a list of branch names currently checked out in worktrees.
 func (g *GitRunner) WorktreeListBranches() ([]string, error) {
 	output, err := g.worktreeListPorcelain()
