@@ -51,7 +51,7 @@ func (c *AddCommand) Run(name string) error {
 		return err
 	}
 
-	if err := c.createSymlinks(srcDir, wtPath, c.Config.Include); err != nil {
+	if err := c.createSymlinks(srcDir, wtPath, c.Config.Symlinks); err != nil {
 		return err
 	}
 

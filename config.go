@@ -15,7 +15,7 @@ const (
 
 // Config holds the merged configuration for the application.
 type Config struct {
-	Include             []string `toml:"include"`
+	Symlinks            []string `toml:"symlinks"`
 	WorktreeDestBaseDir string   `toml:"worktree_destination_base_dir"`
 	WorktreeSourceDir   string   `toml:"worktree_source_dir"`
 }
@@ -28,7 +28,7 @@ type LoadConfigResult struct {
 
 func LoadConfig(dir string) (*LoadConfigResult, error) {
 	seen := make(map[string]bool)
-	var includes []string
+	var symlinks []string
 	var warnings []string
 
 	projCfg, err := loadConfigFile(filepath.Join(dir, configDir, configFileName))
@@ -36,10 +36,10 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 		return nil, err
 	}
 	if projCfg != nil {
-		for _, inc := range projCfg.Include {
-			if !seen[inc] {
-				seen[inc] = true
-				includes = append(includes, inc)
+		for _, s := range projCfg.Symlinks {
+			if !seen[s] {
+				seen[s] = true
+				symlinks = append(symlinks, s)
 			}
 		}
 	}
@@ -49,10 +49,10 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 		return nil, err
 	}
 	if localCfg != nil {
-		for _, inc := range localCfg.Include {
-			if !seen[inc] {
-				seen[inc] = true
-				includes = append(includes, inc)
+		for _, s := range localCfg.Symlinks {
+			if !seen[s] {
+				seen[s] = true
+				symlinks = append(symlinks, s)
 			}
 		}
 		// Warn if local config contains project-level settings
@@ -76,7 +76,7 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 
 	return &LoadConfigResult{
 		Config: &Config{
-			Include:             includes,
+			Symlinks:            symlinks,
 			WorktreeDestBaseDir: destBaseDir,
 			WorktreeSourceDir:   srcDir,
 		},

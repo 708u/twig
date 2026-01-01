@@ -27,7 +27,7 @@ func TestAddCommand_Run(t *testing.T) {
 		{
 			name:   "new_branch",
 			branch: "feature/test",
-			config: &Config{Include: []string{".envrc"}},
+			config: &Config{Symlinks: []string{".envrc"}},
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
 				return &testutil.MockFS{}
@@ -42,7 +42,7 @@ func TestAddCommand_Run(t *testing.T) {
 		{
 			name:   "existing_branch",
 			branch: "existing",
-			config: &Config{Include: []string{".envrc"}},
+			config: &Config{Symlinks: []string{".envrc"}},
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
 				return &testutil.MockFS{}

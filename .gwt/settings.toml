@@ -1,4 +1,3 @@
-# symlink targets
-include = [
+symlinks = [
     "out",
 ]

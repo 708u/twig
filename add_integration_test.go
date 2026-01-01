@@ -27,7 +27,7 @@ func TestAddCommand_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		settingsContent := fmt.Sprintf(`include = [".envrc"]
+		settingsContent := fmt.Sprintf(`symlinks = [".envrc"]
 worktree_source_dir = %q
 worktree_destination_base_dir = %q
 `, mainDir, repoDir)
