@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/708u/gwt"
 	"github.com/spf13/cobra"
@@ -116,18 +117,18 @@ var addCmd = &cobra.Command{
 }
 
 var removeCmd = &cobra.Command{
-	Use:   "remove <branch>",
-	Short: "Remove a worktree and its branch",
-	Long: `Remove a git worktree and delete its associated branch.
+	Use:   "remove <branch>...",
+	Short: "Remove worktrees and their branches",
+	Long: `Remove git worktrees and delete their associated branches.
 
-The branch name is used to locate the worktree.
+The branch names are used to locate the worktrees.
 By default, fails if there are uncommitted changes or the branch is not merged.
-Use --force to override these checks.`,
-	Args: cobra.ExactArgs(1),
+Use --force to override these checks.
+
+Multiple branches can be specified. Errors on individual branches will not
+stop processing of remaining branches.`,
+	Args: cobra.MinimumNArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) >= 1 {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
 		dir, err := resolveCompletionDirectory(cmd)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
@@ -137,19 +138,33 @@ Use --force to override these checks.`,
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}
-		return branches, cobra.ShellCompDirectiveNoFileComp
+		// Exclude already-specified branches from suggestions
+		available := make([]string, 0, len(branches))
+		for _, b := range branches {
+			if !slices.Contains(args, b) {
+				available = append(available, b)
+			}
+		}
+		return available, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		force, _ := cmd.Flags().GetBool("force")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
-		result, err := gwt.NewRemoveCommand(cfg).Run(args[0], cwd, gwt.RemoveOptions{
-			Force:  force,
-			DryRun: dryRun,
-		})
-		if err != nil {
-			return err
+		removeCmd := gwt.NewRemoveCommand(cfg)
+		var result gwt.RemoveResult
+
+		for _, branch := range args {
+			wt, err := removeCmd.Run(branch, cwd, gwt.RemoveOptions{
+				Force:  force,
+				DryRun: dryRun,
+			})
+			if err != nil {
+				wt.Branch = branch
+				wt.Err = err
+			}
+			result.Removed = append(result.Removed, wt)
 		}
 
 		formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
@@ -157,6 +172,10 @@ Use --force to override these checks.`,
 			fmt.Fprint(os.Stderr, formatted.Stderr)
 		}
 		fmt.Fprint(os.Stdout, formatted.Stdout)
+
+		if result.HasErrors() {
+			return fmt.Errorf("failed to remove %d branch(es)", result.ErrorCount())
+		}
 		return nil
 	},
 }

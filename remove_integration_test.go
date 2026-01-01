@@ -245,4 +245,148 @@ worktree_destination_base_dir = %q
 			t.Errorf("unexpected error: %v", err)
 		}
 	})
+
+	t.Run("RemoveMultipleWorktrees", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create multiple worktrees
+		branches := []string{"feature/multi-a", "feature/multi-b", "feature/multi-c"}
+		wtPaths := make([]string, len(branches))
+		for i, branch := range branches {
+			wtPaths[i] = filepath.Join(repoDir, "feature", fmt.Sprintf("multi-%c", 'a'+i))
+			testutil.RunGit(t, mainDir, "worktree", "add", "-b", branch, wtPaths[i])
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Remove all worktrees
+		var removeResult RemoveResult
+		for _, branch := range branches {
+			wt, err := cmd.Run(branch, mainDir, RemoveOptions{})
+			if err != nil {
+				wt.Branch = branch
+				wt.Err = err
+			}
+			removeResult.Removed = append(removeResult.Removed, wt)
+		}
+
+		if removeResult.HasErrors() {
+			t.Fatalf("unexpected errors: %v", removeResult.Removed)
+		}
+
+		if len(removeResult.Removed) != 3 {
+			t.Errorf("expected 3 removed, got %d", len(removeResult.Removed))
+		}
+
+		// Verify all worktrees are removed
+		for _, wtPath := range wtPaths {
+			if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+				t.Errorf("worktree directory should be removed: %s", wtPath)
+			}
+		}
+
+		// Verify all branches are deleted
+		for _, branch := range branches {
+			out := testutil.RunGit(t, mainDir, "branch", "--list", branch)
+			if strings.TrimSpace(out) != "" {
+				t.Errorf("branch should be deleted: %s", branch)
+			}
+		}
+	})
+
+	t.Run("RemoveMultipleWithPartialFailure", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create one valid worktree
+		validBranch := "feature/valid"
+		validWtPath := filepath.Join(repoDir, "feature", "valid")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", validBranch, validWtPath)
+
+		// Create a branch without worktree (will fail)
+		invalidBranch := "feature/no-worktree"
+		testutil.RunGit(t, mainDir, "branch", invalidBranch)
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Try to remove both
+		var removeResult RemoveResult
+		for _, branch := range []string{validBranch, invalidBranch} {
+			wt, err := cmd.Run(branch, mainDir, RemoveOptions{})
+			if err != nil {
+				wt.Branch = branch
+				wt.Err = err
+			}
+			removeResult.Removed = append(removeResult.Removed, wt)
+		}
+
+		// Should have 2 entries (1 success, 1 error)
+		if len(removeResult.Removed) != 2 {
+			t.Errorf("expected 2 entries, got %d", len(removeResult.Removed))
+		}
+		if removeResult.ErrorCount() != 1 {
+			t.Errorf("expected 1 error, got %d", removeResult.ErrorCount())
+		}
+
+		// Valid worktree should be removed
+		if _, err := os.Stat(validWtPath); !os.IsNotExist(err) {
+			t.Errorf("valid worktree should be removed: %s", validWtPath)
+		}
+
+		// First entry should be success, second should be error
+		if removeResult.Removed[0].Err != nil {
+			t.Errorf("first entry should be success, got error: %v", removeResult.Removed[0].Err)
+		}
+		if removeResult.Removed[1].Err == nil {
+			t.Error("second entry should be error, got success")
+		}
+		if removeResult.Removed[1].Branch != invalidBranch {
+			t.Errorf("error should be for %s, got %s", invalidBranch, removeResult.Removed[1].Branch)
+		}
+	})
 }

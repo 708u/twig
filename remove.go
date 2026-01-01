@@ -27,21 +27,65 @@ func NewRemoveCommand(cfg *Config) *RemoveCommand {
 	}
 }
 
-// RemoveResult holds the result of a remove operation.
-type RemoveResult struct {
+// RemovedWorktree holds the result of a single worktree removal.
+type RemovedWorktree struct {
 	Branch       string
 	WorktreePath string
 	DryRun       bool
 	GitOutput    []byte
+	Err          error // nil if success
+}
+
+// RemoveResult aggregates results from remove operations.
+type RemoveResult struct {
+	Removed []RemovedWorktree
+}
+
+// HasErrors returns true if any errors occurred.
+func (r RemoveResult) HasErrors() bool {
+	for _, wt := range r.Removed {
+		if wt.Err != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// ErrorCount returns the number of failed removals.
+func (r RemoveResult) ErrorCount() int {
+	count := 0
+	for _, wt := range r.Removed {
+		if wt.Err != nil {
+			count++
+		}
+	}
+	return count
 }
 
 // Format formats the RemoveResult for display.
 func (r RemoveResult) Format(opts FormatOptions) FormatResult {
+	var stdout, stderr strings.Builder
+
+	for _, wt := range r.Removed {
+		if wt.Err != nil {
+			fmt.Fprintf(&stderr, "error: %s: %v\n", wt.Branch, wt.Err)
+			continue
+		}
+		formatted := wt.Format(opts)
+		stdout.WriteString(formatted.Stdout)
+		stderr.WriteString(formatted.Stderr)
+	}
+
+	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
+}
+
+// Format formats the RemovedWorktree for display.
+func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 	var stdout strings.Builder
 
 	if r.DryRun {
-		stdout.WriteString(fmt.Sprintf("Would remove worktree: %s\n", r.WorktreePath))
-		stdout.WriteString(fmt.Sprintf("Would delete branch: %s\n", r.Branch))
+		fmt.Fprintf(&stdout, "Would remove worktree: %s\n", r.WorktreePath)
+		fmt.Fprintf(&stdout, "Would delete branch: %s\n", r.Branch)
 		return FormatResult{Stdout: stdout.String()}
 	}
 
@@ -49,18 +93,18 @@ func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 		if len(r.GitOutput) > 0 {
 			stdout.Write(r.GitOutput)
 		}
-		stdout.WriteString(fmt.Sprintf("Removed worktree and branch: %s\n", r.Branch))
+		fmt.Fprintf(&stdout, "Removed worktree and branch: %s\n", r.Branch)
 	}
 
-	stdout.WriteString(fmt.Sprintf("gwt remove: %s\n", r.Branch))
+	fmt.Fprintf(&stdout, "gwt remove: %s\n", r.Branch)
 
 	return FormatResult{Stdout: stdout.String()}
 }
 
 // Run removes the worktree and branch for the given branch name.
 // cwd is the current working directory (absolute path) passed from CLI layer.
-func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (RemoveResult, error) {
-	var result RemoveResult
+func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (RemovedWorktree, error) {
+	var result RemovedWorktree
 	result.Branch = branch
 	result.DryRun = opts.DryRun
 

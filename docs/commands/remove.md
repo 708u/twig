@@ -1,16 +1,16 @@
 # remove subcommand
 
-Remove a worktree and delete its associated branch.
+Remove worktrees and delete their associated branches.
 
 ## Usage
 
 ```txt
-gwt remove <branch> [flags]
+gwt remove <branch>... [flags]
 ```
 
 ## Arguments
 
-- `<branch>`: Branch name to remove (required)
+- `<branch>...`: One or more branch names to remove (required)
 
 ## Flags
 
@@ -28,3 +28,19 @@ gwt remove <branch> [flags]
   or the branch is not merged
 - With `--force`: bypasses uncommitted changes
   and unmerged branch checks
+
+## Multiple Branches
+
+When multiple branches are specified, errors on individual branches
+do not stop processing of remaining branches. All results and errors
+are reported at the end.
+
+```txt
+# Remove multiple worktrees
+gwt remove feature/a feature/b feature/c
+```
+
+## Exit Code
+
+- 0: All branches removed successfully
+- 1: One or more branches failed to remove
