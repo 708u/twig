@@ -29,12 +29,30 @@ func NewGitRunner() *GitRunner {
 	return &GitRunner{Executor: osGitExecutor{}}
 }
 
+type worktreeAddOptions struct {
+	createBranch bool
+}
+
+// WorktreeAddOption is a functional option for WorktreeAdd.
+type WorktreeAddOption func(*worktreeAddOptions)
+
+// WithCreateBranch creates a new branch when adding the worktree.
+func WithCreateBranch() WorktreeAddOption {
+	return func(o *worktreeAddOptions) {
+		o.createBranch = true
+	}
+}
+
 // WorktreeAdd creates a new worktree at the specified path.
-// If createBranch is true, creates a new branch with the given name.
-func (g *GitRunner) WorktreeAdd(path, branch string, createBranch bool) error {
+func (g *GitRunner) WorktreeAdd(path, branch string, opts ...WorktreeAddOption) error {
+	var options worktreeAddOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	var output []byte
 	var err error
-	if createBranch {
+	if options.createBranch {
 		output, err = g.Executor.Run("worktree", "add", "-b", branch, path)
 	} else {
 		output, err = g.Executor.Run("worktree", "add", path, branch)

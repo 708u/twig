@@ -31,7 +31,9 @@ func (c *AddCommand) Run(name string) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
+	// TODO: pathについて考える
 	dirName := strings.ReplaceAll(name, "/", "-")
+	// TODO: configから取るようにするか考える
 	worktreePath := filepath.Join(cwd, "..", dirName)
 
 	if err := c.createWorktree(name, worktreePath); err != nil {
@@ -51,6 +53,7 @@ func (c *AddCommand) createWorktree(branch, path string) error {
 		return fmt.Errorf("directory already exists: %s", path)
 	}
 
+	var opts []WorktreeAddOption
 	if c.Git.BranchExists(branch) {
 		branches, err := c.Git.WorktreeListBranches()
 		if err != nil {
@@ -59,13 +62,12 @@ func (c *AddCommand) createWorktree(branch, path string) error {
 		if slices.Contains(branches, branch) {
 			return fmt.Errorf("branch %s is already checked out in another worktree", branch)
 		}
-		if err := c.Git.WorktreeAdd(path, branch, false); err != nil {
-			return fmt.Errorf("failed to create worktree: %w", err)
-		}
 	} else {
-		if err := c.Git.WorktreeAdd(path, branch, true); err != nil {
-			return fmt.Errorf("failed to create worktree: %w", err)
-		}
+		opts = append(opts, WithCreateBranch())
+	}
+
+	if err := c.Git.WorktreeAdd(path, branch, opts...); err != nil {
+		return fmt.Errorf("failed to create worktree: %w", err)
 	}
 
 	return nil
