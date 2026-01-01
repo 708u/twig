@@ -38,7 +38,7 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		cfg, err := LoadConfig(mainDir)
+		result, err := LoadConfig(mainDir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -47,7 +47,7 @@ worktree_destination_base_dir = %q
 		cmd := &AddCommand{
 			FS:     osFS{},
 			Git:    newTestGitRunner(mainDir, &stdout),
-			Config: cfg,
+			Config: result.Config,
 			Stdout: &stdout,
 			Stderr: &stderr,
 		}
@@ -105,7 +105,7 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		cfg, err := LoadConfig(mainDir)
+		result, err := LoadConfig(mainDir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -114,7 +114,7 @@ worktree_destination_base_dir = %q
 		cmd := &AddCommand{
 			FS:     osFS{},
 			Git:    newTestGitRunner(mainDir, &stdout),
-			Config: cfg,
+			Config: result.Config,
 			Stdout: &stdout,
 			Stderr: &stderr,
 		}
@@ -149,7 +149,7 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		cfg, err := LoadConfig(mainDir)
+		result, err := LoadConfig(mainDir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -158,7 +158,7 @@ worktree_destination_base_dir = %q
 		cmd := &AddCommand{
 			FS:     osFS{},
 			Git:    newTestGitRunner(mainDir, &stdout),
-			Config: cfg,
+			Config: result.Config,
 			Stdout: &stdout,
 			Stderr: &stderr,
 		}

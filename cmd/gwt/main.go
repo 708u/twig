@@ -23,12 +23,15 @@ var addCmd = &cobra.Command{
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
 
-		cfg, err := gwt.LoadConfig(cwd)
+		result, err := gwt.LoadConfig(cwd)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
+		for _, w := range result.Warnings {
+			fmt.Fprintln(os.Stderr, "warning:", w)
+		}
 
-		return gwt.NewAddCommand(cfg).Run(args[0])
+		return gwt.NewAddCommand(result.Config).Run(args[0])
 	},
 }
 

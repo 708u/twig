@@ -13,15 +13,23 @@ const (
 	localConfigFileName = "settings.local.toml"
 )
 
+// Config holds the merged configuration for the application.
 type Config struct {
 	Include             []string `toml:"include"`
 	WorktreeDestBaseDir string   `toml:"worktree_destination_base_dir"`
 	WorktreeSourceDir   string   `toml:"worktree_source_dir"`
 }
 
-func LoadConfig(dir string) (*Config, error) {
+// LoadConfigResult contains the loaded config and any warnings.
+type LoadConfigResult struct {
+	Config   *Config
+	Warnings []string
+}
+
+func LoadConfig(dir string) (*LoadConfigResult, error) {
 	seen := make(map[string]bool)
 	var includes []string
+	var warnings []string
 
 	projCfg, err := loadConfigFile(filepath.Join(dir, configDir, configFileName))
 	if err != nil {
@@ -47,29 +55,32 @@ func LoadConfig(dir string) (*Config, error) {
 				includes = append(includes, inc)
 			}
 		}
+		// Warn if local config contains project-level settings
+		if localCfg.WorktreeDestBaseDir != "" {
+			warnings = append(warnings, localConfigFileName+": 'worktree_destination_base_dir' is ignored (project-level setting)")
+		}
+		if localCfg.WorktreeSourceDir != "" {
+			warnings = append(warnings, localConfigFileName+": 'worktree_source_dir' is ignored (project-level setting)")
+		}
 	}
 
-	// TODO: projectとlocalで共通の値をどうするか考える
 	var destBaseDir string
 	if projCfg != nil && projCfg.WorktreeDestBaseDir != "" {
 		destBaseDir = projCfg.WorktreeDestBaseDir
-	}
-	if localCfg != nil && localCfg.WorktreeDestBaseDir != "" {
-		destBaseDir = localCfg.WorktreeDestBaseDir
 	}
 
 	srcDir := dir
 	if projCfg != nil && projCfg.WorktreeSourceDir != "" {
 		srcDir = projCfg.WorktreeSourceDir
 	}
-	if localCfg != nil && localCfg.WorktreeSourceDir != "" {
-		srcDir = localCfg.WorktreeSourceDir
-	}
 
-	return &Config{
-		Include:             includes,
-		WorktreeDestBaseDir: destBaseDir,
-		WorktreeSourceDir:   srcDir,
+	return &LoadConfigResult{
+		Config: &Config{
+			Include:             includes,
+			WorktreeDestBaseDir: destBaseDir,
+			WorktreeSourceDir:   srcDir,
+		},
+		Warnings: warnings,
 	}, nil
 }
 
