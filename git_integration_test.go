@@ -3,7 +3,6 @@
 package gwt
 
 import (
-	"bytes"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -22,8 +21,7 @@ func TestGitRunner_WorktreeFindByBranch_Integration(t *testing.T) {
 		wtPath := filepath.Join(repoDir, "feature-wt")
 		testutil.RunGit(t, mainDir, "worktree", "add", wtPath, "-b", "feature/test")
 
-		var stdout bytes.Buffer
-		runner := newTestGitRunner(mainDir, &stdout)
+		runner := NewGitRunner(mainDir)
 
 		got, err := runner.WorktreeFindByBranch("feature/test")
 		if err != nil {
@@ -39,8 +37,7 @@ func TestGitRunner_WorktreeFindByBranch_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t)
 
-		var stdout bytes.Buffer
-		runner := newTestGitRunner(mainDir, &stdout)
+		runner := NewGitRunner(mainDir)
 
 		_, err := runner.WorktreeFindByBranch("nonexistent")
 		if err == nil {
@@ -63,10 +60,9 @@ func TestGitRunner_WorktreeRemove_Integration(t *testing.T) {
 		wtPath := filepath.Join(repoDir, "to-remove")
 		testutil.RunGit(t, mainDir, "worktree", "add", wtPath, "-b", "to-remove")
 
-		var stdout bytes.Buffer
-		runner := newTestGitRunner(mainDir, &stdout)
+		runner := NewGitRunner(mainDir)
 
-		err := runner.WorktreeRemove(wtPath)
+		_, err := runner.WorktreeRemove(wtPath)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -82,10 +78,9 @@ func TestGitRunner_WorktreeRemove_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t)
 
-		var stdout bytes.Buffer
-		runner := newTestGitRunner(mainDir, &stdout)
+		runner := NewGitRunner(mainDir)
 
-		err := runner.WorktreeRemove("/nonexistent/path")
+		_, err := runner.WorktreeRemove("/nonexistent/path")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -105,10 +100,9 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 
 		testutil.RunGit(t, mainDir, "branch", "to-delete")
 
-		var stdout bytes.Buffer
-		runner := newTestGitRunner(mainDir, &stdout)
+		runner := NewGitRunner(mainDir)
 
-		err := runner.BranchDelete("to-delete")
+		_, err := runner.BranchDelete("to-delete")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -128,10 +122,9 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 		testutil.RunGit(t, mainDir, "commit", "--allow-empty", "-m", "unmerged commit")
 		testutil.RunGit(t, mainDir, "checkout", "main")
 
-		var stdout bytes.Buffer
-		runner := newTestGitRunner(mainDir, &stdout)
+		runner := NewGitRunner(mainDir)
 
-		err := runner.BranchDelete("unmerged", WithForceDelete())
+		_, err := runner.BranchDelete("unmerged", WithForceDelete())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -147,10 +140,9 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t)
 
-		var stdout bytes.Buffer
-		runner := newTestGitRunner(mainDir, &stdout)
+		runner := NewGitRunner(mainDir)
 
-		err := runner.BranchDelete("nonexistent")
+		_, err := runner.BranchDelete("nonexistent")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}

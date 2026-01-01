@@ -1,7 +1,6 @@
 package gwt
 
 import (
-	"bytes"
 	"errors"
 	"slices"
 	"strings"
@@ -23,7 +22,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 		wantErr     bool
 		errContains string
 		wantForce   bool
-		wantStdout  string
+		wantDryRun  bool
 	}{
 		{
 			name:   "success",
@@ -38,8 +37,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 					CapturedArgs: captured,
 				}
 			},
-			wantErr:    false,
-			wantStdout: "Removed worktree and branch: feature/test",
+			wantErr: false,
 		},
 		{
 			name:   "dry_run",
@@ -55,7 +53,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 				}
 			},
 			wantErr:    false,
-			wantStdout: "Would remove worktree",
+			wantDryRun: true,
 		},
 		{
 			name:   "force",
@@ -167,20 +165,17 @@ func TestRemoveCommand_Run(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var stdout, stderr bytes.Buffer
 			var captured []string
 
 			mockGit := tt.setupGit(t, &captured)
 
 			cmd := &RemoveCommand{
 				FS:     &testutil.MockFS{},
-				Git:    &GitRunner{Executor: mockGit, Stdout: &stdout},
+				Git:    &GitRunner{Executor: mockGit},
 				Config: tt.config,
-				Stdout: &stdout,
-				Stderr: &stderr,
 			}
 
-			err := cmd.Run(tt.branch, tt.cwd, tt.opts)
+			result, err := cmd.Run(tt.branch, tt.cwd, tt.opts)
 
 			if tt.wantErr {
 				if err == nil {
@@ -196,12 +191,15 @@ func TestRemoveCommand_Run(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if tt.wantForce && !slices.Contains(captured, "-f") && !slices.Contains(captured, "-D") {
-				t.Errorf("expected force flag (-f or -D), got: %v", captured)
+			if tt.wantDryRun {
+				if !result.DryRun {
+					t.Error("expected DryRun to be true")
+				}
+				return
 			}
 
-			if tt.wantStdout != "" && !strings.Contains(stdout.String(), tt.wantStdout) {
-				t.Errorf("stdout %q should contain %q", stdout.String(), tt.wantStdout)
+			if tt.wantForce && !slices.Contains(captured, "-f") && !slices.Contains(captured, "-D") {
+				t.Errorf("expected force flag (-f or -D), got: %v", captured)
 			}
 		})
 	}

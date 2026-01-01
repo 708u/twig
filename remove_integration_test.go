@@ -3,7 +3,6 @@
 package gwt
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,16 +45,13 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("feature/to-remove", mainDir, RemoveOptions{})
+		removeResult, err := cmd.Run("feature/to-remove", mainDir, RemoveOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -69,8 +65,9 @@ worktree_destination_base_dir = %q
 			t.Errorf("branch should be deleted, got: %s", out)
 		}
 
-		if !strings.Contains(stdout.String(), "Removed worktree and branch") {
-			t.Errorf("expected success message, got: %s", stdout.String())
+		// Verify result
+		if removeResult.Branch != "feature/to-remove" {
+			t.Errorf("result.Branch = %q, want %q", removeResult.Branch, "feature/to-remove")
 		}
 	})
 
@@ -99,16 +96,13 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("feature/dry-run-test", mainDir, RemoveOptions{DryRun: true})
+		removeResult, err := cmd.Run("feature/dry-run-test", mainDir, RemoveOptions{DryRun: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -122,12 +116,9 @@ worktree_destination_base_dir = %q
 			t.Errorf("branch should still exist in dry-run mode")
 		}
 
-		stdoutStr := stdout.String()
-		if !strings.Contains(stdoutStr, "Would remove worktree") {
-			t.Errorf("expected dry-run message, got: %s", stdoutStr)
-		}
-		if !strings.Contains(stdoutStr, "Would delete branch") {
-			t.Errorf("expected dry-run branch message, got: %s", stdoutStr)
+		// Verify result
+		if !removeResult.DryRun {
+			t.Error("result.DryRun should be true")
 		}
 	})
 
@@ -161,16 +152,13 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("feature/force-test", mainDir, RemoveOptions{Force: true})
+		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{Force: true})
 		if err != nil {
 			t.Fatalf("Run with force failed: %v", err)
 		}
@@ -205,16 +193,13 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("feature/inside-test", wtPath, RemoveOptions{})
+		_, err = cmd.Run("feature/inside-test", wtPath, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error when inside worktree, got nil")
 		}
@@ -246,16 +231,13 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("orphan-branch", mainDir, RemoveOptions{})
+		_, err = cmd.Run("orphan-branch", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for branch not in worktree, got nil")
 		}

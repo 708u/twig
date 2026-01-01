@@ -3,7 +3,6 @@
 package gwt
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,16 +41,13 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("feature/test")
+		addResult, err := cmd.Run("feature/test")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -83,6 +79,14 @@ worktree_destination_base_dir = %q
 		if !strings.Contains(out, "feature/test") {
 			t.Errorf("worktree list does not contain feature/test: %s", out)
 		}
+
+		// Verify result
+		if addResult.Branch != "feature/test" {
+			t.Errorf("result.Branch = %q, want %q", addResult.Branch, "feature/test")
+		}
+		if addResult.WorktreePath != wtPath {
+			t.Errorf("result.WorktreePath = %q, want %q", addResult.WorktreePath, wtPath)
+		}
 	})
 
 	t.Run("DefaultDestinationBaseDir", func(t *testing.T) {
@@ -113,16 +117,13 @@ worktree_destination_base_dir = %q
 			t.Errorf("expected WorktreeDestBaseDir %q, got %q", expectedDestBaseDir, result.Config.WorktreeDestBaseDir)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("feature/default-dest")
+		_, err = cmd.Run("feature/default-dest")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -163,16 +164,13 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("existing-branch")
+		_, err = cmd.Run("existing-branch")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -207,16 +205,13 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("test-branch")
+		_, err = cmd.Run("test-branch")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -269,16 +264,13 @@ worktree_destination_base_dir = %q
 			t.Errorf("expected 2 symlinks, got %d: %v", len(result.Config.Symlinks), result.Config.Symlinks)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("feature/local-merge")
+		_, err = cmd.Run("feature/local-merge")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -338,16 +330,13 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("feature/warn-test")
+		addResult, err := cmd.Run("feature/warn-test")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -358,10 +347,17 @@ worktree_destination_base_dir = %q
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 
-		// Verify warning was printed to stderr
-		stderrStr := stderr.String()
-		if !strings.Contains(stderrStr, "nonexistent.txt") || !strings.Contains(stderrStr, "does not match any files, skipping") {
-			t.Errorf("expected warning about nonexistent.txt in stderr, got: %q", stderrStr)
+		// Verify warning in result
+		var foundWarning bool
+		for _, s := range addResult.Symlinks {
+			if s.Skipped && strings.Contains(s.Reason, "nonexistent.txt") &&
+				strings.Contains(s.Reason, "does not match any files") {
+				foundWarning = true
+				break
+			}
+		}
+		if !foundWarning {
+			t.Errorf("expected warning about nonexistent.txt in result.Symlinks")
 		}
 
 		// Verify .envrc was symlinked (matching pattern should still work)
@@ -420,16 +416,13 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		var stdout, stderr bytes.Buffer
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    newTestGitRunner(mainDir, &stdout),
+			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
-			Stdout: &stdout,
-			Stderr: &stderr,
 		}
 
-		err = cmd.Run("feature/glob-test")
+		_, err = cmd.Run("feature/glob-test")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -467,10 +460,4 @@ worktree_destination_base_dir = %q
 			}
 		}
 	})
-}
-
-func newTestGitRunner(dir string, stdout *bytes.Buffer) *GitRunner {
-	runner := NewGitRunner(dir)
-	runner.Stdout = stdout
-	return runner
 }

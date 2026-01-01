@@ -2,10 +2,9 @@ package gwt
 
 import (
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 )
 
 // AddCommand creates git worktrees with symlinks.
@@ -13,8 +12,6 @@ type AddCommand struct {
 	FS     FileSystem
 	Git    *GitRunner
 	Config *Config
-	Stdout io.Writer
-	Stderr io.Writer
 }
 
 // NewAddCommand creates a new AddCommand with the given config.
@@ -23,71 +20,130 @@ func NewAddCommand(cfg *Config) *AddCommand {
 		FS:     osFS{},
 		Git:    NewGitRunner(cfg.WorktreeSourceDir),
 		Config: cfg,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
 	}
+}
+
+// SymlinkResult holds information about a symlink operation.
+type SymlinkResult struct {
+	Src     string
+	Dst     string
+	Skipped bool
+	Reason  string
+}
+
+// AddResult holds the result of an add operation.
+type AddResult struct {
+	Branch       string
+	WorktreePath string
+	Symlinks     []SymlinkResult
+	GitOutput    []byte
+}
+
+// Format formats the AddResult for display.
+func (r AddResult) Format(opts FormatOptions) FormatResult {
+	var stdout, stderr strings.Builder
+
+	var createdCount int
+	for _, s := range r.Symlinks {
+		if s.Skipped {
+			stderr.WriteString(fmt.Sprintf("warning: %s\n", s.Reason))
+		} else {
+			createdCount++
+		}
+	}
+
+	if opts.Verbose {
+		if len(r.GitOutput) > 0 {
+			stdout.Write(r.GitOutput)
+		}
+		stdout.WriteString(fmt.Sprintf("Created worktree at %s\n", r.WorktreePath))
+		for _, s := range r.Symlinks {
+			if !s.Skipped {
+				stdout.WriteString(fmt.Sprintf("Created symlink: %s -> %s\n", s.Dst, s.Src))
+			}
+		}
+	}
+
+	stdout.WriteString(fmt.Sprintf("gwt add: %s (%d symlinks)\n", r.Branch, createdCount))
+
+	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 }
 
 // Run creates a new worktree for the given branch name.
-func (c *AddCommand) Run(name string) error {
+func (c *AddCommand) Run(name string) (AddResult, error) {
+	var result AddResult
+	result.Branch = name
+
 	if name == "" {
-		return fmt.Errorf("branch name is required")
+		return result, fmt.Errorf("branch name is required")
 	}
 
 	if c.Config.WorktreeSourceDir == "" {
-		return fmt.Errorf("worktree source directory is not configured")
+		return result, fmt.Errorf("worktree source directory is not configured")
 	}
 	if c.Config.WorktreeDestBaseDir == "" {
-		return fmt.Errorf("worktree destination base directory is not configured")
+		return result, fmt.Errorf("worktree destination base directory is not configured")
 	}
 
 	wtPath := filepath.Join(c.Config.WorktreeDestBaseDir, name)
+	result.WorktreePath = wtPath
 
-	if err := c.createWorktree(name, wtPath); err != nil {
-		return err
+	gitOutput, err := c.createWorktree(name, wtPath)
+	if err != nil {
+		return result, err
 	}
+	result.GitOutput = gitOutput
 
-	if err := c.createSymlinks(c.Config.WorktreeSourceDir, wtPath, c.Config.Symlinks); err != nil {
-		return err
+	symlinks, err := c.createSymlinks(
+		c.Config.WorktreeSourceDir, wtPath, c.Config.Symlinks)
+	if err != nil {
+		return result, err
 	}
+	result.Symlinks = symlinks
 
-	fmt.Fprintf(c.Stdout, "Created worktree at %s\n", wtPath)
-	return nil
+	return result, nil
 }
 
-func (c *AddCommand) createWorktree(branch, path string) error {
+func (c *AddCommand) createWorktree(branch, path string) ([]byte, error) {
 	if _, err := c.FS.Stat(path); err == nil {
-		return fmt.Errorf("directory already exists: %s", path)
+		return nil, fmt.Errorf("directory already exists: %s", path)
 	}
 
 	var opts []WorktreeAddOption
 	if c.Git.BranchExists(branch) {
 		branches, err := c.Git.WorktreeListBranches()
 		if err != nil {
-			return fmt.Errorf("failed to list worktree branches: %w", err)
+			return nil, fmt.Errorf("failed to list worktree branches: %w", err)
 		}
 		if slices.Contains(branches, branch) {
-			return fmt.Errorf("branch %s is already checked out in another worktree", branch)
+			return nil, fmt.Errorf("branch %s is already checked out in another worktree", branch)
 		}
 	} else {
 		opts = append(opts, WithCreateBranch())
 	}
 
-	if err := c.Git.WorktreeAdd(path, branch, opts...); err != nil {
-		return fmt.Errorf("failed to create worktree: %w", err)
+	output, err := c.Git.WorktreeAdd(path, branch, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create worktree: %w", err)
 	}
 
-	return nil
+	return output, nil
 }
 
-func (c *AddCommand) createSymlinks(srcDir, dstDir string, patterns []string) error {
+func (c *AddCommand) createSymlinks(
+	srcDir, dstDir string, patterns []string) ([]SymlinkResult, error) {
+	var results []SymlinkResult
+
 	for _, pattern := range patterns {
 		matches, err := c.FS.Glob(srcDir, pattern)
 		if err != nil {
-			return fmt.Errorf("invalid glob pattern %s: %w", pattern, err)
+			return nil, fmt.Errorf("invalid glob pattern %s: %w", pattern, err)
 		}
 		if len(matches) == 0 {
-			fmt.Fprintf(c.Stderr, "warning: %s does not match any files, skipping\n", pattern)
+			results = append(results, SymlinkResult{
+				Skipped: true,
+				Reason:  fmt.Sprintf("%s does not match any files, skipping", pattern),
+			})
 			continue
 		}
 
@@ -97,23 +153,28 @@ func (c *AddCommand) createSymlinks(srcDir, dstDir string, patterns []string) er
 
 			// Skip if destination already exists (e.g., git-tracked file checked out by worktree).
 			if _, err := c.FS.Stat(dst); err == nil {
-				fmt.Fprintf(c.Stderr, "Warning: skipping symlink for %s (already exists)\n", match)
+				results = append(results, SymlinkResult{
+					Src:     src,
+					Dst:     dst,
+					Skipped: true,
+					Reason:  fmt.Sprintf("skipping symlink for %s (already exists)", match),
+				})
 				continue
 			}
 
 			if dir := filepath.Dir(dst); dir != dstDir {
 				if err := c.FS.MkdirAll(dir, 0755); err != nil {
-					return fmt.Errorf("failed to create directory for %s: %w", match, err)
+					return nil, fmt.Errorf("failed to create directory for %s: %w", match, err)
 				}
 			}
 
 			if err := c.FS.Symlink(src, dst); err != nil {
-				return fmt.Errorf("failed to create symlink for %s: %w", match, err)
+				return nil, fmt.Errorf("failed to create symlink for %s: %w", match, err)
 			}
 
-			fmt.Fprintf(c.Stdout, "Created symlink: %s -> %s\n", dst, src)
+			results = append(results, SymlinkResult{Src: src, Dst: dst})
 		}
 	}
 
-	return nil
+	return results, nil
 }

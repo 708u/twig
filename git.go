@@ -2,8 +2,6 @@ package gwt
 
 import (
 	"fmt"
-	"io"
-	"os"
 	"os/exec"
 	"strings"
 )
@@ -27,14 +25,12 @@ func (e osGitExecutor) Run(args ...string) ([]byte, error) {
 // GitRunner provides git operations using GitExecutor.
 type GitRunner struct {
 	Executor GitExecutor
-	Stdout   io.Writer
 }
 
 // NewGitRunner creates a new GitRunner with the default executor.
 func NewGitRunner(dir string) *GitRunner {
 	return &GitRunner{
 		Executor: osGitExecutor{dir: dir},
-		Stdout:   os.Stdout,
 	}
 }
 
@@ -53,23 +49,16 @@ func WithCreateBranch() WorktreeAddOption {
 }
 
 // WorktreeAdd creates a new worktree at the specified path.
-func (g *GitRunner) WorktreeAdd(path, branch string, opts ...WorktreeAddOption) error {
+func (g *GitRunner) WorktreeAdd(path, branch string, opts ...WorktreeAddOption) ([]byte, error) {
 	var o worktreeAddOptions
 	for _, opt := range opts {
 		opt(&o)
 	}
 
-	var output []byte
-	var err error
 	if o.createBranch {
-		output, err = g.worktreeAddWithNewBranch(branch, path)
-	} else {
-		output, err = g.worktreeAdd(path, branch)
+		return g.worktreeAddWithNewBranch(branch, path)
 	}
-	if len(output) > 0 {
-		fmt.Fprint(g.Stdout, string(output))
-	}
-	return err
+	return g.worktreeAdd(path, branch)
 }
 
 // BranchExists checks if a branch exists in the local repository.
@@ -155,7 +144,7 @@ func WithForceRemove() WorktreeRemoveOption {
 
 // WorktreeRemove removes the worktree at the given path.
 // By default fails if there are uncommitted changes. Use WithForceRemove() to force.
-func (g *GitRunner) WorktreeRemove(path string, opts ...WorktreeRemoveOption) error {
+func (g *GitRunner) WorktreeRemove(path string, opts ...WorktreeRemoveOption) ([]byte, error) {
 	var o worktreeRemoveOptions
 	for _, opt := range opts {
 		opt(&o)
@@ -163,10 +152,9 @@ func (g *GitRunner) WorktreeRemove(path string, opts ...WorktreeRemoveOption) er
 
 	out, err := g.worktreeRemove(path, o.force)
 	if err != nil {
-		return fmt.Errorf("failed to remove worktree: %w", err)
+		return nil, fmt.Errorf("failed to remove worktree: %w", err)
 	}
-	g.Stdout.Write(out)
-	return nil
+	return out, nil
 }
 
 type branchDeleteOptions struct {
@@ -185,7 +173,7 @@ func WithForceDelete() BranchDeleteOption {
 
 // BranchDelete deletes a local branch.
 // By default uses -d (safe delete). Use WithForceDelete() to use -D (force delete).
-func (g *GitRunner) BranchDelete(branch string, opts ...BranchDeleteOption) error {
+func (g *GitRunner) BranchDelete(branch string, opts ...BranchDeleteOption) ([]byte, error) {
 	var o branchDeleteOptions
 	for _, opt := range opts {
 		opt(&o)
@@ -193,10 +181,9 @@ func (g *GitRunner) BranchDelete(branch string, opts ...BranchDeleteOption) erro
 
 	out, err := g.branchDelete(branch, o.force)
 	if err != nil {
-		return fmt.Errorf("failed to delete branch: %w", err)
+		return nil, fmt.Errorf("failed to delete branch: %w", err)
 	}
-	g.Stdout.Write(out)
-	return nil
+	return out, nil
 }
 
 // private methods for git command execution

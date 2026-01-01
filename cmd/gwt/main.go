@@ -99,7 +99,19 @@ var addCmd = &cobra.Command{
 		return branches, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return gwt.NewAddCommand(cfg).Run(args[0])
+		verbose, _ := cmd.Flags().GetBool("verbose")
+
+		result, err := gwt.NewAddCommand(cfg).Run(args[0])
+		if err != nil {
+			return err
+		}
+
+		formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
+		if formatted.Stderr != "" {
+			fmt.Fprint(os.Stderr, formatted.Stderr)
+		}
+		fmt.Fprint(os.Stdout, formatted.Stdout)
+		return nil
 	},
 }
 
@@ -128,18 +140,30 @@ Use --force to override these checks.`,
 		return branches, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		verbose, _ := cmd.Flags().GetBool("verbose")
 		force, _ := cmd.Flags().GetBool("force")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
-		return gwt.NewRemoveCommand(cfg).Run(args[0], cwd, gwt.RemoveOptions{
+		result, err := gwt.NewRemoveCommand(cfg).Run(args[0], cwd, gwt.RemoveOptions{
 			Force:  force,
 			DryRun: dryRun,
 		})
+		if err != nil {
+			return err
+		}
+
+		formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
+		if formatted.Stderr != "" {
+			fmt.Fprint(os.Stderr, formatted.Stderr)
+		}
+		fmt.Fprint(os.Stdout, formatted.Stdout)
+		return nil
 	},
 }
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&dirFlag, "directory", "C", "", "Run as if gwt was started in <path>")
+	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
 	rootCmd.AddCommand(addCmd)
 
 	removeCmd.Flags().BoolP("force", "f", false, "Force removal even with uncommitted changes or unmerged branch")

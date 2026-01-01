@@ -1,7 +1,6 @@
 package gwt
 
 import (
-	"bytes"
 	"errors"
 	"slices"
 	"strings"
@@ -146,7 +145,6 @@ func TestAddCommand_Run(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var stdout, stderr bytes.Buffer
 			var captured []string
 
 			mockFS := tt.setupFS(t)
@@ -154,13 +152,11 @@ func TestAddCommand_Run(t *testing.T) {
 
 			cmd := &AddCommand{
 				FS:     mockFS,
-				Git:    &GitRunner{Executor: mockGit, Stdout: &stdout},
+				Git:    &GitRunner{Executor: mockGit},
 				Config: tt.config,
-				Stdout: &stdout,
-				Stderr: &stderr,
 			}
 
-			err := cmd.Run(tt.branch)
+			_, err := cmd.Run(tt.branch)
 
 			if tt.wantErr {
 				if err == nil {
@@ -195,12 +191,14 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		targets     []string
-		setupFS     func(t *testing.T) *testutil.MockFS
-		wantErr     bool
-		errContains string
-		wantStderr  string
+		name           string
+		targets        []string
+		setupFS        func(t *testing.T) *testutil.MockFS
+		wantErr        bool
+		errContains    string
+		wantSkipped    int
+		wantCreated    int
+		wantReasonLike string
 	}{
 		{
 			name:    "success",
@@ -214,7 +212,8 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 					},
 				}
 			},
-			wantErr: false,
+			wantErr:     false,
+			wantCreated: 2,
 		},
 		{
 			name:    "source_not_exist",
@@ -225,8 +224,9 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 					GlobResults: map[string][]string{},
 				}
 			},
-			wantErr:    false,
-			wantStderr: "warning: .envrc does not match any files, skipping",
+			wantErr:        false,
+			wantSkipped:    1,
+			wantReasonLike: "does not match any files",
 		},
 		{
 			name:    "symlink_error",
@@ -255,8 +255,9 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 					ExistingPaths: []string{"/dst/.claude"},
 				}
 			},
-			wantErr:    false,
-			wantStderr: "Warning: skipping symlink for .claude (already exists)",
+			wantErr:        false,
+			wantSkipped:    1,
+			wantReasonLike: "already exists",
 		},
 	}
 
@@ -264,17 +265,13 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var stdout, stderr bytes.Buffer
-
 			mockFS := tt.setupFS(t)
 
 			cmd := &AddCommand{
-				FS:     mockFS,
-				Stdout: &stdout,
-				Stderr: &stderr,
+				FS: mockFS,
 			}
 
-			err := cmd.createSymlinks("/src", "/dst", tt.targets)
+			results, err := cmd.createSymlinks("/src", "/dst", tt.targets)
 
 			if tt.wantErr {
 				if err == nil {
@@ -290,8 +287,23 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if tt.wantStderr != "" && !strings.Contains(stderr.String(), tt.wantStderr) {
-				t.Errorf("stderr %q should contain %q", stderr.String(), tt.wantStderr)
+			var skipped, created int
+			for _, r := range results {
+				if r.Skipped {
+					skipped++
+					if tt.wantReasonLike != "" && !strings.Contains(r.Reason, tt.wantReasonLike) {
+						t.Errorf("reason %q should contain %q", r.Reason, tt.wantReasonLike)
+					}
+				} else {
+					created++
+				}
+			}
+
+			if skipped != tt.wantSkipped {
+				t.Errorf("got %d skipped, want %d", skipped, tt.wantSkipped)
+			}
+			if created != tt.wantCreated {
+				t.Errorf("got %d created, want %d", created, tt.wantCreated)
 			}
 		})
 	}
