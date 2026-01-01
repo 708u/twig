@@ -6,9 +6,10 @@ import (
 
 // MockFS is a mock implementation of gwt.FileSystem for testing.
 type MockFS struct {
-	GetwdFunc   func() (string, error)
-	StatFunc    func(name string) (fs.FileInfo, error)
-	SymlinkFunc func(oldname, newname string) error
+	GetwdFunc      func() (string, error)
+	StatFunc       func(name string) (fs.FileInfo, error)
+	SymlinkFunc    func(oldname, newname string) error
+	IsNotExistFunc func(err error) bool
 }
 
 func (m *MockFS) Getwd() (string, error) {
@@ -30,4 +31,11 @@ func (m *MockFS) Symlink(oldname, newname string) error {
 		return m.SymlinkFunc(oldname, newname)
 	}
 	return nil
+}
+
+func (m *MockFS) IsNotExist(err error) bool {
+	if m.IsNotExistFunc != nil {
+		return m.IsNotExistFunc(err)
+	}
+	return false
 }

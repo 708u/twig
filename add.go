@@ -78,7 +78,7 @@ func (c *AddCommand) createSymlinks(srcDir, dstDir string, targets []string) err
 		srcPath := filepath.Join(srcDir, target)
 		dstPath := filepath.Join(dstDir, target)
 
-		if _, err := c.FS.Stat(srcPath); os.IsNotExist(err) {
+		if _, err := c.FS.Stat(srcPath); c.FS.IsNotExist(err) {
 			fmt.Fprintf(os.Stderr, "warning: %s does not exist, skipping\n", target)
 			continue
 		}
