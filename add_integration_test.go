@@ -6,10 +6,11 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/708u/gwt/internal/testutil"
 )
 
 func TestAddCommand_Integration(t *testing.T) {
@@ -19,7 +20,7 @@ func TestAddCommand_Integration(t *testing.T) {
 	t.Run("FullWorkflow", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := setupTestRepo(t)
+		repoDir, mainDir := testutil.SetupTestRepo(t)
 
 		gwtDir := filepath.Join(mainDir, ".gwt")
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
@@ -79,7 +80,7 @@ worktree_destination_base_dir = %q
 			t.Errorf("symlink target = %q, want %q", target, expectedTarget)
 		}
 
-		out := runGit(t, mainDir, "worktree", "list")
+		out := testutil.RunGit(t, mainDir, "worktree", "list")
 		if !strings.Contains(out, "feature-test") {
 			t.Errorf("worktree list does not contain feature-test: %s", out)
 		}
@@ -88,9 +89,9 @@ worktree_destination_base_dir = %q
 	t.Run("ExistingBranch", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := setupTestRepo(t)
+		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		runGit(t, mainDir, "branch", "existing-branch")
+		testutil.RunGit(t, mainDir, "branch", "existing-branch")
 
 		gwtDir := filepath.Join(mainDir, ".gwt")
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
@@ -132,9 +133,9 @@ worktree_destination_base_dir = %q
 	t.Run("BranchAlreadyCheckedOut", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := setupTestRepo(t)
+		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		runGit(t, mainDir, "worktree", "add", filepath.Join(repoDir, "other-wt"), "-b", "test-branch")
+		testutil.RunGit(t, mainDir, "worktree", "add", filepath.Join(repoDir, "other-wt"), "-b", "test-branch")
 
 		gwtDir := filepath.Join(mainDir, ".gwt")
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
@@ -170,37 +171,6 @@ worktree_destination_base_dir = %q
 			t.Errorf("error %q should contain 'already checked out'", err.Error())
 		}
 	})
-}
-
-func setupTestRepo(t *testing.T) (repoDir, mainDir string) {
-	t.Helper()
-
-	tmpDir := t.TempDir()
-	repoDir = filepath.Join(tmpDir, "repo")
-	mainDir = filepath.Join(repoDir, "main")
-
-	if err := os.MkdirAll(mainDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	runGit(t, mainDir, "init")
-	runGit(t, mainDir, "config", "user.email", "test@example.com")
-	runGit(t, mainDir, "config", "user.name", "Test User")
-	runGit(t, mainDir, "commit", "--allow-empty", "-m", "initial")
-
-	return repoDir, mainDir
-}
-
-func runGit(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v failed: %v\n%s", args, err, out)
-	}
-	return string(out)
 }
 
 func newTestGitRunner(dir string, stdout *bytes.Buffer) *GitRunner {
