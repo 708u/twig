@@ -30,13 +30,13 @@ func NewAddCommand(cfg *Config) *AddCommand {
 
 // Run creates a new worktree for the given branch name.
 func (c *AddCommand) Run(name string) error {
+	if name == "" {
+		return fmt.Errorf("branch name is required")
+	}
+
 	srcDir := c.Config.WorktreeSourceDir
 	if srcDir == "" {
-		var err error
-		srcDir, err = c.FS.Getwd()
-		if err != nil {
-			return fmt.Errorf("failed to get current directory: %w", err)
-		}
+		return fmt.Errorf("worktree source directory is not configured")
 	}
 
 	destBaseDir := c.Config.WorktreeDestBaseDir

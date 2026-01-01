@@ -48,7 +48,7 @@ Two-level design for testability:
 
 ### FileSystem Abstraction
 
-- `FileSystem` interface: `Getwd`, `Stat`, `Symlink`, `IsNotExist`
+- `FileSystem` interface: `Stat`, `Symlink`, `IsNotExist`, `Glob`, `MkdirAll`
 - `osFS` struct: production implementation wrapping os package
 
 ### Configuration

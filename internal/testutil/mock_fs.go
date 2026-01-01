@@ -9,18 +9,11 @@ import (
 // MockFS is a mock implementation of gwt.FileSystem for testing.
 type MockFS struct {
 	// Override functions (takes precedence if set)
-	GetwdFunc      func() (string, error)
 	StatFunc       func(name string) (fs.FileInfo, error)
 	SymlinkFunc    func(oldname, newname string) error
 	IsNotExistFunc func(err error) bool
 	GlobFunc       func(dir, pattern string) ([]string, error)
 	MkdirAllFunc   func(path string, perm fs.FileMode) error
-
-	// Cwd is the current working directory returned by Getwd.
-	Cwd string
-
-	// GetwdErr is returned by Getwd if set.
-	GetwdErr error
 
 	// ExistingPaths is a list of paths that exist (Stat returns nil, nil).
 	ExistingPaths []string
@@ -36,19 +29,6 @@ type MockFS struct {
 
 	// MkdirAllErr is returned by MkdirAll if set.
 	MkdirAllErr error
-}
-
-func (m *MockFS) Getwd() (string, error) {
-	if m.GetwdFunc != nil {
-		return m.GetwdFunc()
-	}
-	if m.GetwdErr != nil {
-		return "", m.GetwdErr
-	}
-	if m.Cwd != "" {
-		return m.Cwd, nil
-	}
-	return "/repo/main", nil
 }
 
 func (m *MockFS) Stat(name string) (fs.FileInfo, error) {
