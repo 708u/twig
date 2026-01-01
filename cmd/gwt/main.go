@@ -15,6 +15,34 @@ var (
 	dirFlag string
 )
 
+func resolveDirectory(dirFlag, baseCwd string) (string, error) {
+	if dirFlag == "" {
+		return baseCwd, nil
+	}
+
+	var resolved string
+	if !filepath.IsAbs(dirFlag) {
+		resolved = filepath.Join(baseCwd, dirFlag)
+	} else {
+		resolved = dirFlag
+	}
+
+	resolved, err := filepath.Abs(resolved)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve path: %w", err)
+	}
+
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("cannot change to '%s': %w", dirFlag, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("cannot change to '%s': not a directory", dirFlag)
+	}
+
+	return resolved, nil
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "gwt",
 	Short: "Manage git worktrees and branches together",
@@ -25,24 +53,9 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
 
-		if dirFlag != "" {
-			if !filepath.IsAbs(dirFlag) {
-				cwd = filepath.Join(cwd, dirFlag)
-			} else {
-				cwd = dirFlag
-			}
-			cwd, err = filepath.Abs(cwd)
-			if err != nil {
-				return fmt.Errorf("failed to resolve path: %w", err)
-			}
-
-			info, err := os.Stat(cwd)
-			if err != nil {
-				return fmt.Errorf("cannot change to '%s': %w", dirFlag, err)
-			}
-			if !info.IsDir() {
-				return fmt.Errorf("cannot change to '%s': not a directory", dirFlag)
-			}
+		cwd, err = resolveDirectory(dirFlag, cwd)
+		if err != nil {
+			return err
 		}
 
 		result, err := gwt.LoadConfig(cwd)
