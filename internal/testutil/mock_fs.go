@@ -13,6 +13,8 @@ type MockFS struct {
 	StatFunc       func(name string) (fs.FileInfo, error)
 	SymlinkFunc    func(oldname, newname string) error
 	IsNotExistFunc func(err error) bool
+	GlobFunc       func(dir, pattern string) ([]string, error)
+	MkdirAllFunc   func(path string, perm fs.FileMode) error
 
 	// Cwd is the current working directory returned by Getwd.
 	Cwd string
@@ -25,6 +27,15 @@ type MockFS struct {
 
 	// SymlinkErr is returned by Symlink if set.
 	SymlinkErr error
+
+	// GlobResults maps pattern to matching paths.
+	GlobResults map[string][]string
+
+	// GlobErr is returned by Glob if set.
+	GlobErr error
+
+	// MkdirAllErr is returned by MkdirAll if set.
+	MkdirAllErr error
 }
 
 func (m *MockFS) Getwd() (string, error) {
@@ -62,4 +73,24 @@ func (m *MockFS) IsNotExist(err error) bool {
 		return m.IsNotExistFunc(err)
 	}
 	return errors.Is(err, fs.ErrNotExist)
+}
+
+func (m *MockFS) Glob(dir, pattern string) ([]string, error) {
+	if m.GlobFunc != nil {
+		return m.GlobFunc(dir, pattern)
+	}
+	if m.GlobErr != nil {
+		return nil, m.GlobErr
+	}
+	if m.GlobResults != nil {
+		return m.GlobResults[pattern], nil
+	}
+	return nil, nil
+}
+
+func (m *MockFS) MkdirAll(path string, perm fs.FileMode) error {
+	if m.MkdirAllFunc != nil {
+		return m.MkdirAllFunc(path, perm)
+	}
+	return m.MkdirAllErr
 }

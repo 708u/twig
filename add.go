@@ -84,21 +84,33 @@ func (c *AddCommand) createWorktree(branch, path string) error {
 	return nil
 }
 
-func (c *AddCommand) createSymlinks(srcDir, dstDir string, targets []string) error {
-	for _, target := range targets {
-		src := filepath.Join(srcDir, target)
-		dst := filepath.Join(dstDir, target)
-
-		if _, err := c.FS.Stat(src); c.FS.IsNotExist(err) {
-			fmt.Fprintf(c.Stderr, "warning: %s does not exist, skipping\n", target)
+func (c *AddCommand) createSymlinks(srcDir, dstDir string, patterns []string) error {
+	for _, pattern := range patterns {
+		matches, err := c.FS.Glob(srcDir, pattern)
+		if err != nil {
+			return fmt.Errorf("invalid glob pattern %s: %w", pattern, err)
+		}
+		if len(matches) == 0 {
+			fmt.Fprintf(c.Stderr, "warning: %s does not match any files, skipping\n", pattern)
 			continue
 		}
 
-		if err := c.FS.Symlink(src, dst); err != nil {
-			return fmt.Errorf("failed to create symlink for %s: %w", target, err)
-		}
+		for _, match := range matches {
+			src := filepath.Join(srcDir, match)
+			dst := filepath.Join(dstDir, match)
 
-		fmt.Fprintf(c.Stdout, "Created symlink: %s -> %s\n", dst, src)
+			if dir := filepath.Dir(dst); dir != dstDir {
+				if err := c.FS.MkdirAll(dir, 0755); err != nil {
+					return fmt.Errorf("failed to create directory for %s: %w", match, err)
+				}
+			}
+
+			if err := c.FS.Symlink(src, dst); err != nil {
+				return fmt.Errorf("failed to create symlink for %s: %w", match, err)
+			}
+
+			fmt.Fprintf(c.Stdout, "Created symlink: %s -> %s\n", dst, src)
+		}
 	}
 
 	return nil

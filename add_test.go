@@ -210,7 +210,10 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
 				return &testutil.MockFS{
-					ExistingPaths: []string{"/src/.envrc", "/src/.tool-versions"},
+					GlobResults: map[string][]string{
+						".envrc":         {".envrc"},
+						".tool-versions": {".tool-versions"},
+					},
 				}
 			},
 			wantErr: false,
@@ -220,10 +223,12 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 			targets: []string{".envrc"},
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
-				return &testutil.MockFS{}
+				return &testutil.MockFS{
+					GlobResults: map[string][]string{},
+				}
 			},
 			wantErr:    false,
-			wantStderr: "warning: .envrc does not exist, skipping",
+			wantStderr: "warning: .envrc does not match any files, skipping",
 		},
 		{
 			name:    "symlink_error",
@@ -231,8 +236,10 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
 				return &testutil.MockFS{
-					ExistingPaths: []string{"/src/.envrc"},
-					SymlinkErr:    errors.New("symlink failed"),
+					GlobResults: map[string][]string{
+						".envrc": {".envrc"},
+					},
+					SymlinkErr: errors.New("symlink failed"),
 				}
 			},
 			wantErr:     true,

@@ -171,6 +171,95 @@ worktree_destination_base_dir = %q
 			t.Errorf("error %q should contain 'already checked out'", err.Error())
 		}
 	})
+
+	t.Run("GlobPatternSymlinks", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		matchFiles := []string{"config/app.toml", "config/env/dev.toml"}
+		noMatchFiles := []string{"config/readme.md", "other.txt"}
+
+		// Create nested directory structure for glob testing
+		if err := os.MkdirAll(filepath.Join(mainDir, "config", "env"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range matchFiles {
+			if err := os.WriteFile(filepath.Join(mainDir, f), []byte("content"), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for _, f := range noMatchFiles {
+			if err := os.WriteFile(filepath.Join(mainDir, f), []byte("content"), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`symlinks = ["config/**/*.toml"]
+worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var stdout, stderr bytes.Buffer
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    newTestGitRunner(mainDir, &stdout),
+			Config: result.Config,
+			Stdout: &stdout,
+			Stderr: &stderr,
+		}
+
+		err = cmd.Run("feature/glob-test")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		wtPath := filepath.Join(repoDir, "feature-glob-test")
+
+		// Verify symlinks created for glob matches
+		for _, rel := range matchFiles {
+			linkPath := filepath.Join(wtPath, rel)
+			info, err := os.Lstat(linkPath)
+			if err != nil {
+				t.Errorf("symlink not created: %s", rel)
+				continue
+			}
+			if info.Mode()&os.ModeSymlink == 0 {
+				t.Errorf("%s is not a symlink", rel)
+			}
+
+			target, err := os.Readlink(linkPath)
+			if err != nil {
+				t.Errorf("failed to read symlink %s: %v", rel, err)
+				continue
+			}
+			expectedTarget := filepath.Join(mainDir, rel)
+			if target != expectedTarget {
+				t.Errorf("symlink target = %q, want %q", target, expectedTarget)
+			}
+		}
+
+		// Verify non-matching files are NOT symlinked
+		for _, rel := range noMatchFiles {
+			linkPath := filepath.Join(wtPath, rel)
+			if _, err := os.Lstat(linkPath); err == nil {
+				t.Errorf("file should not be symlinked: %s", rel)
+			}
+		}
+	})
 }
 
 func newTestGitRunner(dir string, stdout *bytes.Buffer) *GitRunner {
