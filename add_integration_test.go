@@ -85,6 +85,59 @@ worktree_destination_base_dir = %q
 		}
 	})
 
+	t.Run("DefaultDestinationBaseDir", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Omit worktree_destination_base_dir - should default to parent of srcDir
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+`, mainDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify destBaseDir is empty in config
+		if result.Config.WorktreeDestBaseDir != "" {
+			t.Errorf("expected empty WorktreeDestBaseDir, got %q", result.Config.WorktreeDestBaseDir)
+		}
+
+		var stdout, stderr bytes.Buffer
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    newTestGitRunner(mainDir, &stdout),
+			Config: result.Config,
+			Stdout: &stdout,
+			Stderr: &stderr,
+		}
+
+		err = cmd.Run("feature/default-dest")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Worktree should be created in parent of srcDir (mainDir)
+		expectedPath := filepath.Join(repoDir, "feature-default-dest")
+		if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+			t.Errorf("worktree not created at expected path: %s", expectedPath)
+		}
+
+		out := testutil.RunGit(t, mainDir, "worktree", "list")
+		if !strings.Contains(out, "feature-default-dest") {
+			t.Errorf("worktree list does not contain feature-default-dest: %s", out)
+		}
+	})
+
 	t.Run("ExistingBranch", func(t *testing.T) {
 		t.Parallel()
 
