@@ -22,7 +22,7 @@ type AddCommand struct {
 func NewAddCommand(cfg *Config) *AddCommand {
 	return &AddCommand{
 		FS:     osFS{},
-		Git:    NewGitRunner(),
+		Git:    NewGitRunner(cfg.WorktreeSourceDir),
 		Config: cfg,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,

@@ -58,7 +58,7 @@ func LoadConfig(dir string) (*Config, error) {
 		destBaseDir = localCfg.WorktreeDestBaseDir
 	}
 
-	var srcDir string
+	srcDir := dir
 	if projCfg != nil && projCfg.WorktreeSourceDir != "" {
 		srcDir = projCfg.WorktreeSourceDir
 	}

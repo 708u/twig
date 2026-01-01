@@ -15,10 +15,13 @@ type GitExecutor interface {
 	Run(args ...string) ([]byte, error)
 }
 
-type osGitExecutor struct{}
+type osGitExecutor struct {
+	dir string
+}
 
-func (osGitExecutor) Run(args ...string) ([]byte, error) {
-	return exec.Command("git", args...).Output()
+func (e osGitExecutor) Run(args ...string) ([]byte, error) {
+	fullArgs := append([]string{"-C", e.dir}, args...)
+	return exec.Command("git", fullArgs...).Output()
 }
 
 // GitRunner provides git operations using GitExecutor.
@@ -28,9 +31,9 @@ type GitRunner struct {
 }
 
 // NewGitRunner creates a new GitRunner with the default executor.
-func NewGitRunner() *GitRunner {
+func NewGitRunner(dir string) *GitRunner {
 	return &GitRunner{
-		Executor: osGitExecutor{},
+		Executor: osGitExecutor{dir: dir},
 		Stdout:   os.Stdout,
 	}
 }
