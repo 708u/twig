@@ -171,6 +171,90 @@ worktree_destination_base_dir = %q
 		}
 	})
 
+	t.Run("LocalConfigSymlinksMerge", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Project config with .envrc
+		projectSettings := fmt.Sprintf(`symlinks = [".envrc"]
+worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Local config with .tool-versions and duplicate .envrc
+		localSettings := `symlinks = [".tool-versions", ".envrc"]
+`
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create source files
+		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# envrc"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(mainDir, ".tool-versions"), []byte("go 1.21"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify merged symlinks with deduplication
+		if len(result.Config.Symlinks) != 2 {
+			t.Errorf("expected 2 symlinks, got %d: %v", len(result.Config.Symlinks), result.Config.Symlinks)
+		}
+
+		var stdout, stderr bytes.Buffer
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    newTestGitRunner(mainDir, &stdout),
+			Config: result.Config,
+			Stdout: &stdout,
+			Stderr: &stderr,
+		}
+
+		err = cmd.Run("feature/local-merge")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		wtPath := filepath.Join(repoDir, "feature-local-merge")
+
+		// Verify both files are symlinked
+		for _, rel := range []string{".envrc", ".tool-versions"} {
+			linkPath := filepath.Join(wtPath, rel)
+			info, err := os.Lstat(linkPath)
+			if err != nil {
+				t.Errorf("symlink not created: %s", rel)
+				continue
+			}
+			if info.Mode()&os.ModeSymlink == 0 {
+				t.Errorf("%s is not a symlink", rel)
+			}
+
+			target, err := os.Readlink(linkPath)
+			if err != nil {
+				t.Errorf("failed to read symlink %s: %v", rel, err)
+				continue
+			}
+			expectedTarget := filepath.Join(mainDir, rel)
+			if target != expectedTarget {
+				t.Errorf("symlink target = %q, want %q", target, expectedTarget)
+			}
+		}
+	})
+
 	t.Run("GlobPatternSymlinks", func(t *testing.T) {
 		t.Parallel()
 
