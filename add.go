@@ -2,6 +2,7 @@ package gwt
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +14,8 @@ type AddCommand struct {
 	FS     FileSystem
 	Git    *GitRunner
 	Config *Config
+	Stdout io.Writer
+	Stderr io.Writer
 }
 
 // NewAddCommand creates a new AddCommand with the given config.
@@ -21,6 +24,8 @@ func NewAddCommand(cfg *Config) *AddCommand {
 		FS:     osFS{},
 		Git:    NewGitRunner(),
 		Config: cfg,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
 	}
 }
 
@@ -44,7 +49,7 @@ func (c *AddCommand) Run(name string) error {
 		return err
 	}
 
-	fmt.Printf("Created worktree at %s\n", worktreePath)
+	fmt.Fprintf(c.Stdout, "Created worktree at %s\n", worktreePath)
 	return nil
 }
 
@@ -79,7 +84,7 @@ func (c *AddCommand) createSymlinks(srcDir, dstDir string, targets []string) err
 		dstPath := filepath.Join(dstDir, target)
 
 		if _, err := c.FS.Stat(srcPath); c.FS.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "warning: %s does not exist, skipping\n", target)
+			fmt.Fprintf(c.Stderr, "warning: %s does not exist, skipping\n", target)
 			continue
 		}
 
@@ -87,7 +92,7 @@ func (c *AddCommand) createSymlinks(srcDir, dstDir string, targets []string) err
 			return fmt.Errorf("failed to create symlink for %s: %w", target, err)
 		}
 
-		fmt.Printf("Created symlink: %s -> %s\n", dstPath, srcPath)
+		fmt.Fprintf(c.Stdout, "Created symlink: %s -> %s\n", dstPath, srcPath)
 	}
 
 	return nil

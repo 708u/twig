@@ -2,6 +2,8 @@ package gwt
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -22,11 +24,15 @@ func (osGitExecutor) Run(args ...string) ([]byte, error) {
 // GitRunner provides git operations using GitExecutor.
 type GitRunner struct {
 	Executor GitExecutor
+	Stdout   io.Writer
 }
 
 // NewGitRunner creates a new GitRunner with the default executor.
 func NewGitRunner() *GitRunner {
-	return &GitRunner{Executor: osGitExecutor{}}
+	return &GitRunner{
+		Executor: osGitExecutor{},
+		Stdout:   os.Stdout,
+	}
 }
 
 type worktreeAddOptions struct {
@@ -58,7 +64,7 @@ func (g *GitRunner) WorktreeAdd(path, branch string, opts ...WorktreeAddOption) 
 		output, err = g.Executor.Run("worktree", "add", path, branch)
 	}
 	if len(output) > 0 {
-		fmt.Print(string(output))
+		fmt.Fprint(g.Stdout, string(output))
 	}
 	return err
 }
