@@ -1,6 +1,5 @@
 ---
 description: 作業途中で発生した別タスクをmdファイルに書き出す
-argument-hint: <filename>
 ---
 
 # 概要
@@ -9,13 +8,28 @@ argument-hint: <filename>
 
 ## 指示
 
-1. ユーザーと会話して、後回しにするタスクの内容を明確にする
-2. 以下の構造でmdファイルを作成する:
+1. 現在の会話コンテキストから、後回しにするタスクの内容を把握する
+2. タスク内容に基づいて、適切なディレクトリ名（kebab-case）を2-3個提案する
+3. AskUserQuestionツールを使用して、ユーザーにディレクトリ名を選択させる
+4. 以下の構造でmdファイルを作成する:
    - 目的
    - 変更内容（具体的な実装方針）
    - 対象ファイル
    - 完了条件
-3. ファイルは `docs/tasks/$ARGUMENTS/task.md` として保存する（ディレクトリがなければ作成）
+5. ファイルは `docs/tasks/<選択されたディレクトリ名>/task.md` として保存する
+
+## AskUserQuestionの使用例
+
+```yaml
+AskUserQuestion:
+  question: "タスクのディレクトリ名を選択してください"
+  header: "Dir name"
+  options:
+    - label: "git-runner-dir-injection"
+      description: "GitRunnerにディレクトリ注入機能を追加"
+    - label: "refactor-config-fields"
+      description: "Configフィールドのリファクタリング"
+```
 
 ## 出力フォーマット
 
@@ -45,5 +59,5 @@ argument-hint: <filename>
 
 - 現在の作業コンテキストから必要な情報を抽出する
 - 後で読んでも理解できるよう、十分な情報を含める
-- ファイル名は引数で指定されたものを使用する
+- ディレクトリ名はkebab-caseで、タスク内容を簡潔に表すものにする
 - 対象ファイルは `@` プレフィックスで記載し、後でファイル内容を参照可能にする
