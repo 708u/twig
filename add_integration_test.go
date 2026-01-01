@@ -308,12 +308,81 @@ worktree_destination_base_dir = %q
 		}
 	})
 
-	t.Run("GlobPatternSymlinks", func(t *testing.T) {
+	t.Run("NoMatchPatternWarning", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		matchFiles := []string{"config/app.toml", "config/env/dev.toml"}
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Configure symlinks with non-existent file pattern
+		settingsContent := fmt.Sprintf(`symlinks = ["nonexistent.txt", ".envrc"]
+worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Only create .envrc (not nonexistent.txt)
+		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# envrc"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var stdout, stderr bytes.Buffer
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    newTestGitRunner(mainDir, &stdout),
+			Config: result.Config,
+			Stdout: &stdout,
+			Stderr: &stderr,
+		}
+
+		err = cmd.Run("feature/warn-test")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree was created successfully
+		wtPath := filepath.Join(repoDir, "feature-warn-test")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+
+		// Verify warning was printed to stderr
+		stderrStr := stderr.String()
+		if !strings.Contains(stderrStr, "nonexistent.txt") || !strings.Contains(stderrStr, "does not match any files, skipping") {
+			t.Errorf("expected warning about nonexistent.txt in stderr, got: %q", stderrStr)
+		}
+
+		// Verify .envrc was symlinked (matching pattern should still work)
+		envrcPath := filepath.Join(wtPath, ".envrc")
+		info, err := os.Lstat(envrcPath)
+		if err != nil {
+			t.Fatalf("failed to stat .envrc: %v", err)
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			t.Errorf(".envrc is not a symlink")
+		}
+	})
+
+	t.Run("MultipleSymlinkPatterns", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Mix of literal files and glob-matched files
+		literalFiles := []string{".envrc", ".tool-versions"}
+		globMatchFiles := []string{"config/app.toml", "config/env/dev.toml"}
+		matchFiles := append(literalFiles, globMatchFiles...)
 		noMatchFiles := []string{"config/readme.md", "other.txt"}
 
 		// Create nested directory structure for glob testing
@@ -336,7 +405,8 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		settingsContent := fmt.Sprintf(`symlinks = ["config/**/*.toml"]
+		// Multiple patterns: literal files + glob pattern
+		settingsContent := fmt.Sprintf(`symlinks = [".envrc", ".tool-versions", "config/**/*.toml"]
 worktree_source_dir = %q
 worktree_destination_base_dir = %q
 `, mainDir, repoDir)
