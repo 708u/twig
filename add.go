@@ -39,17 +39,17 @@ func (c *AddCommand) Run(name string) error {
 	// TODO: pathについて考える
 	dirName := strings.ReplaceAll(name, "/", "-")
 	// TODO: configから取るようにするか考える
-	worktreePath := filepath.Join(cwd, "..", dirName)
+	wtPath := filepath.Join(cwd, "..", dirName)
 
-	if err := c.createWorktree(name, worktreePath); err != nil {
+	if err := c.createWorktree(name, wtPath); err != nil {
 		return err
 	}
 
-	if err := c.createSymlinks(cwd, worktreePath, c.Config.Include); err != nil {
+	if err := c.createSymlinks(cwd, wtPath, c.Config.Include); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(c.Stdout, "Created worktree at %s\n", worktreePath)
+	fmt.Fprintf(c.Stdout, "Created worktree at %s\n", wtPath)
 	return nil
 }
 
@@ -80,19 +80,19 @@ func (c *AddCommand) createWorktree(branch, path string) error {
 
 func (c *AddCommand) createSymlinks(srcDir, dstDir string, targets []string) error {
 	for _, target := range targets {
-		srcPath := filepath.Join(srcDir, target)
-		dstPath := filepath.Join(dstDir, target)
+		src := filepath.Join(srcDir, target)
+		dst := filepath.Join(dstDir, target)
 
-		if _, err := c.FS.Stat(srcPath); c.FS.IsNotExist(err) {
+		if _, err := c.FS.Stat(src); c.FS.IsNotExist(err) {
 			fmt.Fprintf(c.Stderr, "warning: %s does not exist, skipping\n", target)
 			continue
 		}
 
-		if err := c.FS.Symlink(srcPath, dstPath); err != nil {
+		if err := c.FS.Symlink(src, dst); err != nil {
 			return fmt.Errorf("failed to create symlink for %s: %w", target, err)
 		}
 
-		fmt.Fprintf(c.Stdout, "Created symlink: %s -> %s\n", dstPath, srcPath)
+		fmt.Fprintf(c.Stdout, "Created symlink: %s -> %s\n", dst, src)
 	}
 
 	return nil

@@ -21,12 +21,12 @@ func LoadConfig(dir string) (*Config, error) {
 	seen := make(map[string]bool)
 	var includes []string
 
-	projectConfig, err := loadConfigFile(filepath.Join(dir, configDir, configFileName))
+	projCfg, err := loadConfigFile(filepath.Join(dir, configDir, configFileName))
 	if err != nil {
 		return nil, err
 	}
-	if projectConfig != nil {
-		for _, inc := range projectConfig.Include {
+	if projCfg != nil {
+		for _, inc := range projCfg.Include {
 			if !seen[inc] {
 				seen[inc] = true
 				includes = append(includes, inc)
@@ -34,12 +34,12 @@ func LoadConfig(dir string) (*Config, error) {
 		}
 	}
 
-	localConfig, err := loadConfigFile(filepath.Join(dir, configDir, localConfigFileName))
+	localCfg, err := loadConfigFile(filepath.Join(dir, configDir, localConfigFileName))
 	if err != nil {
 		return nil, err
 	}
-	if localConfig != nil {
-		for _, inc := range localConfig.Include {
+	if localCfg != nil {
+		for _, inc := range localCfg.Include {
 			if !seen[inc] {
 				seen[inc] = true
 				includes = append(includes, inc)

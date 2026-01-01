@@ -51,14 +51,14 @@ func WithCreateBranch() WorktreeAddOption {
 
 // WorktreeAdd creates a new worktree at the specified path.
 func (g *GitRunner) WorktreeAdd(path, branch string, opts ...WorktreeAddOption) error {
-	var options worktreeAddOptions
+	var o worktreeAddOptions
 	for _, opt := range opts {
-		opt(&options)
+		opt(&o)
 	}
 
 	var output []byte
 	var err error
-	if options.createBranch {
+	if o.createBranch {
 		output, err = g.Executor.Run("worktree", "add", "-b", branch, path)
 	} else {
 		output, err = g.Executor.Run("worktree", "add", path, branch)
