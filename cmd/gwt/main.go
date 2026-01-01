@@ -3,14 +3,16 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/708u/gwt"
 	"github.com/spf13/cobra"
 )
 
 var (
-	cfg *gwt.Config
-	cwd string
+	cfg     *gwt.Config
+	cwd     string
+	dirFlag string
 )
 
 var rootCmd = &cobra.Command{
@@ -21,6 +23,26 @@ var rootCmd = &cobra.Command{
 		cwd, err = os.Getwd()
 		if err != nil {
 			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+
+		if dirFlag != "" {
+			if !filepath.IsAbs(dirFlag) {
+				cwd = filepath.Join(cwd, dirFlag)
+			} else {
+				cwd = dirFlag
+			}
+			cwd, err = filepath.Abs(cwd)
+			if err != nil {
+				return fmt.Errorf("failed to resolve path: %w", err)
+			}
+
+			info, err := os.Stat(cwd)
+			if err != nil {
+				return fmt.Errorf("cannot change to '%s': %w", dirFlag, err)
+			}
+			if !info.IsDir() {
+				return fmt.Errorf("cannot change to '%s': not a directory", dirFlag)
+			}
 		}
 
 		result, err := gwt.LoadConfig(cwd)
@@ -65,6 +87,7 @@ Use --force to override these checks.`,
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringVarP(&dirFlag, "directory", "C", "", "Run as if gwt was started in <path>")
 	rootCmd.AddCommand(addCmd)
 
 	removeCmd.Flags().BoolP("force", "f", false, "Force removal even with uncommitted changes or unmerged branch")
