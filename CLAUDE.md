@@ -22,6 +22,41 @@ internal/testutil/  # Test mocks for FileSystem and GitExecutor
   - Abstraction interfaces (`FileSystem`, `GitExecutor`) for testability
 - `internal/testutil`: Mock implementations for unit testing
 
+## Architecture
+
+### CLI Layer (cmd/gwt/)
+
+- Cobra framework with RunE pattern
+- No business logic - delegates to root package
+- Loads config and calls command structs
+
+### Command Pattern
+
+Each subcommand is a struct with injected dependencies (e.g., `AddCommand`):
+
+- Holds `FS`, `Git`, `Config`, `Stdout`, `Stderr` as fields
+- Constructor (e.g., `NewAddCommand(cfg)`) provides production defaults
+- `Run()` method executes business logic
+
+### Git Abstraction
+
+Two-level design for testability:
+
+- `GitExecutor` interface: minimal `Run(args...) ([]byte, error)`
+- `GitRunner`: high-level operations (WorktreeAdd, BranchExists, etc.)
+- Directory injected to executor for CWD-independent execution
+
+### FileSystem Abstraction
+
+- `FileSystem` interface: `Getwd`, `Stat`, `Symlink`, `IsNotExist`
+- `osFS` struct: production implementation wrapping os package
+
+### Configuration
+
+- TOML format with BurntSushi/toml
+- Two-tier: `.gwt/settings.toml` (project) + `settings.local.toml` (local)
+- Graceful handling of missing files
+
 ## Design Principles
 
 - Flat package structure: avoid deep nesting, keep packages at root level
