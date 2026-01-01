@@ -78,6 +78,21 @@ func (g *GitRunner) BranchExists(branch string) bool {
 	return err == nil
 }
 
+// BranchList returns all local branch names.
+func (g *GitRunner) BranchList() ([]string, error) {
+	output, err := g.Executor.Run("branch", "--format=%(refname:short)")
+	if err != nil {
+		return nil, err
+	}
+	var branches []string
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line != "" {
+			branches = append(branches, line)
+		}
+	}
+	return branches, nil
+}
+
 // WorktreeListBranches returns a list of branch names currently checked out in worktrees.
 func (g *GitRunner) WorktreeListBranches() ([]string, error) {
 	output, err := g.worktreeListPorcelain()
