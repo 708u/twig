@@ -127,12 +127,14 @@ var listCmd = &cobra.Command{
 	Short: "List all worktrees",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		quiet, _ := cmd.Flags().GetBool("quiet")
+
 		result, err := gwt.NewListCommand(cwd).Run()
 		if err != nil {
 			return err
 		}
 
-		formatted := result.Format()
+		formatted := result.Format(gwt.ListFormatOptions{Quiet: quiet})
 		fmt.Fprint(os.Stdout, formatted.Stdout)
 		return nil
 	},
@@ -210,6 +212,7 @@ func init() {
 	addCmd.Flags().BoolP("quiet", "q", false, "Output only the worktree path")
 	rootCmd.AddCommand(addCmd)
 
+	listCmd.Flags().BoolP("quiet", "q", false, "Output only worktree paths")
 	rootCmd.AddCommand(listCmd)
 
 	removeCmd.Flags().BoolP("force", "f", false, "Force removal even with uncommitted changes or unmerged branch")

@@ -103,6 +103,7 @@ func TestListResult_Format(t *testing.T) {
 	tests := []struct {
 		name       string
 		worktrees  []WorktreeInfo
+		opts       ListFormatOptions
 		wantStdout string
 	}{
 		{
@@ -146,6 +147,21 @@ func TestListResult_Format(t *testing.T) {
 			worktrees:  []WorktreeInfo{},
 			wantStdout: "",
 		},
+		{
+			name: "quiet format outputs paths only",
+			worktrees: []WorktreeInfo{
+				{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
+				{Path: "/repo/worktree/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
+			},
+			opts:       ListFormatOptions{Quiet: true},
+			wantStdout: "/repo/main\n/repo/worktree/feat-a\n",
+		},
+		{
+			name:       "quiet format with empty list",
+			worktrees:  []WorktreeInfo{},
+			opts:       ListFormatOptions{Quiet: true},
+			wantStdout: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -153,7 +169,7 @@ func TestListResult_Format(t *testing.T) {
 			t.Parallel()
 
 			result := ListResult{Worktrees: tt.worktrees}
-			formatted := result.Format()
+			formatted := result.Format(tt.opts)
 
 			if formatted.Stdout != tt.wantStdout {
 				t.Errorf("Stdout = %q, want %q", formatted.Stdout, tt.wantStdout)

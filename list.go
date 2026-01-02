@@ -21,8 +21,31 @@ type ListResult struct {
 	Worktrees []WorktreeInfo
 }
 
-// Format formats the ListResult for display in git worktree list compatible format.
-func (r ListResult) Format() FormatResult {
+// ListFormatOptions configures list output formatting.
+type ListFormatOptions struct {
+	Quiet bool
+}
+
+// Format formats the ListResult for display.
+func (r ListResult) Format(opts ListFormatOptions) FormatResult {
+	if opts.Quiet {
+		return r.formatQuiet()
+	}
+	return r.formatDefault()
+}
+
+// formatQuiet outputs only the worktree paths.
+func (r ListResult) formatQuiet() FormatResult {
+	var stdout strings.Builder
+	for _, wt := range r.Worktrees {
+		stdout.WriteString(wt.Path)
+		stdout.WriteString("\n")
+	}
+	return FormatResult{Stdout: stdout.String()}
+}
+
+// formatDefault outputs git worktree list compatible format.
+func (r ListResult) formatDefault() FormatResult {
 	var stdout strings.Builder
 
 	for _, wt := range r.Worktrees {

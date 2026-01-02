@@ -5,8 +5,14 @@ List all worktrees in `git worktree list` compatible format.
 ## Usage
 
 ```txt
-gwt list
+gwt list [flags]
 ```
+
+## Flags
+
+| Flag      | Short | Description               |
+|-----------|-------|---------------------------|
+| `--quiet` | `-q`  | Output only worktree paths |
 
 ## Behavior
 
@@ -30,6 +36,15 @@ gwt list
 /Users/user/repo-worktree/locked                   5678def [locked-branch] locked
 ```
 
+### Quiet Option
+
+With `--quiet`, only worktree paths are output, one per line.
+This is useful for piping to other commands.
+
+```bash
+cd $(gwt list -q | fzf)
+```
+
 ## Shell Integration
 
 Combine with fzf for quick worktree navigation:
@@ -37,7 +52,7 @@ Combine with fzf for quick worktree navigation:
 ```bash
 gcd() {
   local selected
-  selected=$(gwt list | awk '{print $1}' | fzf +m) &&
+  selected=$(gwt list -q | fzf +m) &&
   cd "$selected"
 }
 ```

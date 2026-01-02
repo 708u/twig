@@ -92,7 +92,7 @@ func TestListCommand_Integration(t *testing.T) {
 			t.Fatalf("Run failed: %v", err)
 		}
 
-		formatted := result.Format()
+		formatted := result.Format(ListFormatOptions{})
 
 		// Should contain full paths and branch names
 		if formatted.Stdout == "" {
@@ -133,6 +133,47 @@ func TestListCommand_Integration(t *testing.T) {
 			}
 			if len(wt.HEAD) != 40 {
 				t.Errorf("HEAD should be 40 characters, got %d: %s", len(wt.HEAD), wt.HEAD)
+			}
+		}
+	})
+
+	t.Run("QuietFormatOutputsPathsOnly", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		wtPath := filepath.Join(repoDir, "feature", "quiet-test")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/quiet-test", wtPath)
+
+		cmd := NewListCommand(mainDir)
+		result, err := cmd.Run()
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		formatted := result.Format(ListFormatOptions{Quiet: true})
+
+		lines := strings.Split(strings.TrimSpace(formatted.Stdout), "\n")
+
+		// Should have 2 worktrees
+		if len(lines) != 2 {
+			t.Errorf("expected 2 lines, got %d: %v", len(lines), lines)
+		}
+
+		// Each line should be just a path (no brackets, no hash)
+		for _, line := range lines {
+			if strings.Contains(line, "[") || strings.Contains(line, "]") {
+				t.Errorf("quiet output should not contain brackets: %s", line)
+			}
+			if !filepath.IsAbs(line) {
+				t.Errorf("quiet output should be absolute path: %s", line)
+			}
+		}
+
+		// Verify paths match worktree paths
+		for _, wt := range result.Worktrees {
+			if !slices.Contains(lines, wt.Path) {
+				t.Errorf("quiet output should contain path %s", wt.Path)
 			}
 		}
 	})
