@@ -2,6 +2,7 @@ package gwt
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -31,6 +32,7 @@ func NewRemoveCommand(cfg *Config) *RemoveCommand {
 type RemovedWorktree struct {
 	Branch       string
 	WorktreePath string
+	CleanedDirs  []string // Empty parent directories that were removed
 	DryRun       bool
 	GitOutput    []byte
 	Err          error // nil if success
@@ -86,6 +88,9 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 	if r.DryRun {
 		fmt.Fprintf(&stdout, "Would remove worktree: %s\n", r.WorktreePath)
 		fmt.Fprintf(&stdout, "Would delete branch: %s\n", r.Branch)
+		for _, dir := range r.CleanedDirs {
+			fmt.Fprintf(&stdout, "Would remove empty directory: %s\n", dir)
+		}
 		return FormatResult{Stdout: stdout.String()}
 	}
 
@@ -94,6 +99,9 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 			stdout.Write(r.GitOutput)
 		}
 		fmt.Fprintf(&stdout, "Removed worktree and branch: %s\n", r.Branch)
+		for _, dir := range r.CleanedDirs {
+			fmt.Fprintf(&stdout, "Removed empty directory: %s\n", dir)
+		}
 	}
 
 	fmt.Fprintf(&stdout, "gwt remove: %s\n", r.Branch)
@@ -126,6 +134,7 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 	}
 
 	if opts.DryRun {
+		result.CleanedDirs = c.predictEmptyParentDirs(wtPath)
 		return result, nil
 	}
 
@@ -140,6 +149,8 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 	}
 	gitOutput = append(gitOutput, wtOut...)
 
+	result.CleanedDirs = c.cleanupEmptyParentDirs(wtPath)
+
 	var branchOpts []BranchDeleteOption
 	if opts.Force {
 		branchOpts = append(branchOpts, WithForceDelete())
@@ -152,4 +163,70 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 
 	result.GitOutput = gitOutput
 	return result, nil
+}
+
+// cleanupEmptyParentDirs removes empty parent directories up to WorktreeDestBaseDir.
+// Returns the list of directories that were removed. Errors are ignored since
+// cleanup failures should not fail the overall remove operation.
+func (c *RemoveCommand) cleanupEmptyParentDirs(wtPath string) []string {
+	var cleaned []string
+	baseDir := c.Config.WorktreeDestBaseDir
+	if baseDir == "" {
+		return cleaned
+	}
+
+	current := filepath.Dir(wtPath)
+	for current != baseDir && strings.HasPrefix(current, baseDir) {
+		entries, err := c.FS.ReadDir(current)
+		if err != nil {
+			break
+		}
+		if len(entries) > 0 {
+			break
+		}
+		if err := c.FS.Remove(current); err != nil {
+			break
+		}
+		cleaned = append(cleaned, current)
+		current = filepath.Dir(current)
+	}
+
+	return cleaned
+}
+
+// predictEmptyParentDirs predicts which parent directories would become empty
+// if wtPath were removed. Used for dry-run mode.
+func (c *RemoveCommand) predictEmptyParentDirs(wtPath string) []string {
+	var wouldClean []string
+	baseDir := c.Config.WorktreeDestBaseDir
+	if baseDir == "" {
+		return wouldClean
+	}
+
+	// Track the path being "removed" in simulation
+	removedPath := wtPath
+	current := filepath.Dir(wtPath)
+
+	for current != baseDir && strings.HasPrefix(current, baseDir) {
+		entries, err := c.FS.ReadDir(current)
+		if err != nil {
+			break
+		}
+		// Check if directory would be empty after removing the simulated path
+		remaining := 0
+		for _, entry := range entries {
+			entryPath := filepath.Join(current, entry.Name())
+			if entryPath != removedPath {
+				remaining++
+			}
+		}
+		if remaining > 0 {
+			break
+		}
+		wouldClean = append(wouldClean, current)
+		removedPath = current
+		current = filepath.Dir(current)
+	}
+
+	return wouldClean
 }
