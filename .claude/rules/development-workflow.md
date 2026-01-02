@@ -26,26 +26,34 @@ When modifying a subcommand, pay special attention to its behavior:
 - Check error handling and exit codes
 - Understand the command's output format
 
-### 2. Implement Changes
+### 2. TDD Cycle
 
-Based on the exploration:
+Follow the Red-Green-Refactor cycle:
 
-- Add, modify, or delete code as needed
+#### Red: Write Failing Tests
+
+- Write tests that define expected behavior before implementation
+- Focus on behavior, not implementation details
+- Run tests to confirm they fail for the expected reason
+
+#### Green: Implement Changes
+
+- Write minimal code to make tests pass
 - Follow existing patterns and conventions in the codebase
 - Keep changes focused and minimal
 
-### 3. Update Tests
+#### Refactor
 
-Review and update tests to ensure coverage:
+- Improve code structure while keeping tests green
+- Remove duplication and improve readability
+- Run tests after each refactoring step
 
-- Check related unit tests (`*_test.go`)
-- Check related integration tests (`*_integration_test.go`)
-- If existing tests do not cover the changes:
-  - Add new test cases
-  - Modify existing tests
-  - Remove obsolete tests
+#### Update Existing Tests
 
-### 4. Update Documentation
+- Check related unit tests (`*_test.go`) and integration tests (`*_integration_test.go`)
+- Modify or remove obsolete tests if needed
+
+### 3. Update Documentation
 
 If the changes affect subcommand behavior, update the documentation:
 
