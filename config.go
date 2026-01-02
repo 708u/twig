@@ -20,6 +20,7 @@ type Config struct {
 	Symlinks            []string `toml:"symlinks"`
 	WorktreeDestBaseDir string   `toml:"worktree_destination_base_dir"`
 	WorktreeSourceDir   string   `toml:"worktree_source_dir"`
+	DefaultSource       string   `toml:"default_source"`
 }
 
 // LoadConfigResult contains the loaded config and any warnings.
@@ -50,12 +51,22 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	// DefaultSource: project config value, can be overridden by local config
+	var defaultSource string
+	if projCfg != nil && projCfg.DefaultSource != "" {
+		defaultSource = projCfg.DefaultSource
+	}
+
 	if localCfg != nil {
 		for _, s := range localCfg.Symlinks {
 			if !seen[s] {
 				seen[s] = true
 				symlinks = append(symlinks, s)
 			}
+		}
+		// Local config can override default_source
+		if localCfg.DefaultSource != "" {
+			defaultSource = localCfg.DefaultSource
 		}
 		// Warn if local config contains project-level settings
 		if localCfg.WorktreeDestBaseDir != "" {
@@ -93,6 +104,7 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 			Symlinks:            symlinks,
 			WorktreeDestBaseDir: destBaseDir,
 			WorktreeSourceDir:   srcDir,
+			DefaultSource:       defaultSource,
 		},
 		Warnings: warnings,
 	}, nil

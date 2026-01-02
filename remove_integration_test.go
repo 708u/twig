@@ -389,4 +389,199 @@ worktree_destination_base_dir = %q
 			t.Errorf("error should be for %s, got %s", invalidBranch, removeResult.Removed[1].Branch)
 		}
 	})
+
+	t.Run("CleanupEmptyParentDirs", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create a deeply nested worktree (3 levels) to verify arbitrary depth cleanup
+		wtPath := filepath.Join(repoDir, "feat", "nested", "very", "deep")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/nested/very/deep", wtPath)
+
+		// Verify parent directories exist
+		parentDir := filepath.Join(repoDir, "feat", "nested", "very")
+		grandparentDir := filepath.Join(repoDir, "feat", "nested")
+		greatGrandparentDir := filepath.Join(repoDir, "feat")
+		if _, err := os.Stat(parentDir); os.IsNotExist(err) {
+			t.Fatalf("parent directory should exist: %s", parentDir)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		removeResult, err := cmd.Run("feat/nested/very/deep", mainDir, RemoveOptions{})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree is removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree directory should be removed: %s", wtPath)
+		}
+
+		// Verify all 3 empty parent directories are removed
+		if _, err := os.Stat(parentDir); !os.IsNotExist(err) {
+			t.Errorf("empty parent directory should be removed: %s", parentDir)
+		}
+		if _, err := os.Stat(grandparentDir); !os.IsNotExist(err) {
+			t.Errorf("empty grandparent directory should be removed: %s", grandparentDir)
+		}
+		if _, err := os.Stat(greatGrandparentDir); !os.IsNotExist(err) {
+			t.Errorf("empty great-grandparent directory should be removed: %s", greatGrandparentDir)
+		}
+
+		// Verify CleanedDirs in result (3 directories cleaned)
+		if len(removeResult.CleanedDirs) != 3 {
+			t.Errorf("expected 3 cleaned dirs, got %d: %v", len(removeResult.CleanedDirs), removeResult.CleanedDirs)
+		}
+	})
+
+	t.Run("PreserveNonEmptyParentDirs", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create two worktrees in same parent
+		wtPath1 := filepath.Join(repoDir, "feat", "test1")
+		wtPath2 := filepath.Join(repoDir, "feat", "test2")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/test1", wtPath1)
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/test2", wtPath2)
+
+		parentDir := filepath.Join(repoDir, "feat")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Remove first worktree
+		removeResult, err := cmd.Run("feat/test1", mainDir, RemoveOptions{})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// First worktree should be removed
+		if _, err := os.Stat(wtPath1); !os.IsNotExist(err) {
+			t.Errorf("first worktree should be removed: %s", wtPath1)
+		}
+
+		// Parent directory should still exist (has sibling worktree)
+		if _, err := os.Stat(parentDir); os.IsNotExist(err) {
+			t.Errorf("parent directory should still exist: %s", parentDir)
+		}
+
+		// No directories should be cleaned
+		if len(removeResult.CleanedDirs) != 0 {
+			t.Errorf("expected 0 cleaned dirs, got %d: %v", len(removeResult.CleanedDirs), removeResult.CleanedDirs)
+		}
+
+		// Now remove second worktree
+		removeResult, err = cmd.Run("feat/test2", mainDir, RemoveOptions{})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Parent directory should now be removed
+		if _, err := os.Stat(parentDir); !os.IsNotExist(err) {
+			t.Errorf("parent directory should be removed after last worktree: %s", parentDir)
+		}
+
+		// One directory should be cleaned
+		if len(removeResult.CleanedDirs) != 1 {
+			t.Errorf("expected 1 cleaned dir, got %d: %v", len(removeResult.CleanedDirs), removeResult.CleanedDirs)
+		}
+	})
+
+	t.Run("DryRunShowsCleanupInfo", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create a nested worktree
+		wtPath := filepath.Join(repoDir, "feat", "dry-cleanup")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/dry-cleanup", wtPath)
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		removeResult, err := cmd.Run("feat/dry-cleanup", mainDir, RemoveOptions{DryRun: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Worktree should still exist
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree should still exist in dry-run: %s", wtPath)
+		}
+
+		// CleanedDirs should show predicted cleanup
+		if len(removeResult.CleanedDirs) != 1 {
+			t.Errorf("expected 1 predicted cleanup dir, got %d: %v", len(removeResult.CleanedDirs), removeResult.CleanedDirs)
+		}
+
+		// Format should include cleanup info
+		formatted := removeResult.Format(FormatOptions{})
+		if !strings.Contains(formatted.Stdout, "Would remove empty directory") {
+			t.Errorf("dry-run output should include cleanup info, got: %s", formatted.Stdout)
+		}
+	})
 }

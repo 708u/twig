@@ -3,6 +3,7 @@ package testutil
 import (
 	"errors"
 	"io/fs"
+	"os"
 	"slices"
 )
 
@@ -14,6 +15,8 @@ type MockFS struct {
 	IsNotExistFunc func(err error) bool
 	GlobFunc       func(dir, pattern string) ([]string, error)
 	MkdirAllFunc   func(path string, perm fs.FileMode) error
+	ReadDirFunc    func(name string) ([]os.DirEntry, error)
+	RemoveFunc     func(name string) error
 
 	// ExistingPaths is a list of paths that exist (Stat returns nil, nil).
 	ExistingPaths []string
@@ -29,6 +32,15 @@ type MockFS struct {
 
 	// MkdirAllErr is returned by MkdirAll if set.
 	MkdirAllErr error
+
+	// DirContents maps directory path to its entries.
+	DirContents map[string][]os.DirEntry
+
+	// ReadDirErr is returned by ReadDir if set.
+	ReadDirErr error
+
+	// RemoveErr is returned by Remove if set.
+	RemoveErr error
 }
 
 func (m *MockFS) Stat(name string) (fs.FileInfo, error) {
@@ -73,4 +85,26 @@ func (m *MockFS) MkdirAll(path string, perm fs.FileMode) error {
 		return m.MkdirAllFunc(path, perm)
 	}
 	return m.MkdirAllErr
+}
+
+func (m *MockFS) ReadDir(name string) ([]os.DirEntry, error) {
+	if m.ReadDirFunc != nil {
+		return m.ReadDirFunc(name)
+	}
+	if m.ReadDirErr != nil {
+		return nil, m.ReadDirErr
+	}
+	if m.DirContents != nil {
+		if entries, ok := m.DirContents[name]; ok {
+			return entries, nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *MockFS) Remove(name string) error {
+	if m.RemoveFunc != nil {
+		return m.RemoveFunc(name)
+	}
+	return m.RemoveErr
 }

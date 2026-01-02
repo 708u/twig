@@ -14,6 +14,8 @@ type FileSystem interface {
 	IsNotExist(err error) bool
 	Glob(dir, pattern string) ([]string, error)
 	MkdirAll(path string, perm fs.FileMode) error
+	ReadDir(name string) ([]os.DirEntry, error)
+	Remove(name string) error
 }
 
 type osFS struct{}
@@ -25,3 +27,5 @@ func (osFS) Glob(dir, pattern string) ([]string, error) {
 	return doublestar.Glob(os.DirFS(dir), pattern)
 }
 func (osFS) MkdirAll(path string, perm fs.FileMode) error { return os.MkdirAll(path, perm) }
+func (osFS) ReadDir(name string) ([]os.DirEntry, error)   { return os.ReadDir(name) }
+func (osFS) Remove(name string) error                     { return os.Remove(name) }

@@ -23,11 +23,35 @@ gwt remove <branch>... [flags]
 
 - Finds the worktree path by looking up the branch name
 - Prevents removal if current directory is inside the target worktree
+- Cleans up empty parent directories after removal (see below)
 - With `--dry-run`: prints what would be removed without making changes
 - Without `--force`: fails if there are uncommitted changes
   or the branch is not merged
 - With `--force`: bypasses uncommitted changes
   and unmerged branch checks
+
+### Empty Directory Cleanup
+
+After removing a worktree, gwt automatically removes any empty parent
+directories up to `WorktreeDestBaseDir`. This prevents orphan directories
+from blocking future branch creation.
+
+Example:
+
+```txt
+# Remove feat/test worktree
+gwt remove feat/test
+
+# If feat/ directory is now empty, it is also removed
+# This allows creating a 'feat' branch later
+```
+
+The cleanup is safe:
+
+- Only removes empty directories
+- Stops at `WorktreeDestBaseDir` boundary
+- Preserves directories containing other worktrees or files
+- Cleanup errors are non-fatal (main operation succeeds)
 
 ## Multiple Branches
 

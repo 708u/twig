@@ -72,3 +72,35 @@ Constraints:
 
 - Cannot be used together with `-C`
 - The specified branch must have an existing worktree
+
+### Default Source Configuration
+
+The default source branch can be configured in `.gwt/settings.toml`:
+
+```toml
+default_source = "main"
+```
+
+Priority:
+
+1. CLI `--source` flag (highest)
+2. Config `default_source`
+3. Current worktree (lowest)
+
+When `-C` is specified, `default_source` is ignored.
+
+The setting can be overridden in `.gwt/settings.local.toml` for personal
+preferences:
+
+```toml
+# settings.local.toml
+default_source = "develop"
+```
+
+To bypass `default_source` and use the current worktree, specify the current
+branch with `--source`:
+
+```bash
+# Explicitly use current worktree instead of default_source
+gwt add feat/x --source feat/a  # assuming you're on feat/a
+```

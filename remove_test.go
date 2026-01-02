@@ -2,6 +2,7 @@ package gwt
 
 import (
 	"errors"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -337,3 +338,216 @@ func TestRemoveCommand_Run(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoveCommand_CleanupEmptyParentDirs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		wtPath         string
+		baseDir        string
+		dirContents    map[string][]os.DirEntry
+		removedDirs    []string
+		wantCleanedLen int
+	}{
+		{
+			name:           "single_level_no_cleanup",
+			wtPath:         "/base/feature",
+			baseDir:        "/base",
+			dirContents:    map[string][]os.DirEntry{},
+			wantCleanedLen: 0,
+		},
+		{
+			name:    "multi_level_empty_parent",
+			wtPath:  "/base/feat/test",
+			baseDir: "/base",
+			dirContents: map[string][]os.DirEntry{
+				"/base/feat": {}, // empty
+			},
+			wantCleanedLen: 1,
+		},
+		{
+			name:    "multi_level_non_empty_parent",
+			wtPath:  "/base/feat/test",
+			baseDir: "/base",
+			dirContents: map[string][]os.DirEntry{
+				"/base/feat": {mockDirEntry{name: "other"}},
+			},
+			wantCleanedLen: 0,
+		},
+		{
+			name:    "deeply_nested_all_empty",
+			wtPath:  "/base/a/b/c",
+			baseDir: "/base",
+			dirContents: map[string][]os.DirEntry{
+				"/base/a/b": {},
+				"/base/a":   {},
+			},
+			wantCleanedLen: 2,
+		},
+		{
+			name:    "deeply_nested_partial_empty",
+			wtPath:  "/base/a/b/c",
+			baseDir: "/base",
+			dirContents: map[string][]os.DirEntry{
+				"/base/a/b": {},
+				"/base/a":   {mockDirEntry{name: "other"}},
+			},
+			wantCleanedLen: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockFS := &testutil.MockFS{
+				DirContents: tt.dirContents,
+			}
+
+			cmd := &RemoveCommand{
+				FS:     mockFS,
+				Config: &Config{WorktreeDestBaseDir: tt.baseDir},
+			}
+
+			cleaned := cmd.cleanupEmptyParentDirs(tt.wtPath)
+
+			if len(cleaned) != tt.wantCleanedLen {
+				t.Errorf("cleaned = %v, want length %d", cleaned, tt.wantCleanedLen)
+			}
+		})
+	}
+}
+
+func TestRemoveCommand_PredictEmptyParentDirs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		wtPath         string
+		baseDir        string
+		dirContents    map[string][]os.DirEntry
+		wantCleanedLen int
+	}{
+		{
+			name:    "predicts_empty_after_removal",
+			wtPath:  "/base/feat/test",
+			baseDir: "/base",
+			dirContents: map[string][]os.DirEntry{
+				"/base/feat": {mockDirEntry{name: "test"}}, // only the worktree itself
+			},
+			wantCleanedLen: 1,
+		},
+		{
+			name:    "predicts_non_empty_with_sibling",
+			wtPath:  "/base/feat/test",
+			baseDir: "/base",
+			dirContents: map[string][]os.DirEntry{
+				"/base/feat": {mockDirEntry{name: "test"}, mockDirEntry{name: "other"}},
+			},
+			wantCleanedLen: 0,
+		},
+		{
+			name:    "deeply_nested_prediction",
+			wtPath:  "/base/a/b/c",
+			baseDir: "/base",
+			dirContents: map[string][]os.DirEntry{
+				"/base/a/b": {mockDirEntry{name: "c"}},
+				"/base/a":   {mockDirEntry{name: "b"}},
+			},
+			wantCleanedLen: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockFS := &testutil.MockFS{
+				DirContents: tt.dirContents,
+			}
+
+			cmd := &RemoveCommand{
+				FS:     mockFS,
+				Config: &Config{WorktreeDestBaseDir: tt.baseDir},
+			}
+
+			predicted := cmd.predictEmptyParentDirs(tt.wtPath)
+
+			if len(predicted) != tt.wantCleanedLen {
+				t.Errorf("predicted = %v, want length %d", predicted, tt.wantCleanedLen)
+			}
+		})
+	}
+}
+
+func TestRemovedWorktree_Format_WithCleanedDirs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		result     RemovedWorktree
+		opts       FormatOptions
+		wantStdout string
+	}{
+		{
+			name: "dry_run_with_cleaned_dirs",
+			result: RemovedWorktree{
+				Branch:       "feat/test",
+				WorktreePath: "/base/feat/test",
+				CleanedDirs:  []string{"/base/feat"},
+				DryRun:       true,
+			},
+			opts: FormatOptions{},
+			wantStdout: "Would remove worktree: /base/feat/test\n" +
+				"Would delete branch: feat/test\n" +
+				"Would remove empty directory: /base/feat\n",
+		},
+		{
+			name: "verbose_with_cleaned_dirs",
+			result: RemovedWorktree{
+				Branch:       "feat/test",
+				WorktreePath: "/base/feat/test",
+				CleanedDirs:  []string{"/base/feat"},
+				DryRun:       false,
+			},
+			opts: FormatOptions{Verbose: true},
+			wantStdout: "Removed worktree and branch: feat/test\n" +
+				"Removed empty directory: /base/feat\n" +
+				"gwt remove: feat/test\n",
+		},
+		{
+			name: "normal_with_cleaned_dirs_not_shown",
+			result: RemovedWorktree{
+				Branch:       "feat/test",
+				WorktreePath: "/base/feat/test",
+				CleanedDirs:  []string{"/base/feat"},
+				DryRun:       false,
+			},
+			opts:       FormatOptions{Verbose: false},
+			wantStdout: "gwt remove: feat/test\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tt.result.Format(tt.opts)
+			if got.Stdout != tt.wantStdout {
+				t.Errorf("Stdout = %q, want %q", got.Stdout, tt.wantStdout)
+			}
+		})
+	}
+}
+
+// mockDirEntry implements os.DirEntry for testing.
+type mockDirEntry struct {
+	name  string
+	isDir bool
+}
+
+func (m mockDirEntry) Name() string               { return m.name }
+func (m mockDirEntry) IsDir() bool                { return m.isDir }
+func (m mockDirEntry) Type() os.FileMode          { return 0 }
+func (m mockDirEntry) Info() (os.FileInfo, error) { return nil, nil }
