@@ -111,7 +111,7 @@ func TestListResult_Format(t *testing.T) {
 				{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
 				{Path: "/repo/worktree/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
 			},
-			wantStdout: "/repo/main  abc1234 [main]\n/repo/worktree/feat-a  def5678 [feat/a]\n",
+			wantStdout: "/repo/main             abc1234 [main]\n/repo/worktree/feat-a  def5678 [feat/a]\n",
 		},
 		{
 			name: "detached HEAD",
