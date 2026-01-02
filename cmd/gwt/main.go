@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/708u/gwt"
 	"github.com/spf13/cobra"
@@ -103,7 +102,7 @@ var addCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		sync, _ := cmd.Flags().GetBool("sync")
-		printFlag, _ := cmd.Flags().GetString("print")
+		quiet, _ := cmd.Flags().GetBool("quiet")
 
 		addCmd := gwt.NewAddCommand(cfg, gwt.AddOptions{Sync: sync})
 		result, err := addCmd.Run(args[0])
@@ -111,16 +110,9 @@ var addCmd = &cobra.Command{
 			return err
 		}
 
-		var printFields []string
-		if printFlag != "" {
-			printFields = strings.Split(printFlag, ",")
-			if err := gwt.ValidatePrintFields(printFields); err != nil {
-				return err
-			}
-		}
 		formatted := result.Format(gwt.AddFormatOptions{
 			Verbose: verbose,
-			Print:   printFields,
+			Quiet:   quiet,
 		})
 		if formatted.Stderr != "" {
 			fmt.Fprint(os.Stderr, formatted.Stderr)
@@ -217,7 +209,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
 
 	addCmd.Flags().BoolP("sync", "s", false, "Sync uncommitted changes to new worktree")
-	addCmd.Flags().String("print", "", "Print specific field (path)")
+	addCmd.Flags().BoolP("quiet", "q", false, "Output only the worktree path")
 	rootCmd.AddCommand(addCmd)
 
 	listCmd.Flags().BoolP("path", "p", false, "Show full paths instead of branch names")

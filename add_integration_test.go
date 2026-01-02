@@ -586,7 +586,7 @@ worktree_destination_base_dir = %q
 		}
 	})
 
-	t.Run("PrintPathOutputsOnlyPath", func(t *testing.T) {
+	t.Run("QuietOutputsOnlyPath", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -614,22 +614,22 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		addResult, err := cmd.Run("feature/print-test")
+		addResult, err := cmd.Run("feature/quiet-test")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
 
 		// Verify worktree path matches expected
-		wtPath := filepath.Join(repoDir, "feature", "print-test")
+		wtPath := filepath.Join(repoDir, "feature", "quiet-test")
 		if addResult.WorktreePath != wtPath {
 			t.Errorf("WorktreePath = %q, want %q", addResult.WorktreePath, wtPath)
 		}
 
-		// Verify Format with Print option outputs only path
-		formatted := addResult.Format(AddFormatOptions{Print: []string{"path"}})
+		// Verify Format with Quiet option outputs only path
+		formatted := addResult.Format(AddFormatOptions{Quiet: true})
 		expectedOutput := wtPath + "\n"
 		if formatted.Stdout != expectedOutput {
-			t.Errorf("Format(Print: path) = %q, want %q", formatted.Stdout, expectedOutput)
+			t.Errorf("Format(Quiet: true) = %q, want %q", formatted.Stdout, expectedOutput)
 		}
 
 		// Verify the path is a valid directory
