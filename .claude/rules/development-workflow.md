@@ -45,7 +45,15 @@ Review and update tests to ensure coverage:
   - Modify existing tests
   - Remove obsolete tests
 
-### 4. Verify All Tests Pass
+### 4. Update Documentation
+
+If the changes affect subcommand behavior, update the documentation:
+
+- Update the corresponding file in @docs/commands/
+- Document new flags, arguments, or behavior changes
+- Update examples if needed
+
+### 5. Verify All Tests Pass
 
 Run the full test suite before completing:
 
