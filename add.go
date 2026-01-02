@@ -50,43 +50,20 @@ type AddResult struct {
 // AddFormatOptions configures add output formatting.
 type AddFormatOptions struct {
 	Verbose bool
-	Print   []string // ["path"], ["path", "branch"], or empty for default
-}
-
-// ValidPrintFields contains valid --print field names.
-var ValidPrintFields = []string{"path"}
-
-// ValidatePrintFields validates the given print fields.
-func ValidatePrintFields(fields []string) error {
-	for _, f := range fields {
-		if !slices.Contains(ValidPrintFields, f) {
-			return fmt.Errorf("invalid print field: %s (valid: %s)",
-				f, strings.Join(ValidPrintFields, ", "))
-		}
-	}
-	return nil
+	Quiet   bool
 }
 
 // Format formats the AddResult for display.
 func (r AddResult) Format(opts AddFormatOptions) FormatResult {
-	// Print overrides default output
-	if len(opts.Print) > 0 {
-		return r.formatPrint(opts.Print)
+	if opts.Quiet {
+		return r.formatQuiet()
 	}
 	return r.formatDefault(opts)
 }
 
-// formatPrint outputs only the specified fields.
-func (r AddResult) formatPrint(fields []string) FormatResult {
-	var stdout strings.Builder
-	for _, field := range fields {
-		switch field {
-		case "path":
-			stdout.WriteString(r.WorktreePath)
-			stdout.WriteString("\n")
-		}
-	}
-	return FormatResult{Stdout: stdout.String()}
+// formatQuiet outputs only the worktree path.
+func (r AddResult) formatQuiet() FormatResult {
+	return FormatResult{Stdout: r.WorktreePath + "\n"}
 }
 
 // formatDefault outputs the default or verbose format.

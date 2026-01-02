@@ -317,14 +317,14 @@ func TestAddResult_Format(t *testing.T) {
 			wantStderr: "",
 		},
 		{
-			name:       "print_path",
-			opts:       AddFormatOptions{Print: []string{"path"}},
+			name:       "quiet",
+			opts:       AddFormatOptions{Quiet: true},
 			wantStdout: "/worktrees/feature/test\n",
 			wantStderr: "",
 		},
 		{
-			name:       "print_ignores_verbose",
-			opts:       AddFormatOptions{Verbose: true, Print: []string{"path"}},
+			name:       "quiet_ignores_verbose",
+			opts:       AddFormatOptions{Verbose: true, Quiet: true},
 			wantStdout: "/worktrees/feature/test\n",
 			wantStderr: "",
 		},
@@ -347,48 +347,6 @@ func TestAddResult_Format(t *testing.T) {
 			}
 			if got.Stderr != tt.wantStderr {
 				t.Errorf("Stderr = %q, want %q", got.Stderr, tt.wantStderr)
-			}
-		})
-	}
-}
-
-func TestValidatePrintFields(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		fields  []string
-		wantErr bool
-	}{
-		{
-			name:    "valid_path",
-			fields:  []string{"path"},
-			wantErr: false,
-		},
-		{
-			name:    "empty",
-			fields:  []string{},
-			wantErr: false,
-		},
-		{
-			name:    "invalid_field",
-			fields:  []string{"invalid"},
-			wantErr: true,
-		},
-		{
-			name:    "valid_and_invalid",
-			fields:  []string{"path", "invalid"},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := ValidatePrintFields(tt.fields)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidatePrintFields() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

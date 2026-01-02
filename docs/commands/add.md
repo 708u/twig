@@ -14,11 +14,11 @@ gwt add <name> [flags]
 
 ## Flags
 
-| Flag              | Short | Description                               |
-|-------------------|-------|-------------------------------------------|
-| `--sync`          | `-s`  | Sync uncommitted changes to new worktree  |
-| `--print <field>` |       | Print specific field (path)               |
-| `--source <branch>` |     | Use specified branch's worktree as source |
+| Flag                | Short | Description                               |
+|---------------------|-------|-------------------------------------------|
+| `--sync`            | `-s`  | Sync uncommitted changes to new worktree  |
+| `--quiet`           | `-q`  | Output only the worktree path             |
+| `--source <branch>` |       | Use specified branch's worktree as source |
 
 ## Behavior
 
@@ -41,20 +41,16 @@ With `--sync`, uncommitted changes are copied to the new worktree:
 If worktree creation or stash apply fails, changes are restored
 to the source worktree automatically.
 
-### Print Option
+### Quiet Option
 
-With `--print`, only the specified field is output to stdout.
+With `--quiet`, only the worktree path is output to stdout.
 This is useful for piping to other commands.
 
 ```bash
-cd $(gwt add feat/x --print path)
+cd $(gwt add feat/x -q)
 ```
 
-Available fields:
-
-- `path`: Worktree path
-
-When `--print` is specified, `--verbose` is ignored.
+When `--quiet` is specified, `--verbose` is ignored.
 
 ### Source Option
 
