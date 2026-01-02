@@ -14,10 +14,11 @@ gwt add <name> [flags]
 
 ## Flags
 
-| Flag      | Short | Description                               |
-|-----------|-------|-------------------------------------------|
-| `--sync`  | `-s`  | Sync uncommitted changes to new worktree  |
-| `--quiet` | `-q`  | Output only the worktree path             |
+| Flag                | Short | Description                               |
+|---------------------|-------|-------------------------------------------|
+| `--sync`            | `-s`  | Sync uncommitted changes to new worktree  |
+| `--quiet`           | `-q`  | Output only the worktree path             |
+| `--source <branch>` |       | Use specified branch's worktree as source |
 
 ## Behavior
 
@@ -50,3 +51,24 @@ cd $(gwt add feat/x -q)
 ```
 
 When `--quiet` is specified, `--verbose` is ignored.
+
+### Source Option
+
+With `--source`, uses the specified branch's worktree as the source.
+This is equivalent to `-C <path>` but accepts a branch name instead of a path.
+
+```bash
+# From a derived worktree, create a new worktree based on main
+gwt add feat/new --source main
+```
+
+When `--source` is specified:
+
+- Settings are loaded from the source branch's worktree
+- Symlinks are created from the source branch's worktree
+- With `--sync`, changes are stashed from the source branch's worktree
+
+Constraints:
+
+- Cannot be used together with `-C`
+- The specified branch must have an existing worktree

@@ -99,6 +99,36 @@ var addCmd = &cobra.Command{
 		}
 		return branches, cobra.ShellCompDirectiveNoFileComp
 	},
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		source, _ := cmd.Flags().GetString("source")
+		if source == "" {
+			return nil
+		}
+
+		// Check mutual exclusivity with -C
+		if dirFlag != "" {
+			return fmt.Errorf("cannot use --source and -C together")
+		}
+
+		// Resolve branch to worktree path
+		git := gwt.NewGitRunner(cwd)
+		sourcePath, err := git.WorktreeFindByBranch(source)
+		if err != nil {
+			return fmt.Errorf("failed to find worktree for branch %q: %w", source, err)
+		}
+
+		// Update cwd and reload config
+		cwd = sourcePath
+		result, err := gwt.LoadConfig(cwd)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+		for _, w := range result.Warnings {
+			fmt.Fprintln(os.Stderr, "warning:", w)
+		}
+		cfg = result.Config
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		sync, _ := cmd.Flags().GetBool("sync")
@@ -208,6 +238,7 @@ func init() {
 
 	addCmd.Flags().BoolP("sync", "s", false, "Sync uncommitted changes to new worktree")
 	addCmd.Flags().BoolP("quiet", "q", false, "Output only the worktree path")
+	addCmd.Flags().String("source", "", "Source branch's worktree to use")
 	rootCmd.AddCommand(addCmd)
 
 	rootCmd.AddCommand(listCmd)
