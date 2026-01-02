@@ -1,7 +1,10 @@
 package gwt
 
 import (
+	"bytes"
+	"fmt"
 	"strings"
+	"text/tabwriter"
 )
 
 // ListCommand lists all worktrees.
@@ -23,23 +26,20 @@ type ListResult struct {
 
 // Format formats the ListResult for display in git worktree list compatible format.
 func (r ListResult) Format() FormatResult {
-	var stdout strings.Builder
+	var buf bytes.Buffer
+	w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
 
 	for _, wt := range r.Worktrees {
-		stdout.WriteString(wt.formatLine())
-		stdout.WriteString("\n")
+		fmt.Fprintf(w, "%s\t%s %s\n", wt.Path, wt.ShortHEAD(), wt.formatStatus())
 	}
+	w.Flush()
 
-	return FormatResult{Stdout: stdout.String()}
+	return FormatResult{Stdout: buf.String()}
 }
 
-// formatLine returns git worktree list compatible format for a single worktree.
-func (w WorktreeInfo) formatLine() string {
+// formatStatus returns the status portion of the worktree line (branch, locked, prunable).
+func (w WorktreeInfo) formatStatus() string {
 	var sb strings.Builder
-	sb.WriteString(w.Path)
-	sb.WriteString("  ")
-	sb.WriteString(w.ShortHEAD())
-	sb.WriteString(" ")
 
 	if w.Bare {
 		sb.WriteString("(bare)")
