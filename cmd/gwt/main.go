@@ -54,8 +54,10 @@ func resolveCompletionDirectory(cmd *cobra.Command) (string, error) {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "gwt",
-	Short: "Manage git worktrees and branches together",
+	Use:           "gwt",
+	Short:         "Manage git worktrees and branches together",
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		var err error
 		cwd, err = os.Getwd()
@@ -260,6 +262,7 @@ func init() {
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "gwt:", err)
 		os.Exit(1)
 	}
 }
