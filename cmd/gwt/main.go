@@ -335,6 +335,7 @@ Safety checks (all must pass):
 			yes, _ := cmd.Flags().GetBool("yes")
 			check, _ := cmd.Flags().GetBool("check")
 			target, _ := cmd.Flags().GetString("target")
+			forceCount, _ := cmd.Flags().GetCount("force")
 
 			cleanCmd := o.newCleanCommander(cfg)
 
@@ -343,6 +344,7 @@ Safety checks (all must pass):
 				Check:   true,
 				Target:  target,
 				Verbose: verbose,
+				Force:   gwt.WorktreeForceLevel(forceCount),
 			})
 			if err != nil {
 				return err
@@ -384,6 +386,7 @@ Safety checks (all must pass):
 				Check:   false,
 				Target:  target,
 				Verbose: verbose,
+				Force:   gwt.WorktreeForceLevel(forceCount),
 			})
 			if err != nil {
 				return err
@@ -481,6 +484,7 @@ stop processing of remaining branches.`,
 	cleanCmd.Flags().BoolP("yes", "y", false, "Execute removal without confirmation")
 	cleanCmd.Flags().Bool("check", false, "Show candidates without prompting or removing")
 	cleanCmd.Flags().String("target", "", "Target branch for merge check (default: auto-detect)")
+	cleanCmd.Flags().CountP("force", "f", "Force clean (-f: unmerged/uncommitted, -ff: also locked)")
 	rootCmd.AddCommand(cleanCmd)
 
 	removeCmd.Flags().CountP("force", "f", "Force removal (-f: uncommitted/unmerged, -ff: also locked)")

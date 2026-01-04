@@ -14,10 +14,11 @@ type CleanCommand struct {
 
 // CleanOptions configures the clean operation.
 type CleanOptions struct {
-	Yes     bool   // Execute without confirmation
-	Check   bool   // Show candidates only (no prompt)
-	Target  string // Target branch for merge check (auto-detect if empty)
-	Verbose bool   // Show skip reasons
+	Yes     bool               // Execute without confirmation
+	Check   bool               // Show candidates only (no prompt)
+	Target  string             // Target branch for merge check (auto-detect if empty)
+	Verbose bool               // Show skip reasons
+	Force   WorktreeForceLevel // Force level: -f for unclean, -ff for locked
 }
 
 // NewCleanCommand creates a new CleanCommand with explicit dependencies.
@@ -163,7 +164,7 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 		}
 
 		// Check skip conditions
-		if reason := c.checkSkipReason(wt, cwd, target); reason != "" {
+		if reason := c.checkSkipReason(wt, cwd, target, opts.Force); reason != "" {
 			candidate.Skipped = true
 			candidate.SkipReason = reason
 		}
@@ -183,13 +184,21 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 		Config: c.Config,
 	}
 
+	// Determine force level for RemoveCommand.
+	// At minimum use Unclean since clean already validated conditions.
+	// Use higher level if clean was invoked with -ff to handle locked worktrees.
+	removeForce := opts.Force
+	if removeForce < WorktreeForceLevelUnclean {
+		removeForce = WorktreeForceLevelUnclean
+	}
+
 	for _, candidate := range result.Candidates {
 		if candidate.Skipped {
 			continue
 		}
 
 		wt, err := removeCmd.Run(candidate.Branch, cwd, RemoveOptions{
-			Force:  WorktreeForceLevelUnclean, // bypass unclean check (we already checked conditions)
+			Force:  removeForce,
 			DryRun: false,
 		})
 		if err != nil {
@@ -231,33 +240,41 @@ func (c *CleanCommand) resolveTarget(target string) (string, error) {
 }
 
 // checkSkipReason checks if worktree should be skipped and returns the reason.
-func (c *CleanCommand) checkSkipReason(wt WorktreeInfo, cwd, target string) SkipReason {
-	// Check detached HEAD
+// force level controls which conditions can be bypassed:
+//   - WorktreeForceLevelNone: all conditions apply
+//   - WorktreeForceLevelUnclean (-f): bypass HasChanges, NotMerged
+//   - WorktreeForceLevelLocked (-ff): also bypass Locked
+func (c *CleanCommand) checkSkipReason(wt WorktreeInfo, cwd, target string, force WorktreeForceLevel) SkipReason {
+	// Check detached HEAD (never bypassed - RemoveCommand requires branch name)
 	if wt.Detached {
 		return SkipDetached
 	}
 
-	// Check locked
-	if wt.Locked {
-		return SkipLocked
-	}
-
-	// Check current directory
+	// Check current directory (never bypassed - dangerous to remove cwd)
 	if strings.HasPrefix(cwd, wt.Path) {
 		return SkipCurrentDir
 	}
 
-	// Check uncommitted changes
-	gitInDir := c.Git.InDir(wt.Path)
-	hasChanges, err := gitInDir.HasChanges()
-	if err != nil || hasChanges {
-		return SkipHasChanges
+	// Check locked (bypassed with -ff)
+	if wt.Locked && force < WorktreeForceLevelLocked {
+		return SkipLocked
 	}
 
-	// Check merged
-	merged, err := c.Git.IsBranchMerged(wt.Branch, target)
-	if err != nil || !merged {
-		return SkipNotMerged
+	// Check uncommitted changes (bypassed with -f)
+	if force < WorktreeForceLevelUnclean {
+		gitInDir := c.Git.InDir(wt.Path)
+		hasChanges, err := gitInDir.HasChanges()
+		if err != nil || hasChanges {
+			return SkipHasChanges
+		}
+	}
+
+	// Check merged (bypassed with -f)
+	if force < WorktreeForceLevelUnclean {
+		merged, err := c.Git.IsBranchMerged(wt.Branch, target)
+		if err != nil || !merged {
+			return SkipNotMerged
+		}
 	}
 
 	return ""

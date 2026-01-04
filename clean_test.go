@@ -544,7 +544,128 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 				Git: &GitRunner{Executor: mockGit},
 			}
 
-			got := cmd.checkSkipReason(tt.wt, tt.cwd, tt.target)
+			got := cmd.checkSkipReason(tt.wt, tt.cwd, tt.target, WorktreeForceLevelNone)
+
+			if got != tt.wantReason {
+				t.Errorf("got %q, want %q", got, tt.wantReason)
+			}
+		})
+	}
+}
+
+func TestCleanCommand_CheckSkipReasonWithForce(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		wt         WorktreeInfo
+		cwd        string
+		target     string
+		force      WorktreeForceLevel
+		setupGit   func() *testutil.MockGitExecutor
+		wantReason SkipReason
+	}{
+		// -f (Unclean) bypasses HasChanges
+		{
+			name:   "force_unclean_bypasses_has_changes",
+			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:    "/other/dir",
+			target: "main",
+			force:  WorktreeForceLevelUnclean,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					HasChanges: true,
+				}
+			},
+			wantReason: "", // bypassed
+		},
+		// -f (Unclean) bypasses NotMerged
+		{
+			name:   "force_unclean_bypasses_not_merged",
+			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:    "/other/dir",
+			target: "main",
+			force:  WorktreeForceLevelUnclean,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					MergedBranches: map[string][]string{
+						"main": {}, // not merged
+					},
+				}
+			},
+			wantReason: "", // bypassed
+		},
+		// -f (Unclean) does NOT bypass Locked
+		{
+			name:   "force_unclean_does_not_bypass_locked",
+			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+			cwd:    "/other/dir",
+			target: "main",
+			force:  WorktreeForceLevelUnclean,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{}
+			},
+			wantReason: SkipLocked,
+		},
+		// -ff (Locked) bypasses Locked
+		{
+			name:   "force_locked_bypasses_locked",
+			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+			cwd:    "/other/dir",
+			target: "main",
+			force:  WorktreeForceLevelLocked,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{}
+			},
+			wantReason: "", // bypassed
+		},
+		// -ff (Locked) also bypasses HasChanges and NotMerged
+		{
+			name:   "force_locked_bypasses_has_changes",
+			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:    "/other/dir",
+			target: "main",
+			force:  WorktreeForceLevelLocked,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					HasChanges: true,
+				}
+			},
+			wantReason: "", // bypassed
+		},
+		// Detached is never bypassed (even with -ff)
+		{
+			name:       "force_locked_does_not_bypass_detached",
+			wt:         WorktreeInfo{Path: "/repo/feat/a", Detached: true},
+			cwd:        "/other/dir",
+			target:     "main",
+			force:      WorktreeForceLevelLocked,
+			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
+			wantReason: SkipDetached,
+		},
+		// CurrentDir is never bypassed (even with -ff)
+		{
+			name:       "force_locked_does_not_bypass_current_dir",
+			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:        "/repo/feat/a/subdir",
+			target:     "main",
+			force:      WorktreeForceLevelLocked,
+			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
+			wantReason: SkipCurrentDir,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := tt.setupGit()
+
+			cmd := &CleanCommand{
+				Git: &GitRunner{Executor: mockGit},
+			}
+
+			got := cmd.checkSkipReason(tt.wt, tt.cwd, tt.target, tt.force)
 
 			if got != tt.wantReason {
 				t.Errorf("got %q, want %q", got, tt.wantReason)

@@ -10,12 +10,13 @@ gwt clean [flags]
 
 ## Flags
 
-| Flag              | Short | Description                                |
-|-------------------|-------|--------------------------------------------|
-| `--yes`           | `-y`  | Execute removal without confirmation       |
-| `--check`         |       | Show candidates without prompting          |
-| `--target`        |       | Target branch for merge check              |
-| `--verbose`       | `-v`  | Show skip reasons for skipped worktrees    |
+| Flag              | Short | Description                                    |
+|-------------------|-------|------------------------------------------------|
+| `--yes`           | `-y`  | Execute removal without confirmation           |
+| `--check`         |       | Show candidates without prompting              |
+| `--target`        |       | Target branch for merge check                  |
+| `--force`         | `-f`  | Force clean (can be specified twice, see below)|
+| `--verbose`       | `-v`  | Show skip reasons for skipped worktrees        |
 
 ## Behavior
 
@@ -54,6 +55,31 @@ All conditions must pass for a worktree to be cleaned:
 | Not locked         | Worktree is not locked            |
 | Not current        | Not the current directory         |
 | Not main           | Not the main worktree             |
+
+### Force Option
+
+With `--force` (`-f`), some safety checks can be bypassed:
+
+| Force Level | Bypassed Conditions                      |
+|-------------|------------------------------------------|
+| `-f`        | Uncommitted changes, not merged          |
+| `-ff`       | Above + locked worktrees                 |
+
+The following conditions are never bypassed:
+
+- Current directory (dangerous to remove cwd)
+- Detached HEAD (RemoveCommand requires branch name)
+
+This matches `gwt remove` behavior where `-f` removes unclean worktrees
+and `-ff` also removes locked worktrees.
+
+```bash
+# Force clean unmerged branches with uncommitted changes
+gwt clean -f --yes
+
+# Also force clean locked worktrees
+gwt clean -ff --yes
+```
 
 ### Target Branch Detection
 

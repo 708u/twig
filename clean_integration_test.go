@@ -452,4 +452,213 @@ func TestCleanCommand_Integration(t *testing.T) {
 			t.Errorf("expected 0 removed in check mode, got %d", len(result.Removed))
 		}
 	})
+
+	t.Run("ForceUncleanBypassesHasChanges", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a branch with uncommitted changes
+		wtPath := filepath.Join(repoDir, "feature", "force-changes")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/force-changes", wtPath)
+
+		// Create uncommitted changes
+		testFile := filepath.Join(wtPath, "uncommitted.txt")
+		if err := os.WriteFile(testFile, []byte("uncommitted"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Without force, should skip
+		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if !result.Candidates[0].Skipped || result.Candidates[0].SkipReason != SkipHasChanges {
+			t.Error("without force, branch with changes should be skipped")
+		}
+
+		// With -f, should not skip
+		result, err = cmd.Run(mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelUnclean})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if result.Candidates[0].Skipped {
+			t.Error("with -f, branch with changes should not be skipped")
+		}
+
+		// Execute with -f
+		result, err = cmd.Run(mainDir, CleanOptions{Force: WorktreeForceLevelUnclean})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Worktree should be removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed with -f: %s", wtPath)
+		}
+	})
+
+	t.Run("ForceUncleanBypassesNotMerged", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create an unmerged branch
+		wtPath := filepath.Join(repoDir, "feature", "force-unmerged")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/force-unmerged", wtPath)
+
+		// Make a commit that is NOT merged to main
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "unmerged commit")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Without force, should skip
+		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if !result.Candidates[0].Skipped || result.Candidates[0].SkipReason != SkipNotMerged {
+			t.Error("without force, unmerged branch should be skipped")
+		}
+
+		// With -f, should not skip
+		result, err = cmd.Run(mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelUnclean})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if result.Candidates[0].Skipped {
+			t.Error("with -f, unmerged branch should not be skipped")
+		}
+
+		// Execute with -f
+		result, err = cmd.Run(mainDir, CleanOptions{Force: WorktreeForceLevelUnclean})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Worktree should be removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed with -f: %s", wtPath)
+		}
+	})
+
+	t.Run("ForceLockedBypassesLocked", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		wtPath := filepath.Join(repoDir, "feature", "force-locked")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/force-locked", wtPath)
+
+		// Lock the worktree
+		testutil.RunGit(t, mainDir, "worktree", "lock", wtPath)
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Without force, should skip
+		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if !result.Candidates[0].Skipped || result.Candidates[0].SkipReason != SkipLocked {
+			t.Error("without force, locked worktree should be skipped")
+		}
+
+		// With -f, should still skip (need -ff)
+		result, err = cmd.Run(mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelUnclean})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if !result.Candidates[0].Skipped || result.Candidates[0].SkipReason != SkipLocked {
+			t.Error("with -f only, locked worktree should still be skipped")
+		}
+
+		// With -ff, should not skip
+		result, err = cmd.Run(mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelLocked})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if result.Candidates[0].Skipped {
+			t.Error("with -ff, locked worktree should not be skipped")
+		}
+
+		// Execute with -ff
+		result, err = cmd.Run(mainDir, CleanOptions{Force: WorktreeForceLevelLocked})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Worktree should be removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed with -ff: %s", wtPath)
+		}
+	})
+
+	t.Run("ForceNeverBypassesCurrentDir", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		wtPath := filepath.Join(repoDir, "feature", "force-cwd")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/force-cwd", wtPath)
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Even with -ff, should skip current directory
+		result, err := cmd.Run(wtPath, CleanOptions{Check: true, Force: WorktreeForceLevelLocked})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if !result.Candidates[0].Skipped {
+			t.Error("current directory should always be skipped, even with -ff")
+		}
+
+		if result.Candidates[0].SkipReason != SkipCurrentDir {
+			t.Errorf("skip reason should be %s, got %s", SkipCurrentDir, result.Candidates[0].SkipReason)
+		}
+	})
 }
