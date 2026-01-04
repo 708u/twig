@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -88,14 +89,11 @@ func createSettings(t *testing.T, repoDir, mainDir string, cfg *setupConfig) {
 	content += fmt.Sprintf("worktree_destination_base_dir = %q\n", repoDir)
 
 	if len(cfg.symlinks) > 0 {
-		content += "symlinks = ["
+		quoted := make([]string, len(cfg.symlinks))
 		for i, s := range cfg.symlinks {
-			if i > 0 {
-				content += ", "
-			}
-			content += fmt.Sprintf("%q", s)
+			quoted[i] = fmt.Sprintf("%q", s)
 		}
-		content += "]\n"
+		content += fmt.Sprintf("symlinks = [%s]\n", strings.Join(quoted, ", "))
 	}
 
 	if cfg.defaultSource != "" {
