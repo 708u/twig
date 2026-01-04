@@ -1,0 +1,1 @@
+../../../docs/commands/remove.md
