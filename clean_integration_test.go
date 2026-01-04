@@ -294,6 +294,11 @@ worktree_destination_base_dir = %q
 		}
 	})
 
+	// TODO: Add test for interactive confirmation (without --yes flag).
+	// Currently blocked because os.Stdin is used directly in CLI layer.
+	// After refactor/cobra-io-injection, we can use cmd.SetIn() to mock stdin.
+	// See: docs/tasks/refactor/cli-testability/
+
 	t.Run("ExecutesWithYesFlag", func(t *testing.T) {
 		t.Parallel()
 
