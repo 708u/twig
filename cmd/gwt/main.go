@@ -24,8 +24,21 @@ func defaultNewCleanCommander(cfg *gwt.Config) CleanCommander {
 	return gwt.NewDefaultCleanCommand(cfg)
 }
 
+// ListCommander defines the interface for list operations.
+type ListCommander interface {
+	Run() (gwt.ListResult, error)
+}
+
+// NewListCommander is the factory function type for creating ListCommander instances.
+type NewListCommander func(dir string) ListCommander
+
+func defaultNewListCommander(dir string) ListCommander {
+	return gwt.NewDefaultListCommand(dir)
+}
+
 type options struct {
 	newCleanCommander NewCleanCommander
+	newListCommander  NewListCommander
 }
 
 // Option configures newRootCmd.
@@ -35,6 +48,13 @@ type Option func(*options)
 func WithNewCleanCommander(ncc NewCleanCommander) Option {
 	return func(o *options) {
 		o.newCleanCommander = ncc
+	}
+}
+
+// WithNewListCommander sets the factory function for creating ListCommander instances.
+func WithNewListCommander(nlc NewListCommander) Option {
+	return func(o *options) {
+		o.newListCommander = nlc
 	}
 }
 
@@ -69,6 +89,7 @@ func resolveDirectory(dirFlag, baseCwd string) (string, error) {
 func newRootCmd(opts ...Option) *cobra.Command {
 	o := &options{
 		newCleanCommander: defaultNewCleanCommander,
+		newListCommander:  defaultNewListCommander,
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -240,7 +261,7 @@ func newRootCmd(opts ...Option) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			quiet, _ := cmd.Flags().GetBool("quiet")
 
-			result, err := gwt.NewListCommand(cwd).Run()
+			result, err := o.newListCommander(cwd).Run()
 			if err != nil {
 				return err
 			}

@@ -12,11 +12,16 @@ type ListCommand struct {
 	Git *GitRunner
 }
 
-// NewListCommand creates a new ListCommand.
-func NewListCommand(dir string) *ListCommand {
+// NewListCommand creates a ListCommand with explicit dependencies (for testing).
+func NewListCommand(git *GitRunner) *ListCommand {
 	return &ListCommand{
-		Git: NewGitRunner(dir),
+		Git: git,
 	}
+}
+
+// NewDefaultListCommand creates a ListCommand with production defaults.
+func NewDefaultListCommand(dir string) *ListCommand {
+	return NewListCommand(NewGitRunner(dir))
 }
 
 // ListResult holds the result of a list operation.
