@@ -1,0 +1,582 @@
+package gwt
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/708u/gwt/internal/testutil"
+)
+
+func TestCleanResult_CleanableCount(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		result CleanResult
+		want   int
+	}{
+		{
+			name:   "empty",
+			result: CleanResult{},
+			want:   0,
+		},
+		{
+			name: "all_cleanable",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false},
+					{Branch: "feat/b", Skipped: false},
+				},
+			},
+			want: 2,
+		},
+		{
+			name: "all_skipped",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: true},
+					{Branch: "feat/b", Skipped: true},
+				},
+			},
+			want: 0,
+		},
+		{
+			name: "mixed",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false},
+					{Branch: "feat/b", Skipped: true},
+					{Branch: "feat/c", Skipped: false},
+				},
+			},
+			want: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.result.CleanableCount(); got != tt.want {
+				t.Errorf("CleanableCount() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCleanResult_Format(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		result     CleanResult
+		opts       FormatOptions
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name: "dry_run_with_candidates",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false},
+					{Branch: "feat/b", Skipped: true, SkipReason: SkipNotMerged},
+				},
+				DryRun: true,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "clean: feat/a\n",
+			wantStderr: "",
+		},
+		{
+			name: "dry_run_verbose_shows_skipped",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false},
+					{Branch: "feat/b", Skipped: true, SkipReason: SkipNotMerged},
+				},
+				DryRun: true,
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "clean: feat/a\nskip: feat/b (not merged)\n",
+			wantStderr: "",
+		},
+		{
+			name: "no_candidates",
+			result: CleanResult{
+				Candidates: []CleanCandidate{},
+				DryRun:     true,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "No worktrees to clean\n",
+			wantStderr: "",
+		},
+		{
+			name: "all_skipped",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: true, SkipReason: SkipLocked},
+				},
+				DryRun: true,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "No worktrees to clean\n",
+			wantStderr: "",
+		},
+		{
+			name: "execution_results",
+			result: CleanResult{
+				Removed: []RemovedWorktree{
+					{Branch: "feat/a"},
+					{Branch: "feat/b"},
+				},
+				DryRun: false,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "gwt clean: feat/a\ngwt clean: feat/b\n",
+			wantStderr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := tt.result.Format(tt.opts)
+			if got.Stdout != tt.wantStdout {
+				t.Errorf("Stdout = %q, want %q", got.Stdout, tt.wantStdout)
+			}
+			if got.Stderr != tt.wantStderr {
+				t.Errorf("Stderr = %q, want %q", got.Stderr, tt.wantStderr)
+			}
+		})
+	}
+}
+
+func TestCleanCommand_Run(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		cwd            string
+		opts           CleanOptions
+		config         *Config
+		setupGit       func() *testutil.MockGitExecutor
+		wantErr        bool
+		errContains    string
+		wantCandidates int
+		wantSkipped    int
+	}{
+		{
+			name: "finds_merged_candidates",
+			cwd:  "/other/dir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+						{Path: "/repo/feat/b", Branch: "feat/b"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+				}
+			},
+			wantCandidates: 2,
+			wantSkipped:    1, // feat/b not merged
+		},
+		{
+			name: "skips_locked_worktrees",
+			cwd:  "/other/dir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1,
+		},
+		{
+			name: "skips_current_directory",
+			cwd:  "/repo/feat/a/subdir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1,
+		},
+		{
+			name: "skips_worktrees_with_changes",
+			cwd:  "/other/dir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+					HasChanges: true,
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1,
+		},
+		{
+			name: "skips_detached_head",
+			cwd:  "/other/dir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Detached: true},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1,
+		},
+		{
+			name: "uses_target_flag",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Target: "develop"},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{
+						"develop": {"develop", "feat/a"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0,
+		},
+		{
+			name: "uses_config_default_source",
+			cwd:  "/other/dir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "develop",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{
+						"develop": {"develop", "feat/a"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0,
+		},
+		{
+			name: "auto_detects_target",
+			cwd:  "/other/dir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0,
+		},
+		{
+			name: "skips_bare_worktrees",
+			cwd:  "/other/dir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/.git/worktrees/bare", Bare: true},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := tt.setupGit()
+
+			cmd := &CleanCommand{
+				FS:     &testutil.MockFS{},
+				Git:    &GitRunner{Executor: mockGit},
+				Config: tt.config,
+			}
+
+			result, err := cmd.Run(tt.cwd, tt.opts)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(result.Candidates) != tt.wantCandidates {
+				t.Errorf("got %d candidates, want %d", len(result.Candidates), tt.wantCandidates)
+			}
+
+			skippedCount := 0
+			for _, c := range result.Candidates {
+				if c.Skipped {
+					skippedCount++
+				}
+			}
+			if skippedCount != tt.wantSkipped {
+				t.Errorf("got %d skipped, want %d", skippedCount, tt.wantSkipped)
+			}
+		})
+	}
+}
+
+func TestCleanCommand_ResolveTarget(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		target     string
+		config     *Config
+		worktrees  []testutil.MockWorktree
+		wantTarget string
+		wantErr    bool
+	}{
+		{
+			name:       "uses_provided_target",
+			target:     "develop",
+			config:     &Config{DefaultSource: "main"},
+			wantTarget: "develop",
+		},
+		{
+			name:       "uses_config_default_source",
+			target:     "",
+			config:     &Config{DefaultSource: "develop"},
+			wantTarget: "develop",
+		},
+		{
+			name:   "auto_detects_from_worktrees",
+			target: "",
+			config: &Config{},
+			worktrees: []testutil.MockWorktree{
+				{Path: "/repo/main", Branch: "main"},
+			},
+			wantTarget: "main",
+		},
+		{
+			name:      "error_when_no_target_found",
+			target:    "",
+			config:    &Config{},
+			worktrees: []testutil.MockWorktree{},
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := &testutil.MockGitExecutor{
+				Worktrees: tt.worktrees,
+			}
+
+			cmd := &CleanCommand{
+				Git:    &GitRunner{Executor: mockGit},
+				Config: tt.config,
+			}
+
+			got, err := cmd.resolveTarget(tt.target)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if got != tt.wantTarget {
+				t.Errorf("got %q, want %q", got, tt.wantTarget)
+			}
+		})
+	}
+}
+
+func TestCleanCommand_CheckSkipReason(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		wt         WorktreeInfo
+		cwd        string
+		target     string
+		setupGit   func() *testutil.MockGitExecutor
+		wantReason SkipReason
+	}{
+		{
+			name:   "no_skip_for_valid_candidate",
+			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:    "/other/dir",
+			target: "main",
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					MergedBranches: map[string][]string{
+						"main": {"feat/a"},
+					},
+				}
+			},
+			wantReason: "",
+		},
+		{
+			name:       "skip_detached",
+			wt:         WorktreeInfo{Path: "/repo/feat/a", Detached: true},
+			cwd:        "/other/dir",
+			target:     "main",
+			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
+			wantReason: SkipDetached,
+		},
+		{
+			name:       "skip_locked",
+			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+			cwd:        "/other/dir",
+			target:     "main",
+			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
+			wantReason: SkipLocked,
+		},
+		{
+			name:       "skip_current_dir",
+			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:        "/repo/feat/a/subdir",
+			target:     "main",
+			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
+			wantReason: SkipCurrentDir,
+		},
+		{
+			name:   "skip_has_changes",
+			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:    "/other/dir",
+			target: "main",
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					HasChanges: true,
+				}
+			},
+			wantReason: SkipHasChanges,
+		},
+		{
+			name:   "skip_not_merged",
+			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:    "/other/dir",
+			target: "main",
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					MergedBranches: map[string][]string{
+						"main": {},
+					},
+				}
+			},
+			wantReason: SkipNotMerged,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := tt.setupGit()
+
+			cmd := &CleanCommand{
+				Git: &GitRunner{Executor: mockGit},
+			}
+
+			got := cmd.checkSkipReason(tt.wt, tt.cwd, tt.target)
+
+			if got != tt.wantReason {
+				t.Errorf("got %q, want %q", got, tt.wantReason)
+			}
+		})
+	}
+}

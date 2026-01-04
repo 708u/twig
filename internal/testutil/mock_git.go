@@ -53,6 +53,12 @@ type MockGitExecutor struct {
 
 	// StashPopErr is returned when stash pop is called.
 	StashPopErr error
+
+	// MergedBranches maps target branch to list of branches merged into it.
+	MergedBranches map[string][]string
+
+	// WorktreePruneErr is returned when worktree prune is called.
+	WorktreePruneErr error
 }
 
 func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
@@ -84,6 +90,8 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 				return m.handleWorktreeAdd(args)
 			case "remove":
 				return m.handleWorktreeRemove(args)
+			case "prune":
+				return m.handleWorktreePrune()
 			}
 		}
 	case "branch":
@@ -168,6 +176,10 @@ func (m *MockGitExecutor) handleWorktreeRemove(args []string) ([]byte, error) {
 	return nil, m.WorktreeRemoveErr
 }
 
+func (m *MockGitExecutor) handleWorktreePrune() ([]byte, error) {
+	return nil, m.WorktreePruneErr
+}
+
 func (m *MockGitExecutor) handleBranch(args []string) ([]byte, error) {
 	if m.CapturedArgs != nil {
 		*m.CapturedArgs = args
@@ -175,6 +187,12 @@ func (m *MockGitExecutor) handleBranch(args []string) ([]byte, error) {
 	// args: ["branch", "-d"/"-D", "branch-name"]
 	if len(args) >= 3 && (args[1] == "-d" || args[1] == "-D") {
 		return nil, m.BranchDeleteErr
+	}
+	// args: ["branch", "--merged", "target", "--format=%(refname:short)"]
+	if len(args) >= 3 && args[1] == "--merged" {
+		target := args[2]
+		branches := m.MergedBranches[target]
+		return []byte(strings.Join(branches, "\n")), nil
 	}
 	return nil, nil
 }

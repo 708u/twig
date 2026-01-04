@@ -179,6 +179,47 @@ var listCmd = &cobra.Command{
 	},
 }
 
+var cleanCmd = &cobra.Command{
+	Use:   "clean",
+	Short: "Remove merged worktrees that are no longer needed",
+	Long: `Remove worktrees that have been merged to the target branch.
+
+By default, only shows candidates without removing them.
+Use --yes to actually remove the worktrees.
+
+Safety checks (all must pass):
+  - Branch is merged to target
+  - No uncommitted changes
+  - Worktree is not locked
+  - Not the current directory
+  - Not the main worktree`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		verbose, _ := cmd.Flags().GetBool("verbose")
+		yes, _ := cmd.Flags().GetBool("yes")
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		target, _ := cmd.Flags().GetString("target")
+
+		cleanCmd := gwt.NewCleanCommand(cfg)
+		result, err := cleanCmd.Run(cwd, gwt.CleanOptions{
+			Yes:     yes,
+			DryRun:  dryRun,
+			Target:  target,
+			Verbose: verbose,
+		})
+		if err != nil {
+			return err
+		}
+
+		formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
+		if formatted.Stderr != "" {
+			fmt.Fprint(os.Stderr, formatted.Stderr)
+		}
+		fmt.Fprint(os.Stdout, formatted.Stdout)
+		return nil
+	},
+}
+
 var removeCmd = &cobra.Command{
 	Use:   "remove <branch>...",
 	Short: "Remove worktrees and their branches",
@@ -254,6 +295,11 @@ func init() {
 
 	listCmd.Flags().BoolP("quiet", "q", false, "Output only worktree paths")
 	rootCmd.AddCommand(listCmd)
+
+	cleanCmd.Flags().BoolP("yes", "y", false, "Execute removal without confirmation")
+	cleanCmd.Flags().Bool("dry-run", false, "Show candidates without removing")
+	cleanCmd.Flags().String("target", "", "Target branch for merge check (default: auto-detect)")
+	rootCmd.AddCommand(cleanCmd)
 
 	removeCmd.Flags().BoolP("force", "f", false, "Force removal even with uncommitted changes or unmerged branch")
 	removeCmd.Flags().Bool("dry-run", false, "Show what would be removed without making changes")
