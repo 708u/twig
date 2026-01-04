@@ -410,7 +410,7 @@ stop processing of remaining branches.`,
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verbose, _ := cmd.Flags().GetBool("verbose")
-			force, _ := cmd.Flags().GetBool("force")
+			force, _ := cmd.Flags().GetCount("force")
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
 
 			removeCmd := o.newRemoveCommander(cfg)
@@ -461,7 +461,7 @@ stop processing of remaining branches.`,
 	cleanCmd.Flags().String("target", "", "Target branch for merge check (default: auto-detect)")
 	rootCmd.AddCommand(cleanCmd)
 
-	removeCmd.Flags().BoolP("force", "f", false, "Force removal even with uncommitted changes or unmerged branch")
+	removeCmd.Flags().CountP("force", "f", "Force removal (-f: uncommitted/unmerged, -ff: also locked)")
 	removeCmd.Flags().Bool("dry-run", false, "Show what would be removed without making changes")
 	rootCmd.AddCommand(removeCmd)
 

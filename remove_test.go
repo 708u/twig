@@ -147,16 +147,16 @@ func TestRemoveCommand_Run(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		branch      string
-		cwd         string
-		opts        RemoveOptions
-		config      *Config
-		setupGit    func(t *testing.T, captured *[]string) *testutil.MockGitExecutor
-		wantErr     bool
-		errContains string
-		wantForce   bool
-		wantDryRun  bool
+		name           string
+		branch         string
+		cwd            string
+		opts           RemoveOptions
+		config         *Config
+		setupGit       func(t *testing.T, captured *[]string) *testutil.MockGitExecutor
+		wantErr        bool
+		errContains    string
+		wantForceLevel int // expected number of -f flags
+		wantDryRun     bool
 	}{
 		{
 			name:   "success",
@@ -190,10 +190,10 @@ func TestRemoveCommand_Run(t *testing.T) {
 			wantDryRun: true,
 		},
 		{
-			name:   "force",
+			name:   "force_level_1_unclean",
 			branch: "feature/test",
 			cwd:    "/other/dir",
-			opts:   RemoveOptions{Force: true},
+			opts:   RemoveOptions{Force: 1},
 			config: &Config{WorktreeSourceDir: "/repo/main"},
 			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
 				t.Helper()
@@ -202,8 +202,24 @@ func TestRemoveCommand_Run(t *testing.T) {
 					CapturedArgs: captured,
 				}
 			},
-			wantErr:   false,
-			wantForce: true,
+			wantErr:        false,
+			wantForceLevel: 1,
+		},
+		{
+			name:   "force_level_2_locked",
+			branch: "feature/test",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{Force: 2},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees:    []testutil.MockWorktree{{Path: "/repo/feature/test", Branch: "feature/test"}},
+					CapturedArgs: captured,
+				}
+			},
+			wantErr:        false,
+			wantForceLevel: 2,
 		},
 		{
 			name:   "empty_branch",
@@ -332,8 +348,21 @@ func TestRemoveCommand_Run(t *testing.T) {
 				return
 			}
 
-			if tt.wantForce && !slices.Contains(captured, "-f") && !slices.Contains(captured, "-D") {
-				t.Errorf("expected force flag (-f or -D), got: %v", captured)
+			if tt.wantForceLevel > 0 {
+				// Check that -f appears the expected number of times for worktree removal
+				fCount := 0
+				for _, arg := range captured {
+					if arg == "-f" {
+						fCount++
+					}
+				}
+				if fCount != tt.wantForceLevel {
+					t.Errorf("expected -f %d time(s) for worktree removal, got %d in: %v", tt.wantForceLevel, fCount, captured)
+				}
+				// Also check -D for branch deletion
+				if !slices.Contains(captured, "-D") {
+					t.Errorf("expected -D for force branch deletion, got: %v", captured)
+				}
 			}
 		})
 	}

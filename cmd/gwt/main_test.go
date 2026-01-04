@@ -348,37 +348,49 @@ func TestRemoveCmd(t *testing.T) {
 	tests := []struct {
 		name      string
 		args      []string
-		wantForce bool
+		wantForce int
 		wantDry   bool
 	}{
 		{
 			name:      "no_flags",
 			args:      []string{"remove", "feat/a"},
-			wantForce: false,
+			wantForce: 0,
 			wantDry:   false,
 		},
 		{
 			name:      "force_flag",
 			args:      []string{"remove", "--force", "feat/a"},
-			wantForce: true,
+			wantForce: 1,
 			wantDry:   false,
 		},
 		{
 			name:      "force_short_flag",
 			args:      []string{"remove", "-f", "feat/a"},
-			wantForce: true,
+			wantForce: 1,
+			wantDry:   false,
+		},
+		{
+			name:      "force_double_short_flag",
+			args:      []string{"remove", "-ff", "feat/a"},
+			wantForce: 2,
+			wantDry:   false,
+		},
+		{
+			name:      "force_double_separate_flags",
+			args:      []string{"remove", "-f", "-f", "feat/a"},
+			wantForce: 2,
 			wantDry:   false,
 		},
 		{
 			name:      "dry_run_flag",
 			args:      []string{"remove", "--dry-run", "feat/a"},
-			wantForce: false,
+			wantForce: 0,
 			wantDry:   true,
 		},
 		{
-			name:      "both_flags",
+			name:      "force_and_dry_run",
 			args:      []string{"remove", "--force", "--dry-run", "feat/a"},
-			wantForce: true,
+			wantForce: 1,
 			wantDry:   true,
 		},
 	}

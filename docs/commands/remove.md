@@ -14,11 +14,11 @@ gwt remove <branch>... [flags]
 
 ## Flags
 
-| Flag        | Short | Description                            |
-|-------------|-------|----------------------------------------|
-| `--force`   | `-f`  | Force removal with uncommitted changes |
-| `--dry-run` |       | Show what would be removed             |
-| `--verbose` | `-v`  | Enable verbose output                  |
+| Flag        | Short | Description                                       |
+|-------------|-------|---------------------------------------------------|
+| `--force`   | `-f`  | Force removal (can be specified twice, see below) |
+| `--dry-run` |       | Show what would be removed                        |
+| `--verbose` | `-v`  | Enable verbose output                             |
 
 ## Behavior
 
@@ -26,10 +26,13 @@ gwt remove <branch>... [flags]
 - Prevents removal if current directory is inside the target worktree
 - Cleans up empty parent directories after removal (see below)
 - With `--dry-run`: prints what would be removed without making changes
-- Without `--force`: fails if there are uncommitted changes
-  or the branch is not merged
-- With `--force`: bypasses uncommitted changes
-  and unmerged branch checks
+- Without `--force`: fails if there are uncommitted changes,
+  the branch is not merged, or the worktree is locked
+- With `-f` (once): bypasses uncommitted changes and unmerged branch checks
+- With `-ff` (twice): also bypasses locked worktree checks
+
+This matches git's behavior where `git worktree remove -f` removes unclean
+worktrees and `git worktree remove -f -f` also removes locked worktrees.
 
 ### Empty Directory Cleanup
 
