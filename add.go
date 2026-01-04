@@ -152,43 +152,44 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	}
 
 	// Stash changes if sync or carry is enabled
-	var stashed bool
+	var stashHash string
 	if stashMsg != "" {
 		hasChanges, err := stashSourceGit.HasChanges()
 		if err != nil {
 			return result, fmt.Errorf("failed to check for changes: %w", err)
 		}
 		if hasChanges {
-			if _, err := stashSourceGit.StashPush(stashMsg); err != nil {
+			hash, err := stashSourceGit.StashPush(stashMsg)
+			if err != nil {
 				return result, fmt.Errorf("failed to stash changes: %w", err)
 			}
-			stashed = true
+			stashHash = hash
 		}
 	}
 
 	gitOutput, err := c.createWorktree(name, wtPath)
 	if err != nil {
-		if stashed {
-			_, _ = stashSourceGit.StashPop()
+		if stashHash != "" {
+			_, _ = stashSourceGit.StashPopByHash(stashHash)
 		}
 		return result, err
 	}
 	result.GitOutput = gitOutput
 
 	// Apply stashed changes to new worktree
-	if stashed {
-		if _, err := stashSourceGit.InDir(wtPath).StashApply(); err != nil {
+	if stashHash != "" {
+		if _, err := c.Git.InDir(wtPath).StashApplyByHash(stashHash); err != nil {
 			_, _ = c.Git.WorktreeRemove(wtPath, WithForceRemove())
-			_, _ = stashSourceGit.StashPop()
+			_, _ = stashSourceGit.StashPopByHash(stashHash)
 			return result, fmt.Errorf("failed to apply changes to new worktree: %w", err)
 		}
 		if isCarry {
 			// Carry: drop stash (source becomes clean)
-			_, _ = stashSourceGit.StashDrop()
+			_, _ = stashSourceGit.StashDropByHash(stashHash)
 			result.ChangesCarried = true
 		} else {
 			// Sync: restore stash in source (both have changes)
-			if _, err := stashSourceGit.StashPop(); err != nil {
+			if _, err := stashSourceGit.StashPopByHash(stashHash); err != nil {
 				return result, fmt.Errorf("failed to restore changes in source: %w", err)
 			}
 			result.ChangesSynced = true

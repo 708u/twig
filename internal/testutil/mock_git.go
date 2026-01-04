@@ -48,6 +48,9 @@ type MockGitExecutor struct {
 	// StashPushErr is returned when stash push is called.
 	StashPushErr error
 
+	// StashHash is returned when stash push succeeds and used for subsequent stash operations.
+	StashHash string
+
 	// StashApplyErr is returned when stash apply is called.
 	StashApplyErr error
 
@@ -100,6 +103,15 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 }
 
 func (m *MockGitExecutor) handleRevParse(args []string) ([]byte, error) {
+	// Handle stash@{0} for StashPush hash retrieval
+	if len(args) >= 2 && args[1] == "stash@{0}" {
+		hash := m.StashHash
+		if hash == "" {
+			hash = "abc123def456"
+		}
+		return []byte(hash + "\n"), nil
+	}
+
 	// args: ["rev-parse", "--verify", "refs/heads/{branch}"]
 	if len(args) < 3 {
 		return nil, nil
@@ -198,6 +210,19 @@ func (m *MockGitExecutor) handleStash(args []string) ([]byte, error) {
 		return nil, nil
 	}
 	switch args[1] {
+	case "create":
+		// stash create returns hash on stdout
+		if m.StashPushErr != nil {
+			return nil, m.StashPushErr
+		}
+		hash := m.StashHash
+		if hash == "" {
+			hash = "abc123def456"
+		}
+		return []byte(hash + "\n"), nil
+	case "store":
+		// stash store adds to reflog, no output
+		return nil, nil
 	case "push":
 		return nil, m.StashPushErr
 	case "apply":
@@ -206,6 +231,13 @@ func (m *MockGitExecutor) handleStash(args []string) ([]byte, error) {
 		return nil, m.StashPopErr
 	case "drop":
 		return nil, m.StashDropErr
+	case "list":
+		// Return stash list with format "%gd %H"
+		hash := m.StashHash
+		if hash == "" {
+			hash = "abc123def456"
+		}
+		return []byte("stash@{0} " + hash + "\n"), nil
 	}
 	return nil, nil
 }

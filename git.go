@@ -301,27 +301,54 @@ func (g *GitRunner) HasChanges() (bool, error) {
 }
 
 // StashPush stashes all changes including untracked files.
-// TODO: Return stash hash to avoid race condition. See docs/tasks/fix-stash-race-condition/task.md
-func (g *GitRunner) StashPush(message string) ([]byte, error) {
-	return g.Run("stash", "push", "-u", "-m", message)
+// Returns the stash commit hash for later reference.
+//
+// Race condition note:
+// There is a small race window between "stash push" and "rev-parse stash@{0}".
+// If another process creates a stash in this window, we may get the wrong hash.
+// However, this window is very small (milliseconds) and acceptable in practice.
+//
+// Why not use "stash create" + "stash store" pattern?
+// "stash create" does not support -u/--include-untracked option (git limitation).
+// It can only stash tracked file changes, not untracked files.
+// See: https://git-scm.com/docs/git-stash
+func (g *GitRunner) StashPush(message string) (string, error) {
+	if _, err := g.Run("stash", "push", "-u", "-m", message); err != nil {
+		return "", err
+	}
+	out, err := g.Run("rev-parse", "stash@{0}")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
-// StashApply applies the latest stash without dropping it.
-// TODO: Accept hash parameter to avoid race condition. See docs/tasks/fix-stash-race-condition/task.md
-func (g *GitRunner) StashApply() ([]byte, error) {
-	return g.Run("stash", "apply", "stash@{0}")
+// StashApplyByHash applies the stash with the given hash without dropping it.
+func (g *GitRunner) StashApplyByHash(hash string) ([]byte, error) {
+	return g.Run("stash", "apply", hash)
 }
 
-// StashPop pops the latest stash.
-// TODO: Accept hash parameter to avoid race condition. See docs/tasks/fix-stash-race-condition/task.md
-func (g *GitRunner) StashPop() ([]byte, error) {
-	return g.Run("stash", "pop")
+// StashPopByHash applies and drops the stash with the given hash.
+func (g *GitRunner) StashPopByHash(hash string) ([]byte, error) {
+	if _, err := g.StashApplyByHash(hash); err != nil {
+		return nil, err
+	}
+	return g.StashDropByHash(hash)
 }
 
-// StashDrop drops the latest stash without applying it.
-// TODO: Accept hash parameter to avoid race condition. See docs/tasks/fix-stash-race-condition/task.md
-func (g *GitRunner) StashDrop() ([]byte, error) {
-	return g.Run("stash", "drop", "stash@{0}")
+// StashDropByHash drops the stash with the given hash.
+func (g *GitRunner) StashDropByHash(hash string) ([]byte, error) {
+	out, err := g.Run("stash", "list", "--format=%gd %H")
+	if err != nil {
+		return nil, err
+	}
+	for line := range strings.SplitSeq(string(out), "\n") {
+		if strings.HasSuffix(line, hash) {
+			ref := strings.Fields(line)[0]
+			return g.Run("stash", "drop", ref)
+		}
+	}
+	return nil, fmt.Errorf("stash not found: %s", hash)
 }
 
 // private methods for git command execution
