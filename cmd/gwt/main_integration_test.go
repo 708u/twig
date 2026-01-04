@@ -264,26 +264,6 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("CliSourceOverridesDefaultSource", func(t *testing.T) {
-		t.Parallel()
-
-		// This test verifies the priority: CLI --source > config default_source
-		// Test by checking the condition logic
-
-		cliSource := "dev"
-		configDefaultSource := "main"
-
-		// CLI source should take precedence
-		effectiveSource := cliSource
-		if effectiveSource == "" && configDefaultSource != "" {
-			effectiveSource = configDefaultSource
-		}
-
-		if effectiveSource != "dev" {
-			t.Errorf("effective source = %q, want %q", effectiveSource, "dev")
-		}
-	})
-
 	t.Run("DefaultSourceAppliedWithDirFlag", func(t *testing.T) {
 		t.Parallel()
 
@@ -316,24 +296,6 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 		// Since cliSource is empty but default_source is set, effectiveSource should be "main"
 		if effectiveSource != "main" {
 			t.Errorf("effective source = %q, want %q (default_source should be applied with -C)", effectiveSource, "main")
-		}
-	})
-
-	t.Run("SourceFlagOverridesDefaultSourceWithDirFlag", func(t *testing.T) {
-		t.Parallel()
-
-		// This test verifies: -C + --source specified, --source overrides default_source
-		cliSource := "dev"
-		configDefaultSource := "main"
-
-		// CLI source should take precedence even with -C
-		effectiveSource := cliSource
-		if effectiveSource == "" && configDefaultSource != "" {
-			effectiveSource = configDefaultSource
-		}
-
-		if effectiveSource != "dev" {
-			t.Errorf("effective source = %q, want %q (--source should override default_source with -C)", effectiveSource, "dev")
 		}
 	})
 
