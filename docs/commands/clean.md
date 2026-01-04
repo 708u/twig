@@ -36,11 +36,8 @@ All conditions must pass for a worktree to be cleaned:
 
 ### Target Branch Detection
 
-Priority order:
-
-1. `--target` flag
-2. `default_source` in config
-3. First non-bare worktree (usually main)
+If `--target` is not specified, auto-detects from the first
+non-bare worktree (usually main).
 
 ### Additional Actions
 

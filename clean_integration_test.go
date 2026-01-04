@@ -420,49 +420,6 @@ worktree_destination_base_dir = %q
 		}
 	})
 
-	t.Run("UsesDefaultSourceConfig", func(t *testing.T) {
-		t.Parallel()
-
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-default_source = "main"
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		wtPath := filepath.Join(repoDir, "feature", "test")
-		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/test", wtPath)
-
-		cfgResult, err := LoadConfig(mainDir)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		cmd := &CleanCommand{
-			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
-			Config: cfgResult.Config,
-		}
-
-		result, err := cmd.Run(mainDir, CleanOptions{})
-		if err != nil {
-			t.Fatalf("Run failed: %v", err)
-		}
-
-		// Target should be from config
-		if result.TargetBranch != "main" {
-			t.Errorf("target should be main from config, got %s", result.TargetBranch)
-		}
-	})
-
 	t.Run("AutoDetectsTarget", func(t *testing.T) {
 		t.Parallel()
 

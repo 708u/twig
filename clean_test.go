@@ -299,28 +299,6 @@ func TestCleanCommand_Run(t *testing.T) {
 			wantSkipped:    0,
 		},
 		{
-			name: "uses_config_default_source",
-			cwd:  "/other/dir",
-			opts: CleanOptions{},
-			config: &Config{
-				WorktreeSourceDir: "/repo/main",
-				DefaultSource:     "develop",
-			},
-			setupGit: func() *testutil.MockGitExecutor {
-				return &testutil.MockGitExecutor{
-					Worktrees: []testutil.MockWorktree{
-						{Path: "/repo/main", Branch: "main"},
-						{Path: "/repo/feat/a", Branch: "feat/a"},
-					},
-					MergedBranches: map[string][]string{
-						"develop": {"develop", "feat/a"},
-					},
-				}
-			},
-			wantCandidates: 1,
-			wantSkipped:    0,
-		},
-		{
 			name: "auto_detects_target",
 			cwd:  "/other/dir",
 			opts: CleanOptions{},
@@ -425,13 +403,7 @@ func TestCleanCommand_ResolveTarget(t *testing.T) {
 		{
 			name:       "uses_provided_target",
 			target:     "develop",
-			config:     &Config{DefaultSource: "main"},
-			wantTarget: "develop",
-		},
-		{
-			name:       "uses_config_default_source",
-			target:     "",
-			config:     &Config{DefaultSource: "develop"},
+			config:     &Config{},
 			wantTarget: "develop",
 		},
 		{

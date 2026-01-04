@@ -16,7 +16,7 @@ type CleanCommand struct {
 type CleanOptions struct {
 	Yes     bool   // Execute without confirmation
 	DryRun  bool   // Show candidates only
-	Target  string // Target branch for merge check
+	Target  string // Target branch for merge check (auto-detect if empty)
 	Verbose bool   // Show skip reasons
 }
 
@@ -179,14 +179,10 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 }
 
 // resolveTarget resolves the target branch for merge checking.
-// Priority: 1. opts.Target, 2. config.DefaultSource, 3. first non-bare worktree
+// If target is specified, use it. Otherwise, auto-detect from first non-bare worktree.
 func (c *CleanCommand) resolveTarget(target string) (string, error) {
 	if target != "" {
 		return target, nil
-	}
-
-	if c.Config.DefaultSource != "" {
-		return c.Config.DefaultSource, nil
 	}
 
 	// Find first non-bare worktree (usually main)
