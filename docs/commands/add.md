@@ -19,6 +19,7 @@ gwt add <name> [flags]
 | `--sync`              | `-s`  | Sync uncommitted changes to new worktree           |
 | `--carry [<branch>]`  | `-c`  | Carry uncommitted changes (optionally from branch) |
 | `--quiet`             | `-q`  | Output only the worktree path                      |
+| `--verbose`           | `-v`  | Enable verbose output                              |
 | `--source <branch>`   |       | Use specified branch's worktree as source          |
 | `--lock`              |       | Lock the worktree after creation                   |
 | `--reason <string>`   |       | Reason for locking (requires `--lock`)             |
