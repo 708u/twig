@@ -155,7 +155,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 		setupGit       func(t *testing.T, captured *[]string) *testutil.MockGitExecutor
 		wantErr        bool
 		errContains    string
-		wantForceLevel int // expected number of -f flags
+		wantForceLevel WorktreeForceLevel
 		wantDryRun     bool
 	}{
 		{
@@ -193,7 +193,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 			name:   "force_level_unclean",
 			branch: "feature/test",
 			cwd:    "/other/dir",
-			opts:   RemoveOptions{Force: ForceLevelUnclean},
+			opts:   RemoveOptions{Force: WorktreeForceLevelUnclean},
 			config: &Config{WorktreeSourceDir: "/repo/main"},
 			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
 				t.Helper()
@@ -203,13 +203,13 @@ func TestRemoveCommand_Run(t *testing.T) {
 				}
 			},
 			wantErr:        false,
-			wantForceLevel: int(ForceLevelUnclean),
+			wantForceLevel: WorktreeForceLevelUnclean,
 		},
 		{
 			name:   "force_level_locked",
 			branch: "feature/test",
 			cwd:    "/other/dir",
-			opts:   RemoveOptions{Force: ForceLevelLocked},
+			opts:   RemoveOptions{Force: WorktreeForceLevelLocked},
 			config: &Config{WorktreeSourceDir: "/repo/main"},
 			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
 				t.Helper()
@@ -219,7 +219,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 				}
 			},
 			wantErr:        false,
-			wantForceLevel: int(ForceLevelLocked),
+			wantForceLevel: WorktreeForceLevelLocked,
 		},
 		{
 			name:   "empty_branch",
@@ -356,7 +356,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 						fCount++
 					}
 				}
-				if fCount != tt.wantForceLevel {
+				if WorktreeForceLevel(fCount) != tt.wantForceLevel {
 					t.Errorf("expected -f %d time(s) for worktree removal, got %d in: %v", tt.wantForceLevel, fCount, captured)
 				}
 				// Also check -D for branch deletion

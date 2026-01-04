@@ -297,28 +297,28 @@ func (g *GitRunner) WorktreeFindByBranch(branch string) (string, error) {
 	return "", fmt.Errorf("branch %q is not checked out in any worktree", branch)
 }
 
-// ForceLevel represents the force level for worktree removal.
+// WorktreeForceLevel represents the force level for worktree removal.
 // Matches git worktree remove behavior.
-type ForceLevel int
+type WorktreeForceLevel uint8
 
 const (
-	// ForceLevelNone means no force - fail on uncommitted changes or locked.
-	ForceLevelNone ForceLevel = iota
-	// ForceLevelUnclean removes unclean worktrees (-f).
-	ForceLevelUnclean
-	// ForceLevelLocked also removes locked worktrees (-f -f).
-	ForceLevelLocked
+	// WorktreeForceLevelNone means no force - fail on uncommitted changes or locked.
+	WorktreeForceLevelNone WorktreeForceLevel = iota
+	// WorktreeForceLevelUnclean removes unclean worktrees (-f).
+	WorktreeForceLevelUnclean
+	// WorktreeForceLevelLocked also removes locked worktrees (-f -f).
+	WorktreeForceLevelLocked
 )
 
 type worktreeRemoveOptions struct {
-	forceLevel ForceLevel
+	forceLevel WorktreeForceLevel
 }
 
 // WorktreeRemoveOption is a functional option for WorktreeRemove.
 type WorktreeRemoveOption func(*worktreeRemoveOptions)
 
 // WithForceRemove forces worktree removal.
-func WithForceRemove(level ForceLevel) WorktreeRemoveOption {
+func WithForceRemove(level WorktreeForceLevel) WorktreeRemoveOption {
 	return func(o *worktreeRemoveOptions) {
 		o.forceLevel = level
 	}
@@ -448,12 +448,12 @@ func (g *GitRunner) worktreeListPorcelain() ([]byte, error) {
 	return g.Run("worktree", "list", "--porcelain")
 }
 
-func (g *GitRunner) worktreeRemove(path string, forceLevel ForceLevel) ([]byte, error) {
+func (g *GitRunner) worktreeRemove(path string, forceLevel WorktreeForceLevel) ([]byte, error) {
 	args := []string{"worktree", "remove"}
 	// git worktree remove:
 	// -f (once): remove unclean worktree
 	// -f -f (twice): also remove locked worktree
-	for i := 0; i < int(forceLevel); i++ {
+	for range forceLevel {
 		args = append(args, "-f")
 	}
 	args = append(args, path)

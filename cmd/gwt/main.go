@@ -439,7 +439,7 @@ stop processing of remaining branches.`,
 
 			for _, branch := range args {
 				wt, err := removeCmd.Run(branch, cwd, gwt.RemoveOptions{
-					Force:  gwt.ForceLevel(forceCount),
+					Force:  gwt.WorktreeForceLevel(forceCount),
 					DryRun: dryRun,
 				})
 				if err != nil {
