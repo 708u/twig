@@ -100,7 +100,6 @@ When `--quiet` is specified, `--verbose` is ignored.
 ### Source Option
 
 With `--source`, uses the specified branch's worktree as the source.
-This is equivalent to `-C <path>` but accepts a branch name instead of a path.
 
 ```bash
 # From a derived worktree, create a new worktree based on main
@@ -120,8 +119,18 @@ When `--source` is specified:
 
 Constraints:
 
-- Cannot be used together with `-C`
 - The specified branch must have an existing worktree
+
+When used with `-C`:
+
+- `-C` sets the working directory and loads config from that location
+- `--source` searches for the branch within that directory's worktree group
+- This allows running `gwt add` from outside any worktree
+
+```bash
+# From any directory, create worktree using repo's settings
+gwt add feat/new -C /path/to/repo --source main
+```
 
 ### Lock Option
 
@@ -157,7 +166,16 @@ Priority:
 2. Config `default_source`
 3. Current worktree (lowest)
 
-When `-C` is specified, `default_source` is ignored.
+When `-C` is specified, `default_source` from that directory's config is
+applied. This provides consistent behavior: the config loaded by `-C` is
+fully respected.
+
+```bash
+# If /path/to/repo has default_source = "main" in its config:
+gwt add feat/new -C /path/to/repo
+# This is equivalent to:
+gwt add feat/new -C /path/to/repo --source main
+```
 
 The setting can be overridden in `.gwt/settings.local.toml` for personal
 preferences:

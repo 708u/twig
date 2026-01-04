@@ -102,26 +102,65 @@ worktree_destination_base_dir = %q
 		}
 	})
 
-	t.Run("SourceAndDirectoryMutualExclusion", func(t *testing.T) {
+	t.Run("SourceAndDirectoryCoexistence", func(t *testing.T) {
 		t.Parallel()
 
-		// This test verifies the error case when both -C and --source are specified
-		// We test this by simulating the condition check in PreRunE
+		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// If both dirFlag and source are set, error should occur
-		source := "main"
-		testDirFlag := "/some/path"
-
-		// Simulate the check
-		if source != "" && testDirFlag != "" {
-			err := fmt.Errorf("cannot use --source and -C together")
-			if !strings.Contains(err.Error(), "cannot use --source and -C together") {
-				t.Errorf("expected mutual exclusion error")
-			}
-			// Test passes - error is expected
-			return
+		// Setup gwt settings in main worktree
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
 		}
-		t.Error("expected mutual exclusion check to trigger")
+
+		settingsContent := fmt.Sprintf(`symlinks = [".envrc"]
+worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Commit the settings
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		// Create .envrc in main
+		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# main envrc"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Simulate -C pointing to mainDir and --source pointing to main
+		// This should work: -C sets working directory, --source sets source branch
+		git := gwt.NewGitRunner(mainDir)
+		sourcePath, err := git.WorktreeFindByBranch("main")
+		if err != nil {
+			t.Fatalf("failed to find main worktree: %v", err)
+		}
+
+		// Load config from source (as --source would do after -C sets cwd)
+		result, err := gwt.LoadConfig(sourcePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Create worktree using the resolved config
+		addCmd := gwt.NewAddCommand(result.Config, gwt.AddOptions{})
+		addResult, err := addCmd.Run("feat/coexist")
+		if err != nil {
+			t.Fatalf("failed to create worktree: %v", err)
+		}
+
+		// Verify worktree was created
+		worktreePath := filepath.Join(repoDir, "feat", "coexist")
+		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", worktreePath)
+		}
+
+		// Verify result
+		if addResult.Branch != "feat/coexist" {
+			t.Errorf("result.Branch = %q, want %q", addResult.Branch, "feat/coexist")
+		}
 	})
 
 	t.Run("SourceBranchNotFound", func(t *testing.T) {
@@ -287,7 +326,7 @@ default_source = "main"
 		}
 	})
 
-	t.Run("DefaultSourceIgnoredWithDirFlag", func(t *testing.T) {
+	t.Run("DefaultSourceAppliedWithDirFlag", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -316,26 +355,42 @@ default_source = "main"
 			t.Fatal(err)
 		}
 
-		// Simulate -C flag being set
-		testDirFlag := mainDir
-
+		// Simulate -C flag being set (dirFlag is not empty)
 		// Load config (as PersistentPreRunE would do with -C)
-		result, err := gwt.LoadConfig(testDirFlag)
+		result, err := gwt.LoadConfig(mainDir)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		// When -C is specified, default_source should be ignored
-		// (The PreRunE logic checks: if source == "" && dirFlag == "" && cfg.DefaultSource != "")
+		// When -C is specified, default_source should now be applied
+		// (The PreRunE logic checks: if source == "" && cfg.DefaultSource != "")
 		cliSource := ""
 		var effectiveSource string
-		if cliSource == "" && testDirFlag == "" && result.Config.DefaultSource != "" {
+		if cliSource == "" && result.Config.DefaultSource != "" {
 			effectiveSource = result.Config.DefaultSource
 		}
 
-		// Since testDirFlag is set, effectiveSource should remain empty
-		if effectiveSource != "" {
-			t.Errorf("effective source = %q, want empty (default_source should be ignored with -C)", effectiveSource)
+		// Since cliSource is empty but default_source is set, effectiveSource should be "main"
+		if effectiveSource != "main" {
+			t.Errorf("effective source = %q, want %q (default_source should be applied with -C)", effectiveSource, "main")
+		}
+	})
+
+	t.Run("SourceFlagOverridesDefaultSourceWithDirFlag", func(t *testing.T) {
+		t.Parallel()
+
+		// This test verifies: -C + --source specified, --source overrides default_source
+		cliSource := "dev"
+		configDefaultSource := "main"
+
+		// CLI source should take precedence even with -C
+		effectiveSource := cliSource
+		if effectiveSource == "" && configDefaultSource != "" {
+			effectiveSource = configDefaultSource
+		}
+
+		if effectiveSource != "dev" {
+			t.Errorf("effective source = %q, want %q (--source should override default_source with -C)", effectiveSource, "dev")
 		}
 	})
 

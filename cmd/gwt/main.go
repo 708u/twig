@@ -107,19 +107,13 @@ var addCmd = &cobra.Command{
 		sync, _ := cmd.Flags().GetBool("sync")
 		carryEnabled := cmd.Flags().Changed("carry")
 
-		// --source and -C are mutually exclusive
-		if source != "" && dirFlag != "" {
-			return fmt.Errorf("cannot use --source and -C together")
-		}
-
 		// --sync and --carry are mutually exclusive
 		if sync && carryEnabled {
 			return fmt.Errorf("cannot use --sync and --carry together")
 		}
 
 		// Resolve effective source: CLI --source > config default_source
-		// When -C is specified, default_source is ignored
-		if source == "" && dirFlag == "" {
+		if source == "" {
 			source = cfg.DefaultSource
 		}
 
