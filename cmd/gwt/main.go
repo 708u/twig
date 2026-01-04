@@ -276,7 +276,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
 
 	addCmd.Flags().BoolP("sync", "s", false, "Sync uncommitted changes to new worktree")
-	addCmd.Flags().StringP("carry", "c", "", "Carry uncommitted changes (optionally specify source branch)")
+	addCmd.Flags().StringP("carry", "c", "", "Move uncommitted changes to new worktree (no value: from source, @: from current, <branch>: from branch)")
 	addCmd.Flags().BoolP("quiet", "q", false, "Output only the worktree path")
 	addCmd.Flags().String("source", "", "Source branch's worktree to use")
 	rootCmd.AddCommand(addCmd)
