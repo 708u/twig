@@ -723,18 +723,6 @@ worktree_destination_base_dir = %q
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
 
 		var calledOpts gwt.AddOptions
 		mock := &mockAddCommander{
@@ -768,18 +756,6 @@ worktree_destination_base_dir = %q
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
 
 		var calledOpts gwt.AddOptions
 		mock := &mockAddCommander{
