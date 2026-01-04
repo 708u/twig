@@ -16,7 +16,7 @@ func TestGitRunner_WorktreeFindByBranch_Integration(t *testing.T) {
 	t.Run("Found", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		wtPath := filepath.Join(repoDir, "feature-wt")
 		testutil.RunGit(t, mainDir, "worktree", "add", wtPath, "-b", "feature/test")
@@ -35,7 +35,7 @@ func TestGitRunner_WorktreeFindByBranch_Integration(t *testing.T) {
 	t.Run("NotFound", func(t *testing.T) {
 		t.Parallel()
 
-		_, mainDir := testutil.SetupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		runner := NewGitRunner(mainDir)
 
@@ -55,7 +55,7 @@ func TestGitRunner_WorktreeRemove_Integration(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		wtPath := filepath.Join(repoDir, "to-remove")
 		testutil.RunGit(t, mainDir, "worktree", "add", wtPath, "-b", "to-remove")
@@ -76,7 +76,7 @@ func TestGitRunner_WorktreeRemove_Integration(t *testing.T) {
 	t.Run("NotExists", func(t *testing.T) {
 		t.Parallel()
 
-		_, mainDir := testutil.SetupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		runner := NewGitRunner(mainDir)
 
@@ -96,7 +96,7 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 	t.Run("SafeDelete", func(t *testing.T) {
 		t.Parallel()
 
-		_, mainDir := testutil.SetupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		testutil.RunGit(t, mainDir, "branch", "to-delete")
 
@@ -116,7 +116,7 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 	t.Run("ForceDelete", func(t *testing.T) {
 		t.Parallel()
 
-		_, mainDir := testutil.SetupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		testutil.RunGit(t, mainDir, "checkout", "-b", "unmerged")
 		testutil.RunGit(t, mainDir, "commit", "--allow-empty", "-m", "unmerged commit")
@@ -138,7 +138,7 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 	t.Run("NotExists", func(t *testing.T) {
 		t.Parallel()
 
-		_, mainDir := testutil.SetupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		runner := NewGitRunner(mainDir)
 
