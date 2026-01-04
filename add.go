@@ -26,17 +26,22 @@ type AddOptions struct {
 	LockReason string
 }
 
-// NewAddCommand creates a new AddCommand with the given config.
-func NewAddCommand(cfg *Config, opts AddOptions) *AddCommand {
+// NewAddCommand creates an AddCommand with explicit dependencies (for testing).
+func NewAddCommand(fs FileSystem, git *GitRunner, cfg *Config, opts AddOptions) *AddCommand {
 	return &AddCommand{
-		FS:         osFS{},
-		Git:        NewGitRunner(cfg.WorktreeSourceDir),
+		FS:         fs,
+		Git:        git,
 		Config:     cfg,
 		Sync:       opts.Sync,
 		CarryFrom:  opts.CarryFrom,
 		Lock:       opts.Lock,
 		LockReason: opts.LockReason,
 	}
+}
+
+// NewDefaultAddCommand creates an AddCommand with production defaults.
+func NewDefaultAddCommand(cfg *Config, opts AddOptions) *AddCommand {
+	return NewAddCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir), cfg, opts)
 }
 
 // SymlinkResult holds information about a symlink operation.

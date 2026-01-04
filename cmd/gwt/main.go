@@ -12,6 +12,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// AddCommander is the interface for AddCommand execution.
+type AddCommander interface {
+	Run(name string) (gwt.AddResult, error)
+}
+
+// NewAddCommander is a factory function type for creating AddCommander instances.
+type NewAddCommander func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander
+
+func defaultNewAddCommander(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+	return gwt.NewDefaultAddCommand(cfg, opts)
+}
+
 // CleanCommander defines the interface for clean operations.
 type CleanCommander interface {
 	Run(cwd string, opts gwt.CleanOptions) (gwt.CleanResult, error)
@@ -25,11 +37,19 @@ func defaultNewCleanCommander(cfg *gwt.Config) CleanCommander {
 }
 
 type options struct {
+	newAddCommander   NewAddCommander
 	newCleanCommander NewCleanCommander
 }
 
 // Option configures newRootCmd.
 type Option func(*options)
+
+// WithNewAddCommander sets the factory function for creating AddCommander instances.
+func WithNewAddCommander(nac NewAddCommander) Option {
+	return func(o *options) {
+		o.newAddCommander = nac
+	}
+}
 
 // WithNewCleanCommander sets the factory function for creating CleanCommander instances.
 func WithNewCleanCommander(ncc NewCleanCommander) Option {
@@ -68,6 +88,7 @@ func resolveDirectory(dirFlag, baseCwd string) (string, error) {
 
 func newRootCmd(opts ...Option) *cobra.Command {
 	o := &options{
+		newAddCommander:   defaultNewAddCommander,
 		newCleanCommander: defaultNewCleanCommander,
 	}
 	for _, opt := range opts {
@@ -210,7 +231,7 @@ func newRootCmd(opts ...Option) *cobra.Command {
 				}
 			}
 
-			addCmd := gwt.NewAddCommand(cfg, gwt.AddOptions{
+			addCmd := o.newAddCommander(cfg, gwt.AddOptions{
 				Sync:       sync,
 				CarryFrom:  carryFrom,
 				Lock:       lock,
