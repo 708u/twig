@@ -538,7 +538,7 @@ func TestAddCmd(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stderr)
-		cmd.SetArgs([]string{"-C", mainDir, "add", "--sync", "--carry", "feat/conflict"})
+		cmd.SetArgs([]string{"-C", mainDir, "add", "--sync", "--carry=@", "feat/conflict"})
 
 		err := cmd.Execute()
 		if err == nil {
