@@ -20,13 +20,19 @@ type CleanOptions struct {
 	Verbose bool   // Show skip reasons
 }
 
-// NewCleanCommand creates a new CleanCommand with the given config.
-func NewCleanCommand(cfg *Config) *CleanCommand {
+// NewCleanCommand creates a new CleanCommand with explicit dependencies.
+// Use this for testing or when custom dependencies are needed.
+func NewCleanCommand(fs FileSystem, git *GitRunner, cfg *Config) *CleanCommand {
 	return &CleanCommand{
-		FS:     osFS{},
-		Git:    NewGitRunner(cfg.WorktreeSourceDir),
+		FS:     fs,
+		Git:    git,
 		Config: cfg,
 	}
+}
+
+// NewDefaultCleanCommand creates a new CleanCommand with production dependencies.
+func NewDefaultCleanCommand(cfg *Config) *CleanCommand {
+	return NewCleanCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir), cfg)
 }
 
 // SkipReason describes why a worktree was skipped.
