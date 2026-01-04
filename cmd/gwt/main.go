@@ -12,12 +12,71 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	cfg         *gwt.Config
-	cwd         string
-	originalCwd string
-	dirFlag     string
-)
+// CleanCommander defines the interface for clean operations.
+type CleanCommander interface {
+	Run(cwd string, opts gwt.CleanOptions) (gwt.CleanResult, error)
+}
+
+// NewCleanCommander is the factory function type for creating CleanCommander instances.
+type NewCleanCommander func(cfg *gwt.Config) CleanCommander
+
+func defaultNewCleanCommander(cfg *gwt.Config) CleanCommander {
+	return gwt.NewDefaultCleanCommand(cfg)
+}
+
+// ListCommander defines the interface for list operations.
+type ListCommander interface {
+	Run() (gwt.ListResult, error)
+}
+
+// NewListCommander is the factory function type for creating ListCommander instances.
+type NewListCommander func(dir string) ListCommander
+
+func defaultNewListCommander(dir string) ListCommander {
+	return gwt.NewDefaultListCommand(dir)
+}
+
+// RemoveCommander defines the interface for remove operations.
+type RemoveCommander interface {
+	Run(branch string, cwd string, opts gwt.RemoveOptions) (gwt.RemovedWorktree, error)
+}
+
+// NewRemoveCommander is the factory function type for creating RemoveCommander instances.
+type NewRemoveCommander func(cfg *gwt.Config) RemoveCommander
+
+func defaultNewRemoveCommander(cfg *gwt.Config) RemoveCommander {
+	return gwt.NewDefaultRemoveCommand(cfg)
+}
+
+type options struct {
+	newCleanCommander  NewCleanCommander
+	newListCommander   NewListCommander
+	newRemoveCommander NewRemoveCommander
+}
+
+// Option configures newRootCmd.
+type Option func(*options)
+
+// WithNewCleanCommander sets the factory function for creating CleanCommander instances.
+func WithNewCleanCommander(ncc NewCleanCommander) Option {
+	return func(o *options) {
+		o.newCleanCommander = ncc
+	}
+}
+
+// WithNewListCommander sets the factory function for creating ListCommander instances.
+func WithNewListCommander(nlc NewListCommander) Option {
+	return func(o *options) {
+		o.newListCommander = nlc
+	}
+}
+
+// WithNewRemoveCommander sets the factory function for creating RemoveCommander instances.
+func WithNewRemoveCommander(nrc NewRemoveCommander) Option {
+	return func(o *options) {
+		o.newRemoveCommander = nrc
+	}
+}
 
 func resolveDirectory(dirFlag, baseCwd string) (string, error) {
 	if dirFlag == "" {
@@ -47,180 +106,197 @@ func resolveDirectory(dirFlag, baseCwd string) (string, error) {
 	return resolved, nil
 }
 
-func resolveCompletionDirectory(cmd *cobra.Command) (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
+func newRootCmd(opts ...Option) *cobra.Command {
+	o := &options{
+		newCleanCommander:  defaultNewCleanCommander,
+		newListCommander:   defaultNewListCommander,
+		newRemoveCommander: defaultNewRemoveCommander,
 	}
-	dirFlag, _ := cmd.Root().PersistentFlags().GetString("directory")
-	return resolveDirectory(dirFlag, cwd)
-}
+	for _, opt := range opts {
+		opt(o)
+	}
 
-var rootCmd = &cobra.Command{
-	Use:           "gwt",
-	Short:         "Manage git worktrees and branches together",
-	SilenceErrors: true,
-	SilenceUsage:  true,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		var err error
-		originalCwd, err = os.Getwd()
+	var (
+		cfg         *gwt.Config
+		cwd         string
+		originalCwd string
+		dirFlag     string
+	)
+
+	resolveCompletionDirectory := func(cmd *cobra.Command) (string, error) {
+		currentCwd, err := os.Getwd()
 		if err != nil {
-			return fmt.Errorf("failed to get current directory: %w", err)
+			return "", err
 		}
+		flag, _ := cmd.Root().PersistentFlags().GetString("directory")
+		return resolveDirectory(flag, currentCwd)
+	}
 
-		cwd, err = resolveDirectory(dirFlag, originalCwd)
-		if err != nil {
-			return err
-		}
-
-		result, err := gwt.LoadConfig(cwd)
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
-		for _, w := range result.Warnings {
-			fmt.Fprintln(cmd.ErrOrStderr(), "warning:", w)
-		}
-		cfg = result.Config
-		return nil
-	},
-}
-
-var addCmd = &cobra.Command{
-	Use:   "add <name>",
-	Short: "Create a new worktree with a new branch",
-	Args:  cobra.ExactArgs(1),
-	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) >= 1 {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		dir, err := resolveCompletionDirectory(cmd)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveError
-		}
-		git := gwt.NewGitRunner(dir)
-		branches, err := git.BranchList()
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveError
-		}
-		return branches, cobra.ShellCompDirectiveNoFileComp
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		source, _ := cmd.Flags().GetString("source")
-		sync, _ := cmd.Flags().GetBool("sync")
-		carryEnabled := cmd.Flags().Changed("carry")
-
-		// --sync and --carry are mutually exclusive
-		if sync && carryEnabled {
-			return fmt.Errorf("cannot use --sync and --carry together")
-		}
-
-		// Resolve effective source: CLI --source > config default_source
-		if source == "" {
-			source = cfg.DefaultSource
-		}
-
-		if source == "" {
-			return nil
-		}
-
-		// Resolve branch to worktree path
-		git := gwt.NewGitRunner(cwd)
-		sourcePath, err := git.WorktreeFindByBranch(source)
-		if err != nil {
-			return fmt.Errorf("failed to find worktree for branch %q: %w", source, err)
-		}
-
-		// Update cwd and reload config
-		cwd = sourcePath
-		result, err := gwt.LoadConfig(cwd)
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
-		for _, w := range result.Warnings {
-			fmt.Fprintln(cmd.ErrOrStderr(), "warning:", w)
-		}
-		cfg = result.Config
-		return nil
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		verbose, _ := cmd.Flags().GetBool("verbose")
-		sync, _ := cmd.Flags().GetBool("sync")
-		quiet, _ := cmd.Flags().GetBool("quiet")
-		lock, _ := cmd.Flags().GetBool("lock")
-		lockReason, _ := cmd.Flags().GetString("reason")
-
-		// --reason requires --lock
-		if lockReason != "" && !lock {
-			return fmt.Errorf("--reason requires --lock")
-		}
-
-		// Resolve CarryFrom path
-		var carryFrom string
-		if cmd.Flags().Changed("carry") {
-			carryValue, _ := cmd.Flags().GetString("carry")
-			switch carryValue {
-			case "":
-				// --carry without value: use source worktree (cwd)
-				carryFrom = cwd
-			case "@":
-				// --carry=@: use original worktree (where command was executed)
-				carryFrom = originalCwd
-			default:
-				// --carry=<branch>: resolve branch to worktree path
-				git := gwt.NewGitRunner(cwd)
-				path, err := git.WorktreeFindByBranch(carryValue)
-				if err != nil {
-					return fmt.Errorf("failed to find worktree for branch %q: %w", carryValue, err)
-				}
-				carryFrom = path
+	rootCmd := &cobra.Command{
+		Use:           "gwt",
+		Short:         "Manage git worktrees and branches together",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			originalCwd, err = os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to get current directory: %w", err)
 			}
-		}
 
-		addCmd := gwt.NewAddCommand(cfg, gwt.AddOptions{
-			Sync:       sync,
-			CarryFrom:  carryFrom,
-			Lock:       lock,
-			LockReason: lockReason,
-		})
-		result, err := addCmd.Run(args[0])
-		if err != nil {
-			return err
-		}
+			cwd, err = resolveDirectory(dirFlag, originalCwd)
+			if err != nil {
+				return err
+			}
 
-		formatted := result.Format(gwt.AddFormatOptions{
-			Verbose: verbose,
-			Quiet:   quiet,
-		})
-		if formatted.Stderr != "" {
-			fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
-		}
-		fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
-		return nil
-	},
-}
+			result, err := gwt.LoadConfig(cwd)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+			for _, w := range result.Warnings {
+				fmt.Fprintln(cmd.ErrOrStderr(), "warning:", w)
+			}
+			cfg = result.Config
+			return nil
+		},
+	}
 
-var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all worktrees",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		quiet, _ := cmd.Flags().GetBool("quiet")
+	addCmd := &cobra.Command{
+		Use:   "add <name>",
+		Short: "Create a new worktree with a new branch",
+		Args:  cobra.ExactArgs(1),
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) >= 1 {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			dir, err := resolveCompletionDirectory(cmd)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			git := gwt.NewGitRunner(dir)
+			branches, err := git.BranchList()
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			return branches, cobra.ShellCompDirectiveNoFileComp
+		},
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			source, _ := cmd.Flags().GetString("source")
+			sync, _ := cmd.Flags().GetBool("sync")
+			carryEnabled := cmd.Flags().Changed("carry")
 
-		result, err := gwt.NewListCommand(cwd).Run()
-		if err != nil {
-			return err
-		}
+			// --sync and --carry are mutually exclusive
+			if sync && carryEnabled {
+				return fmt.Errorf("cannot use --sync and --carry together")
+			}
 
-		formatted := result.Format(gwt.ListFormatOptions{Quiet: quiet})
-		fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
-		return nil
-	},
-}
+			// Resolve effective source: CLI --source > config default_source
+			if source == "" {
+				source = cfg.DefaultSource
+			}
 
-var cleanCmd = &cobra.Command{
-	Use:   "clean",
-	Short: "Remove merged worktrees that are no longer needed",
-	Long: `Remove worktrees that have been merged to the target branch.
+			if source == "" {
+				return nil
+			}
+
+			// Resolve branch to worktree path
+			git := gwt.NewGitRunner(cwd)
+			sourcePath, err := git.WorktreeFindByBranch(source)
+			if err != nil {
+				return fmt.Errorf("failed to find worktree for branch %q: %w", source, err)
+			}
+
+			// Update cwd and reload config
+			cwd = sourcePath
+			result, err := gwt.LoadConfig(cwd)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+			for _, w := range result.Warnings {
+				fmt.Fprintln(cmd.ErrOrStderr(), "warning:", w)
+			}
+			cfg = result.Config
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			sync, _ := cmd.Flags().GetBool("sync")
+			quiet, _ := cmd.Flags().GetBool("quiet")
+			lock, _ := cmd.Flags().GetBool("lock")
+			lockReason, _ := cmd.Flags().GetString("reason")
+
+			// --reason requires --lock
+			if lockReason != "" && !lock {
+				return fmt.Errorf("--reason requires --lock")
+			}
+
+			// Resolve CarryFrom path
+			var carryFrom string
+			if cmd.Flags().Changed("carry") {
+				carryValue, _ := cmd.Flags().GetString("carry")
+				switch carryValue {
+				case "":
+					// --carry without value: use source worktree (cwd)
+					carryFrom = cwd
+				case "@":
+					// --carry=@: use original worktree (where command was executed)
+					carryFrom = originalCwd
+				default:
+					// --carry=<branch>: resolve branch to worktree path
+					git := gwt.NewGitRunner(cwd)
+					path, err := git.WorktreeFindByBranch(carryValue)
+					if err != nil {
+						return fmt.Errorf("failed to find worktree for branch %q: %w", carryValue, err)
+					}
+					carryFrom = path
+				}
+			}
+
+			addCmd := gwt.NewAddCommand(cfg, gwt.AddOptions{
+				Sync:       sync,
+				CarryFrom:  carryFrom,
+				Lock:       lock,
+				LockReason: lockReason,
+			})
+			result, err := addCmd.Run(args[0])
+			if err != nil {
+				return err
+			}
+
+			formatted := result.Format(gwt.AddFormatOptions{
+				Verbose: verbose,
+				Quiet:   quiet,
+			})
+			if formatted.Stderr != "" {
+				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
+			}
+			fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
+			return nil
+		},
+	}
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all worktrees",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			quiet, _ := cmd.Flags().GetBool("quiet")
+
+			result, err := o.newListCommander(cwd).Run()
+			if err != nil {
+				return err
+			}
+
+			formatted := result.Format(gwt.ListFormatOptions{Quiet: quiet})
+			fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
+			return nil
+		},
+	}
+
+	cleanCmd := &cobra.Command{
+		Use:   "clean",
+		Short: "Remove merged worktrees that are no longer needed",
+		Long: `Remove worktrees that have been merged to the target branch.
 
 By default, shows candidates and prompts for confirmation.
 Use --yes to skip confirmation and remove immediately.
@@ -232,79 +308,79 @@ Safety checks (all must pass):
   - Worktree is not locked
   - Not the current directory
   - Not the main worktree`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		verbose, _ := cmd.Flags().GetBool("verbose")
-		yes, _ := cmd.Flags().GetBool("yes")
-		check, _ := cmd.Flags().GetBool("check")
-		target, _ := cmd.Flags().GetString("target")
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			yes, _ := cmd.Flags().GetBool("yes")
+			check, _ := cmd.Flags().GetBool("check")
+			target, _ := cmd.Flags().GetString("target")
 
-		cleanCommand := gwt.NewCleanCommand(cfg)
+			cleanCmd := o.newCleanCommander(cfg)
 
-		// First pass: analyze candidates (always in check mode first)
-		result, err := cleanCommand.Run(cwd, gwt.CleanOptions{
-			Check:   true,
-			Target:  target,
-			Verbose: verbose,
-		})
-		if err != nil {
-			return err
-		}
+			// First pass: analyze candidates (always in check mode first)
+			result, err := cleanCmd.Run(cwd, gwt.CleanOptions{
+				Check:   true,
+				Target:  target,
+				Verbose: verbose,
+			})
+			if err != nil {
+				return err
+			}
 
-		// If check mode or no candidates, just show output and exit
-		if check || result.CleanableCount() == 0 {
+			// If check mode or no candidates, just show output and exit
+			if check || result.CleanableCount() == 0 {
+				formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
+				if formatted.Stderr != "" {
+					fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
+				}
+				fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
+				return nil
+			}
+
+			// Show candidates
 			formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
 			if formatted.Stderr != "" {
 				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
 			}
 			fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
-			return nil
-		}
 
-		// Show candidates
-		formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
-		if formatted.Stderr != "" {
-			fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
-		}
-		fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
+			// If not --yes, prompt for confirmation
+			if !yes {
+				fmt.Fprint(cmd.OutOrStdout(), "\nProceed? [y/N]: ")
+				reader := bufio.NewReader(cmd.InOrStdin())
+				input, err := reader.ReadString('\n')
+				if err != nil {
+					return err
+				}
+				input = strings.TrimSpace(strings.ToLower(input))
+				if input != "y" && input != "yes" {
+					return nil
+				}
+			}
 
-		// If not --yes, prompt for confirmation
-		if !yes {
-			fmt.Fprint(cmd.OutOrStdout(), "\nProceed? [y/N]: ")
-			reader := bufio.NewReader(cmd.InOrStdin())
-			input, err := reader.ReadString('\n')
+			// Second pass: execute removal
+			result, err = cleanCmd.Run(cwd, gwt.CleanOptions{
+				Check:   false,
+				Target:  target,
+				Verbose: verbose,
+			})
 			if err != nil {
 				return err
 			}
-			input = strings.TrimSpace(strings.ToLower(input))
-			if input != "y" && input != "yes" {
-				return nil
+
+			formatted = result.Format(gwt.FormatOptions{Verbose: verbose})
+			if formatted.Stderr != "" {
+				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
 			}
-		}
+			fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
+			return nil
+		},
+	}
 
-		// Second pass: execute removal
-		result, err = cleanCommand.Run(cwd, gwt.CleanOptions{
-			Check:   false,
-			Target:  target,
-			Verbose: verbose,
-		})
-		if err != nil {
-			return err
-		}
-
-		formatted = result.Format(gwt.FormatOptions{Verbose: verbose})
-		if formatted.Stderr != "" {
-			fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
-		}
-		fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
-		return nil
-	},
-}
-
-var removeCmd = &cobra.Command{
-	Use:   "remove <branch>...",
-	Short: "Remove worktrees and their branches",
-	Long: `Remove git worktrees and delete their associated branches.
+	removeCmd := &cobra.Command{
+		Use:   "remove <branch>...",
+		Short: "Remove worktrees and their branches",
+		Long: `Remove git worktrees and delete their associated branches.
 
 The branch names are used to locate the worktrees.
 By default, fails if there are uncommitted changes or the branch is not merged.
@@ -312,60 +388,60 @@ Use --force to override these checks.
 
 Multiple branches can be specified. Errors on individual branches will not
 stop processing of remaining branches.`,
-	Args: cobra.MinimumNArgs(1),
-	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		dir, err := resolveCompletionDirectory(cmd)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveError
-		}
-		git := gwt.NewGitRunner(dir)
-		branches, err := git.WorktreeListBranches()
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveError
-		}
-		// Exclude already-specified branches from suggestions
-		available := make([]string, 0, len(branches))
-		for _, b := range branches {
-			if !slices.Contains(args, b) {
-				available = append(available, b)
-			}
-		}
-		return available, cobra.ShellCompDirectiveNoFileComp
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		verbose, _ := cmd.Flags().GetBool("verbose")
-		force, _ := cmd.Flags().GetBool("force")
-		dryRun, _ := cmd.Flags().GetBool("dry-run")
-
-		removeCmd := gwt.NewRemoveCommand(cfg)
-		var result gwt.RemoveResult
-
-		for _, branch := range args {
-			wt, err := removeCmd.Run(branch, cwd, gwt.RemoveOptions{
-				Force:  force,
-				DryRun: dryRun,
-			})
+		Args: cobra.MinimumNArgs(1),
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			dir, err := resolveCompletionDirectory(cmd)
 			if err != nil {
-				wt.Branch = branch
-				wt.Err = err
+				return nil, cobra.ShellCompDirectiveError
 			}
-			result.Removed = append(result.Removed, wt)
-		}
+			git := gwt.NewGitRunner(dir)
+			branches, err := git.WorktreeListBranches()
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			// Exclude already-specified branches from suggestions
+			available := make([]string, 0, len(branches))
+			for _, b := range branches {
+				if !slices.Contains(args, b) {
+					available = append(available, b)
+				}
+			}
+			return available, cobra.ShellCompDirectiveNoFileComp
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			force, _ := cmd.Flags().GetBool("force")
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
 
-		formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
-		if formatted.Stderr != "" {
-			fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
-		}
-		fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
+			removeCmd := o.newRemoveCommander(cfg)
+			var result gwt.RemoveResult
 
-		if result.HasErrors() {
-			return fmt.Errorf("failed to remove %d branch(es)", result.ErrorCount())
-		}
-		return nil
-	},
-}
+			for _, branch := range args {
+				wt, err := removeCmd.Run(branch, cwd, gwt.RemoveOptions{
+					Force:  force,
+					DryRun: dryRun,
+				})
+				if err != nil {
+					wt.Branch = branch
+					wt.Err = err
+				}
+				result.Removed = append(result.Removed, wt)
+			}
 
-func init() {
+			formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
+			if formatted.Stderr != "" {
+				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
+			}
+			fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
+
+			if result.HasErrors() {
+				return fmt.Errorf("failed to remove %d branch(es)", result.ErrorCount())
+			}
+			return nil
+		},
+	}
+
+	// Register flags
 	rootCmd.PersistentFlags().StringVarP(&dirFlag, "directory", "C", "", "Run as if gwt was started in <path>")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
 
@@ -388,7 +464,11 @@ func init() {
 	removeCmd.Flags().BoolP("force", "f", false, "Force removal even with uncommitted changes or unmerged branch")
 	removeCmd.Flags().Bool("dry-run", false, "Show what would be removed without making changes")
 	rootCmd.AddCommand(removeCmd)
+
+	return rootCmd
 }
+
+var rootCmd = newRootCmd()
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
