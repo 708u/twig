@@ -256,8 +256,7 @@ func (c *CleanCommand) checkSkipReason(wt WorktreeInfo, cwd, target string, forc
 
 	// Check uncommitted changes
 	if force < WorktreeForceLevelUnclean {
-		gitInDir := c.Git.InDir(wt.Path)
-		hasChanges, err := gitInDir.HasChanges()
+		hasChanges, err := c.Git.InDir(wt.Path).HasChanges()
 		if err != nil || hasChanges {
 			return SkipHasChanges
 		}
