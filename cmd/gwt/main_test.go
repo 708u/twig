@@ -356,37 +356,26 @@ func (m *mockRemoveCommander) Run(branch, cwd string, opts gwt.RemoveOptions) (g
 	return gwt.RemovedWorktree{Branch: branch, WorktreePath: "/test/" + branch}, nil
 }
 
-// setupTestRepo creates a test git repository with gwt settings.
-func setupTestRepo(t *testing.T) string {
-	t.Helper()
-
-	_, mainDir := testutil.SetupTestRepo(t)
-
-	gwtDir := filepath.Join(mainDir, ".gwt")
-	if err := os.MkdirAll(gwtDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
-	if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	testutil.RunGit(t, mainDir, "add", ".gwt")
-	testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
-
-	return mainDir
-}
-
 func TestAddCmd(t *testing.T) {
 	t.Parallel()
 
 	t.Run("BasicExecution", func(t *testing.T) {
 		t.Parallel()
 
-		mainDir := setupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:       "feat/test",
@@ -416,7 +405,20 @@ func TestAddCmd(t *testing.T) {
 	t.Run("SyncFlag", func(t *testing.T) {
 		t.Parallel()
 
-		mainDir := setupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
 		var calledOpts gwt.AddOptions
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
@@ -448,7 +450,20 @@ func TestAddCmd(t *testing.T) {
 	t.Run("QuietFlag", func(t *testing.T) {
 		t.Parallel()
 
-		mainDir := setupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:       "feat/quiet",
@@ -480,7 +495,20 @@ func TestAddCmd(t *testing.T) {
 	t.Run("LockFlags", func(t *testing.T) {
 		t.Parallel()
 
-		mainDir := setupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
 		var calledOpts gwt.AddOptions
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
@@ -514,7 +542,20 @@ func TestAddCmd(t *testing.T) {
 	t.Run("ReasonWithoutLock", func(t *testing.T) {
 		t.Parallel()
 
-		mainDir := setupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:       "feat/error",
@@ -543,7 +584,20 @@ func TestAddCmd(t *testing.T) {
 	t.Run("ErrorFromCommand", func(t *testing.T) {
 		t.Parallel()
 
-		mainDir := setupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:       "feat/fail",
@@ -573,7 +627,20 @@ func TestAddCmd(t *testing.T) {
 	t.Run("OutputWithSymlinks", func(t *testing.T) {
 		t.Parallel()
 
-		mainDir := setupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:       "feat/symlinks",
@@ -606,7 +673,20 @@ func TestAddCmd(t *testing.T) {
 	t.Run("OutputWithWarnings", func(t *testing.T) {
 		t.Parallel()
 
-		mainDir := setupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:       "feat/warn",
@@ -642,7 +722,20 @@ func TestAddCmd(t *testing.T) {
 	t.Run("SyncAndCarryMutuallyExclusive", func(t *testing.T) {
 		t.Parallel()
 
-		mainDir := setupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:       "feat/conflict",
