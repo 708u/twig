@@ -719,6 +719,96 @@ worktree_destination_base_dir = %q
 		}
 	})
 
+	t.Run("CarryFlagWithoutValue", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		var calledOpts gwt.AddOptions
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/carry",
+				WorktreePath: "/path/to/worktree",
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			calledOpts = opts
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "feat/carry", "--carry"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// --carry without value should use source worktree (mainDir)
+		if calledOpts.CarryFrom != mainDir {
+			t.Errorf("CarryFrom = %q, want %q", calledOpts.CarryFrom, mainDir)
+		}
+	})
+
+	t.Run("CarryShortFlagWithoutValue", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		var calledOpts gwt.AddOptions
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/carry-short",
+				WorktreePath: "/path/to/worktree",
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			calledOpts = opts
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "feat/carry-short", "-c"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// -c without value should use source worktree (mainDir)
+		if calledOpts.CarryFrom != mainDir {
+			t.Errorf("CarryFrom = %q, want %q", calledOpts.CarryFrom, mainDir)
+		}
+	})
+
 	t.Run("SyncAndCarryMutuallyExclusive", func(t *testing.T) {
 		t.Parallel()
 

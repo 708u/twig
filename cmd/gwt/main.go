@@ -256,8 +256,8 @@ func newRootCmd(opts ...Option) *cobra.Command {
 			if cmd.Flags().Changed("carry") {
 				carryValue, _ := cmd.Flags().GetString("carry")
 				switch carryValue {
-				case "":
-					// --carry without value: use source worktree (cwd)
+				case "", "source":
+					// --carry without value (or --carry=source): use source worktree (cwd)
 					carryFrom = cwd
 				case "@":
 					// --carry=@: use original worktree (where command was executed)
@@ -468,6 +468,7 @@ stop processing of remaining branches.`,
 
 	addCmd.Flags().BoolP("sync", "s", false, "Sync uncommitted changes to new worktree")
 	addCmd.Flags().StringP("carry", "c", "", "Move uncommitted changes to new worktree (no value: from source, @: from current, <branch>: from branch)")
+	addCmd.Flags().Lookup("carry").NoOptDefVal = "source"
 	addCmd.Flags().BoolP("quiet", "q", false, "Output only the worktree path")
 	addCmd.Flags().String("source", "", "Source branch's worktree to use")
 	addCmd.Flags().Bool("lock", false, "Lock the worktree after creation")
