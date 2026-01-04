@@ -13,14 +13,35 @@ gwt clean [flags]
 | Flag              | Short | Description                                |
 |-------------------|-------|--------------------------------------------|
 | `--yes`           | `-y`  | Execute removal without confirmation       |
-| `--dry-run`       |       | Show candidates without removing           |
+| `--check`         |       | Show candidates without prompting          |
 | `--target`        |       | Target branch for merge check              |
 | `--verbose`       | `-v`  | Show skip reasons for skipped worktrees    |
 
 ## Behavior
 
-By default, only shows candidates without removing them.
-Use `--yes` to actually remove the worktrees.
+By default, shows candidates and prompts for confirmation before removing.
+
+| Flag      | Behavior                                 |
+|-----------|------------------------------------------|
+| (none)    | Show candidates, prompt, then execute    |
+| `--yes`   | Execute without confirmation             |
+| `--check` | Show candidates only (no prompt)         |
+
+### Interactive Confirmation
+
+When run without `--yes` or `--check`, the command displays candidates
+and prompts for confirmation:
+
+```txt
+clean:
+  feat/old-branch
+  fix/completed
+
+Proceed? [y/N]:
+```
+
+Enter `y` or `yes` (case-insensitive) to proceed with removal.
+Any other input aborts the operation without removing anything.
 
 ### Safety Checks
 
@@ -44,30 +65,62 @@ non-bare worktree (usually main).
 The command also runs `git worktree prune` to clean up references
 to worktrees that no longer exist.
 
+## Output Format
+
+Output is grouped by status with indentation:
+
+```txt
+clean:
+  feat/old-branch
+  fix/completed
+
+skip:
+  feat/wip (not merged)
+  feat/active (has uncommitted changes)
+```
+
+- `clean:` shows worktrees that will be removed
+- `skip:` shows skipped worktrees (verbose mode only)
+- Each item is indented with 2 spaces
+- A blank line separates groups
+
 ## Examples
 
 ```txt
-# Show candidates only (default)
+# Show candidates with confirmation prompt (default)
 gwt clean
-clean: feature/old-branch
-clean: fix/completed
+clean:
+  feature/old-branch
+  fix/completed
+
+Proceed? [y/N]: y
+gwt clean: feature/old-branch
+gwt clean: fix/completed
 
 # Show with skip reasons
 gwt clean -v
-clean: feature/old-branch
-skip: feature/active (has uncommitted changes)
-skip: feature/wip (not merged)
+clean:
+  feature/old-branch
 
-# Actually remove worktrees
+skip:
+  feature/active (has uncommitted changes)
+  feature/wip (not merged)
+
+Proceed? [y/N]:
+
+# Remove without confirmation
 gwt clean --yes
 gwt clean: feature/old-branch
 gwt clean: fix/completed
 
+# Only check candidates (no prompt, no removal)
+gwt clean --check
+clean:
+  feature/old-branch
+  fix/completed
+
 # Check against specific branch
 gwt clean --target develop
-
-# Preview what would be removed
-gwt clean --dry-run
 ```
 
 ## Exit Code

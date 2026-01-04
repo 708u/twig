@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/708u/gwt"
 	"github.com/spf13/cobra"
@@ -220,8 +222,9 @@ var cleanCmd = &cobra.Command{
 	Short: "Remove merged worktrees that are no longer needed",
 	Long: `Remove worktrees that have been merged to the target branch.
 
-By default, only shows candidates without removing them.
-Use --yes to actually remove the worktrees.
+By default, shows candidates and prompts for confirmation.
+Use --yes to skip confirmation and remove immediately.
+Use --check to only show candidates without prompting.
 
 Safety checks (all must pass):
   - Branch is merged to target
@@ -233,13 +236,14 @@ Safety checks (all must pass):
 	RunE: func(cmd *cobra.Command, args []string) error {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		yes, _ := cmd.Flags().GetBool("yes")
-		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		check, _ := cmd.Flags().GetBool("check")
 		target, _ := cmd.Flags().GetString("target")
 
-		cleanCmd := gwt.NewCleanCommand(cfg)
-		result, err := cleanCmd.Run(cwd, gwt.CleanOptions{
-			Yes:     yes,
-			DryRun:  dryRun,
+		cleanCommand := gwt.NewCleanCommand(cfg)
+
+		// First pass: analyze candidates (always in check mode first)
+		result, err := cleanCommand.Run(cwd, gwt.CleanOptions{
+			Check:   true,
 			Target:  target,
 			Verbose: verbose,
 		})
@@ -247,7 +251,48 @@ Safety checks (all must pass):
 			return err
 		}
 
+		// If check mode or no candidates, just show output and exit
+		if check || result.CleanableCount() == 0 {
+			formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
+			if formatted.Stderr != "" {
+				fmt.Fprint(os.Stderr, formatted.Stderr)
+			}
+			fmt.Fprint(os.Stdout, formatted.Stdout)
+			return nil
+		}
+
+		// Show candidates
 		formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
+		if formatted.Stderr != "" {
+			fmt.Fprint(os.Stderr, formatted.Stderr)
+		}
+		fmt.Fprint(os.Stdout, formatted.Stdout)
+
+		// If not --yes, prompt for confirmation
+		if !yes {
+			fmt.Print("\nProceed? [y/N]: ")
+			reader := bufio.NewReader(os.Stdin)
+			input, err := reader.ReadString('\n')
+			if err != nil {
+				return err
+			}
+			input = strings.TrimSpace(strings.ToLower(input))
+			if input != "y" && input != "yes" {
+				return nil
+			}
+		}
+
+		// Second pass: execute removal
+		result, err = cleanCommand.Run(cwd, gwt.CleanOptions{
+			Check:   false,
+			Target:  target,
+			Verbose: verbose,
+		})
+		if err != nil {
+			return err
+		}
+
+		formatted = result.Format(gwt.FormatOptions{Verbose: verbose})
 		if formatted.Stderr != "" {
 			fmt.Fprint(os.Stderr, formatted.Stderr)
 		}
@@ -336,7 +381,7 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 
 	cleanCmd.Flags().BoolP("yes", "y", false, "Execute removal without confirmation")
-	cleanCmd.Flags().Bool("dry-run", false, "Show candidates without removing")
+	cleanCmd.Flags().Bool("check", false, "Show candidates without prompting or removing")
 	cleanCmd.Flags().String("target", "", "Target branch for merge check (default: auto-detect)")
 	rootCmd.AddCommand(cleanCmd)
 

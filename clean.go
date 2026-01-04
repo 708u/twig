@@ -15,7 +15,7 @@ type CleanCommand struct {
 // CleanOptions configures the clean operation.
 type CleanOptions struct {
 	Yes     bool   // Execute without confirmation
-	DryRun  bool   // Show candidates only
+	Check   bool   // Show candidates only (no prompt)
 	Target  string // Target branch for merge check (auto-detect if empty)
 	Verbose bool   // Show skip reasons
 }
@@ -54,7 +54,7 @@ type CleanResult struct {
 	Removed      []RemovedWorktree
 	TargetBranch string
 	Pruned       bool
-	DryRun       bool
+	Check        bool // --check mode (show candidates only, no prompt)
 }
 
 // CleanableCount returns the number of worktrees that can be cleaned.
@@ -72,30 +72,54 @@ func (r CleanResult) CleanableCount() int {
 func (r CleanResult) Format(opts FormatOptions) FormatResult {
 	var stdout, stderr strings.Builder
 
-	// Show candidates
-	if r.DryRun || len(r.Removed) == 0 {
-		for _, c := range r.Candidates {
-			if c.Skipped {
-				if opts.Verbose {
-					fmt.Fprintf(&stdout, "skip: %s (%s)\n", c.Branch, c.SkipReason)
-				}
-			} else {
-				fmt.Fprintf(&stdout, "clean: %s\n", c.Branch)
+	// Show removal results (execution completed)
+	if !r.Check && len(r.Removed) > 0 {
+		for _, wt := range r.Removed {
+			if wt.Err != nil {
+				fmt.Fprintf(&stderr, "error: %s: %v\n", wt.Branch, wt.Err)
+				continue
 			}
-		}
-		if r.CleanableCount() == 0 {
-			fmt.Fprintln(&stdout, "No worktrees to clean")
+			fmt.Fprintf(&stdout, "gwt clean: %s\n", wt.Branch)
 		}
 		return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	}
 
-	// Show removal results
-	for _, wt := range r.Removed {
-		if wt.Err != nil {
-			fmt.Fprintf(&stderr, "error: %s: %v\n", wt.Branch, wt.Err)
-			continue
+	// Show candidates (check mode or before execution)
+	var cleanable, skipped []CleanCandidate
+	for _, c := range r.Candidates {
+		if c.Skipped {
+			skipped = append(skipped, c)
+		} else {
+			cleanable = append(cleanable, c)
 		}
-		fmt.Fprintf(&stdout, "gwt clean: %s\n", wt.Branch)
+	}
+
+	// No cleanable candidates
+	if len(cleanable) == 0 {
+		if opts.Verbose && len(skipped) > 0 {
+			fmt.Fprintln(&stdout, "skip:")
+			for _, c := range skipped {
+				fmt.Fprintf(&stdout, "  %s (%s)\n", c.Branch, c.SkipReason)
+			}
+			fmt.Fprintln(&stdout)
+		}
+		fmt.Fprintln(&stdout, "No worktrees to clean")
+		return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
+	}
+
+	// Output cleanable candidates with group header
+	fmt.Fprintln(&stdout, "clean:")
+	for _, c := range cleanable {
+		fmt.Fprintf(&stdout, "  %s\n", c.Branch)
+	}
+
+	// Output skipped candidates with group header (verbose only)
+	if opts.Verbose && len(skipped) > 0 {
+		fmt.Fprintln(&stdout)
+		fmt.Fprintln(&stdout, "skip:")
+		for _, c := range skipped {
+			fmt.Fprintf(&stdout, "  %s (%s)\n", c.Branch, c.SkipReason)
+		}
 	}
 
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
@@ -105,7 +129,7 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 // cwd is the current working directory (absolute path) passed from CLI layer.
 func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 	var result CleanResult
-	result.DryRun = opts.DryRun || !opts.Yes
+	result.Check = opts.Check
 
 	// Resolve target branch
 	target, err := c.resolveTarget(opts.Target)
@@ -141,8 +165,8 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 		result.Candidates = append(result.Candidates, candidate)
 	}
 
-	// If dry-run or no --yes, just return candidates
-	if result.DryRun {
+	// If check mode, just return candidates (no execution)
+	if result.Check {
 		return result, nil
 	}
 

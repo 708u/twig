@@ -516,7 +516,7 @@ worktree_destination_base_dir = %q
 		}
 	})
 
-	t.Run("DryRunDoesNotRemove", func(t *testing.T) {
+	t.Run("CheckModeDoesNotRemove", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -533,8 +533,8 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		wtPath := filepath.Join(repoDir, "feature", "dry-run")
-		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/dry-run", wtPath)
+		wtPath := filepath.Join(repoDir, "feature", "check-mode")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/check-mode", wtPath)
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -547,15 +547,15 @@ worktree_destination_base_dir = %q
 			Config: cfgResult.Config,
 		}
 
-		// Run with --dry-run
-		result, err := cmd.Run(mainDir, CleanOptions{DryRun: true})
+		// Run with --check
+		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
 
 		// Worktree should still exist
 		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
-			t.Error("worktree should still exist in dry-run mode")
+			t.Error("worktree should still exist in check mode")
 		}
 
 		// Should have candidates but no removed
@@ -564,7 +564,7 @@ worktree_destination_base_dir = %q
 		}
 
 		if len(result.Removed) != 0 {
-			t.Errorf("expected 0 removed in dry-run, got %d", len(result.Removed))
+			t.Errorf("expected 0 removed in check mode, got %d", len(result.Removed))
 		}
 	})
 }

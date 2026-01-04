@@ -74,36 +74,36 @@ func TestCleanResult_Format(t *testing.T) {
 		wantStderr string
 	}{
 		{
-			name: "dry_run_with_candidates",
+			name: "check_with_candidates",
 			result: CleanResult{
 				Candidates: []CleanCandidate{
 					{Branch: "feat/a", Skipped: false},
 					{Branch: "feat/b", Skipped: true, SkipReason: SkipNotMerged},
 				},
-				DryRun: true,
+				Check: true,
 			},
 			opts:       FormatOptions{},
-			wantStdout: "clean: feat/a\n",
+			wantStdout: "clean:\n  feat/a\n",
 			wantStderr: "",
 		},
 		{
-			name: "dry_run_verbose_shows_skipped",
+			name: "check_verbose_shows_skipped",
 			result: CleanResult{
 				Candidates: []CleanCandidate{
 					{Branch: "feat/a", Skipped: false},
 					{Branch: "feat/b", Skipped: true, SkipReason: SkipNotMerged},
 				},
-				DryRun: true,
+				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "clean: feat/a\nskip: feat/b (not merged)\n",
+			wantStdout: "clean:\n  feat/a\n\nskip:\n  feat/b (not merged)\n",
 			wantStderr: "",
 		},
 		{
 			name: "no_candidates",
 			result: CleanResult{
 				Candidates: []CleanCandidate{},
-				DryRun:     true,
+				Check:      true,
 			},
 			opts:       FormatOptions{},
 			wantStdout: "No worktrees to clean\n",
@@ -115,7 +115,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Candidates: []CleanCandidate{
 					{Branch: "feat/a", Skipped: true, SkipReason: SkipLocked},
 				},
-				DryRun: true,
+				Check: true,
 			},
 			opts:       FormatOptions{},
 			wantStdout: "No worktrees to clean\n",
@@ -128,7 +128,7 @@ func TestCleanResult_Format(t *testing.T) {
 					{Branch: "feat/a"},
 					{Branch: "feat/b"},
 				},
-				DryRun: false,
+				Check: false,
 			},
 			opts:       FormatOptions{},
 			wantStdout: "gwt clean: feat/a\ngwt clean: feat/b\n",
