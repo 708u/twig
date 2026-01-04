@@ -3,6 +3,7 @@
 package gwt
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -158,6 +159,24 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
+		// First, verify removal without --force fails with GitError and hint
+		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{})
+		if err == nil {
+			t.Fatal("expected error for uncommitted changes without --force")
+		}
+
+		var gitErr *GitError
+		if !errors.As(err, &gitErr) {
+			t.Fatalf("expected GitError, got %T: %v", err, err)
+		}
+		if gitErr.Op != OpWorktreeRemove {
+			t.Errorf("GitError.Op = %v, want %v", gitErr.Op, OpWorktreeRemove)
+		}
+		if hint := gitErr.Hint(); hint == "" {
+			t.Error("GitError.Hint() should return hint for uncommitted changes")
+		}
+
+		// Now verify --force succeeds
 		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{Force: true})
 		if err != nil {
 			t.Fatalf("Run with force failed: %v", err)
@@ -165,6 +184,66 @@ worktree_destination_base_dir = %q
 
 		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
 			t.Errorf("worktree directory should be removed: %s", wtPath)
+		}
+	})
+
+	t.Run("ErrorWithHintForLockedWorktree", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		wtPath := filepath.Join(repoDir, "feature", "locked-test")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/locked-test", wtPath)
+
+		// Lock the worktree
+		testutil.RunGit(t, mainDir, "worktree", "lock", wtPath)
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: result.Config,
+		}
+
+		// Removal without --force should fail with hint
+		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{})
+		if err == nil {
+			t.Fatal("expected error for locked worktree without --force")
+		}
+
+		var gitErr *GitError
+		if !errors.As(err, &gitErr) {
+			t.Fatalf("expected GitError, got %T: %v", err, err)
+		}
+		if gitErr.Op != OpWorktreeRemove {
+			t.Errorf("GitError.Op = %v, want %v", gitErr.Op, OpWorktreeRemove)
+		}
+		expectedHint := "run 'git worktree unlock <path>' first, or use 'gwt remove --force'"
+		if hint := gitErr.Hint(); hint != expectedHint {
+			t.Errorf("GitError.Hint() = %q, want %q", hint, expectedHint)
+		}
+
+		// Cleanup: unlock and force remove
+		testutil.RunGit(t, mainDir, "worktree", "unlock", wtPath)
+		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{Force: true})
+		if err != nil {
+			t.Fatalf("cleanup failed: %v", err)
 		}
 	})
 
