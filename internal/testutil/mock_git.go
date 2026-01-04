@@ -179,14 +179,14 @@ func (m *MockGitExecutor) handleWorktreeList() ([]byte, error) {
 
 func (m *MockGitExecutor) handleWorktreeAdd(args []string) ([]byte, error) {
 	if m.CapturedArgs != nil {
-		*m.CapturedArgs = args
+		*m.CapturedArgs = append(*m.CapturedArgs, args...)
 	}
 	return nil, m.WorktreeAddErr
 }
 
 func (m *MockGitExecutor) handleWorktreeRemove(args []string) ([]byte, error) {
 	if m.CapturedArgs != nil {
-		*m.CapturedArgs = args
+		*m.CapturedArgs = append(*m.CapturedArgs, args...)
 	}
 	return nil, m.WorktreeRemoveErr
 }
@@ -197,7 +197,7 @@ func (m *MockGitExecutor) handleWorktreePrune() ([]byte, error) {
 
 func (m *MockGitExecutor) handleBranch(args []string) ([]byte, error) {
 	if m.CapturedArgs != nil {
-		*m.CapturedArgs = args
+		*m.CapturedArgs = append(*m.CapturedArgs, args...)
 	}
 	// args: ["branch", "-d"/"-D", "branch-name"]
 	if len(args) >= 3 && (args[1] == "-d" || args[1] == "-D") {

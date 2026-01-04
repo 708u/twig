@@ -16,7 +16,9 @@ type RemoveCommand struct {
 
 // RemoveOptions configures the remove operation.
 type RemoveOptions struct {
-	Force  bool
+	// Force specifies the force level.
+	// Matches git worktree behavior: -f for unclean, -f -f for locked.
+	Force  WorktreeForceLevel
 	DryRun bool
 }
 
@@ -164,8 +166,8 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 
 	var gitOutput []byte
 	var wtOpts []WorktreeRemoveOption
-	if opts.Force {
-		wtOpts = append(wtOpts, WithForceRemove())
+	if opts.Force > WorktreeForceLevelNone {
+		wtOpts = append(wtOpts, WithForceRemove(opts.Force))
 	}
 	wtOut, err := c.Git.WorktreeRemove(wtPath, wtOpts...)
 	if err != nil {
@@ -176,7 +178,7 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 	result.CleanedDirs = c.cleanupEmptyParentDirs(wtPath)
 
 	var branchOpts []BranchDeleteOption
-	if opts.Force {
+	if opts.Force > WorktreeForceLevelNone {
 		branchOpts = append(branchOpts, WithForceDelete())
 	}
 	brOut, err := c.Git.BranchDelete(branch, branchOpts...)

@@ -858,37 +858,49 @@ func TestRemoveCmd(t *testing.T) {
 	tests := []struct {
 		name      string
 		args      []string
-		wantForce bool
+		wantForce gwt.WorktreeForceLevel
 		wantDry   bool
 	}{
 		{
 			name:      "no_flags",
 			args:      []string{"remove", "feat/a"},
-			wantForce: false,
+			wantForce: gwt.WorktreeForceLevelNone,
 			wantDry:   false,
 		},
 		{
 			name:      "force_flag",
 			args:      []string{"remove", "--force", "feat/a"},
-			wantForce: true,
+			wantForce: gwt.WorktreeForceLevelUnclean,
 			wantDry:   false,
 		},
 		{
 			name:      "force_short_flag",
 			args:      []string{"remove", "-f", "feat/a"},
-			wantForce: true,
+			wantForce: gwt.WorktreeForceLevelUnclean,
+			wantDry:   false,
+		},
+		{
+			name:      "force_double_short_flag",
+			args:      []string{"remove", "-ff", "feat/a"},
+			wantForce: gwt.WorktreeForceLevelLocked,
+			wantDry:   false,
+		},
+		{
+			name:      "force_double_separate_flags",
+			args:      []string{"remove", "-f", "-f", "feat/a"},
+			wantForce: gwt.WorktreeForceLevelLocked,
 			wantDry:   false,
 		},
 		{
 			name:      "dry_run_flag",
 			args:      []string{"remove", "--dry-run", "feat/a"},
-			wantForce: false,
+			wantForce: gwt.WorktreeForceLevelNone,
 			wantDry:   true,
 		},
 		{
-			name:      "both_flags",
+			name:      "force_and_dry_run",
 			args:      []string{"remove", "--force", "--dry-run", "feat/a"},
-			wantForce: true,
+			wantForce: gwt.WorktreeForceLevelUnclean,
 			wantDry:   true,
 		},
 	}

@@ -297,17 +297,30 @@ func (g *GitRunner) WorktreeFindByBranch(branch string) (string, error) {
 	return "", fmt.Errorf("branch %q is not checked out in any worktree", branch)
 }
 
+// WorktreeForceLevel represents the force level for worktree removal.
+// Matches git worktree remove behavior.
+type WorktreeForceLevel uint8
+
+const (
+	// WorktreeForceLevelNone means no force - fail on uncommitted changes or locked.
+	WorktreeForceLevelNone WorktreeForceLevel = iota
+	// WorktreeForceLevelUnclean removes unclean worktrees (-f).
+	WorktreeForceLevelUnclean
+	// WorktreeForceLevelLocked also removes locked worktrees (-f -f).
+	WorktreeForceLevelLocked
+)
+
 type worktreeRemoveOptions struct {
-	force bool
+	forceLevel WorktreeForceLevel
 }
 
 // WorktreeRemoveOption is a functional option for WorktreeRemove.
 type WorktreeRemoveOption func(*worktreeRemoveOptions)
 
-// WithForceRemove forces worktree removal even if there are uncommitted changes.
-func WithForceRemove() WorktreeRemoveOption {
+// WithForceRemove forces worktree removal.
+func WithForceRemove(level WorktreeForceLevel) WorktreeRemoveOption {
 	return func(o *worktreeRemoveOptions) {
-		o.force = true
+		o.forceLevel = level
 	}
 }
 
@@ -319,7 +332,7 @@ func (g *GitRunner) WorktreeRemove(path string, opts ...WorktreeRemoveOption) ([
 		opt(&o)
 	}
 
-	out, err := g.worktreeRemove(path, o.force)
+	out, err := g.worktreeRemove(path, o.forceLevel)
 	if err != nil {
 		return nil, newGitError(OpWorktreeRemove, err)
 	}
@@ -435,9 +448,12 @@ func (g *GitRunner) worktreeListPorcelain() ([]byte, error) {
 	return g.Run("worktree", "list", "--porcelain")
 }
 
-func (g *GitRunner) worktreeRemove(path string, force bool) ([]byte, error) {
+func (g *GitRunner) worktreeRemove(path string, forceLevel WorktreeForceLevel) ([]byte, error) {
 	args := []string{"worktree", "remove"}
-	if force {
+	// git worktree remove:
+	// -f (once): remove unclean worktree
+	// -f -f (twice): also remove locked worktree
+	for range forceLevel {
 		args = append(args, "-f")
 	}
 	args = append(args, path)

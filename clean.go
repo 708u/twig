@@ -189,7 +189,7 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 		}
 
 		wt, err := removeCmd.Run(candidate.Branch, cwd, RemoveOptions{
-			Force:  true, // Force because we already checked conditions
+			Force:  WorktreeForceLevelUnclean, // bypass unclean check (we already checked conditions)
 			DryRun: false,
 		})
 		if err != nil {

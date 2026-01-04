@@ -184,7 +184,7 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	// Apply stashed changes to new worktree
 	if stashHash != "" {
 		if _, err := c.Git.InDir(wtPath).StashApplyByHash(stashHash); err != nil {
-			_, _ = c.Git.WorktreeRemove(wtPath, WithForceRemove())
+			_, _ = c.Git.WorktreeRemove(wtPath, WithForceRemove(WorktreeForceLevelUnclean))
 			_, _ = stashSourceGit.StashPopByHash(stashHash)
 			return result, fmt.Errorf("failed to apply changes to new worktree: %w", err)
 		}
