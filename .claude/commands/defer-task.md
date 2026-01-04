@@ -9,7 +9,9 @@ description: 作業途中で発生した別タスクをmdファイルに書き�
 ## 指示
 
 1. 現在の会話コンテキストから、後回しにするタスクの内容を把握する
-2. タスク内容に基づいて、適切なディレクトリ名（kebab-case）を2-3個提案する
+2. タスク内容に基づいて、適切なディレクトリ名を2-3個提案する
+   - 形式: `<prefix>/<kebab-case-name>`
+   - prefix: Conventional Commitsに則ったもの（例: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `perf`, `ci` など）
 3. AskUserQuestionツールを使用して、ユーザーにディレクトリ名を選択させる
 4. 以下の構造でmdファイルを作成する:
    - 目的
@@ -25,9 +27,9 @@ AskUserQuestion:
   question: "タスクのディレクトリ名を選択してください"
   header: "Dir name"
   options:
-    - label: "git-runner-dir-injection"
+    - label: "feat/git-runner-dir-injection"
       description: "GitRunnerにディレクトリ注入機能を追加"
-    - label: "refactor-config-fields"
+    - label: "refactor/config-fields"
       description: "Configフィールドのリファクタリング"
 ```
 
@@ -59,5 +61,5 @@ AskUserQuestion:
 
 - 現在の作業コンテキストから必要な情報を抽出する
 - 後で読んでも理解できるよう、十分な情報を含める
-- ディレクトリ名はkebab-caseで、タスク内容を簡潔に表すものにする
+- ディレクトリ名は `<prefix>/<kebab-case-name>` 形式で、Conventional Commitsのprefixを必ず付ける
 - 対象ファイルは `@` プレフィックスで記載し、後でファイル内容を参照可能にする
