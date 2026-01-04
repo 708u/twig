@@ -387,3 +387,26 @@ func (g *GitRunner) branchDelete(branch string, force bool) ([]byte, error) {
 	}
 	return g.Run("branch", flag, branch)
 }
+
+// IsBranchMerged checks if branch is merged into target.
+func (g *GitRunner) IsBranchMerged(branch, target string) (bool, error) {
+	out, err := g.Run("branch", "--merged", target, "--format=%(refname:short)")
+	if err != nil {
+		return false, fmt.Errorf("failed to check merged branches: %w", err)
+	}
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		if line == branch {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// WorktreePrune removes references to worktrees that no longer exist.
+func (g *GitRunner) WorktreePrune() ([]byte, error) {
+	out, err := g.Run("worktree", "prune")
+	if err != nil {
+		return nil, fmt.Errorf("failed to prune worktrees: %w", err)
+	}
+	return out, nil
+}

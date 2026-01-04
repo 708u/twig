@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/708u/gwt"
 	"github.com/spf13/cobra"
@@ -215,6 +217,90 @@ var listCmd = &cobra.Command{
 	},
 }
 
+var cleanCmd = &cobra.Command{
+	Use:   "clean",
+	Short: "Remove merged worktrees that are no longer needed",
+	Long: `Remove worktrees that have been merged to the target branch.
+
+By default, shows candidates and prompts for confirmation.
+Use --yes to skip confirmation and remove immediately.
+Use --check to only show candidates without prompting.
+
+Safety checks (all must pass):
+  - Branch is merged to target
+  - No uncommitted changes
+  - Worktree is not locked
+  - Not the current directory
+  - Not the main worktree`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		verbose, _ := cmd.Flags().GetBool("verbose")
+		yes, _ := cmd.Flags().GetBool("yes")
+		check, _ := cmd.Flags().GetBool("check")
+		target, _ := cmd.Flags().GetString("target")
+
+		cleanCommand := gwt.NewCleanCommand(cfg)
+
+		// First pass: analyze candidates (always in check mode first)
+		result, err := cleanCommand.Run(cwd, gwt.CleanOptions{
+			Check:   true,
+			Target:  target,
+			Verbose: verbose,
+		})
+		if err != nil {
+			return err
+		}
+
+		// If check mode or no candidates, just show output and exit
+		if check || result.CleanableCount() == 0 {
+			formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
+			if formatted.Stderr != "" {
+				fmt.Fprint(os.Stderr, formatted.Stderr)
+			}
+			fmt.Fprint(os.Stdout, formatted.Stdout)
+			return nil
+		}
+
+		// Show candidates
+		formatted := result.Format(gwt.FormatOptions{Verbose: verbose})
+		if formatted.Stderr != "" {
+			fmt.Fprint(os.Stderr, formatted.Stderr)
+		}
+		fmt.Fprint(os.Stdout, formatted.Stdout)
+
+		// If not --yes, prompt for confirmation
+		if !yes {
+			fmt.Print("\nProceed? [y/N]: ")
+			reader := bufio.NewReader(os.Stdin)
+			input, err := reader.ReadString('\n')
+			if err != nil {
+				return err
+			}
+			input = strings.TrimSpace(strings.ToLower(input))
+			if input != "y" && input != "yes" {
+				return nil
+			}
+		}
+
+		// Second pass: execute removal
+		result, err = cleanCommand.Run(cwd, gwt.CleanOptions{
+			Check:   false,
+			Target:  target,
+			Verbose: verbose,
+		})
+		if err != nil {
+			return err
+		}
+
+		formatted = result.Format(gwt.FormatOptions{Verbose: verbose})
+		if formatted.Stderr != "" {
+			fmt.Fprint(os.Stderr, formatted.Stderr)
+		}
+		fmt.Fprint(os.Stdout, formatted.Stdout)
+		return nil
+	},
+}
+
 var removeCmd = &cobra.Command{
 	Use:   "remove <branch>...",
 	Short: "Remove worktrees and their branches",
@@ -293,6 +379,11 @@ func init() {
 
 	listCmd.Flags().BoolP("quiet", "q", false, "Output only worktree paths")
 	rootCmd.AddCommand(listCmd)
+
+	cleanCmd.Flags().BoolP("yes", "y", false, "Execute removal without confirmation")
+	cleanCmd.Flags().Bool("check", false, "Show candidates without prompting or removing")
+	cleanCmd.Flags().String("target", "", "Target branch for merge check (default: auto-detect)")
+	rootCmd.AddCommand(cleanCmd)
 
 	removeCmd.Flags().BoolP("force", "f", false, "Force removal even with uncommitted changes or unmerged branch")
 	removeCmd.Flags().Bool("dry-run", false, "Show what would be removed without making changes")
