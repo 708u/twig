@@ -302,6 +302,16 @@ func (g *GitRunner) HasChanges() (bool, error) {
 
 // StashPush stashes all changes including untracked files.
 // Returns the stash commit hash for later reference.
+//
+// Race condition note:
+// There is a small race window between "stash push" and "rev-parse stash@{0}".
+// If another process creates a stash in this window, we may get the wrong hash.
+// However, this window is very small (milliseconds) and acceptable in practice.
+//
+// Why not use "stash create" + "stash store" pattern?
+// "stash create" does not support -u/--include-untracked option (git limitation).
+// It can only stash tracked file changes, not untracked files.
+// See: https://git-scm.com/docs/git-stash
 func (g *GitRunner) StashPush(message string) (string, error) {
 	if _, err := g.Run("stash", "push", "-u", "-m", message); err != nil {
 		return "", err

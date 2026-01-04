@@ -210,6 +210,19 @@ func (m *MockGitExecutor) handleStash(args []string) ([]byte, error) {
 		return nil, nil
 	}
 	switch args[1] {
+	case "create":
+		// stash create returns hash on stdout
+		if m.StashPushErr != nil {
+			return nil, m.StashPushErr
+		}
+		hash := m.StashHash
+		if hash == "" {
+			hash = "abc123def456"
+		}
+		return []byte(hash + "\n"), nil
+	case "store":
+		// stash store adds to reflog, no output
+		return nil, nil
 	case "push":
 		return nil, m.StashPushErr
 	case "apply":
