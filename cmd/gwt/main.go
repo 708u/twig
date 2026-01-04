@@ -24,8 +24,21 @@ func defaultNewCleanCommander(cfg *gwt.Config) CleanCommander {
 	return gwt.NewDefaultCleanCommand(cfg)
 }
 
+// RemoveCommander defines the interface for remove operations.
+type RemoveCommander interface {
+	Run(branch string, cwd string, opts gwt.RemoveOptions) (gwt.RemovedWorktree, error)
+}
+
+// NewRemoveCommander is the factory function type for creating RemoveCommander instances.
+type NewRemoveCommander func(cfg *gwt.Config) RemoveCommander
+
+func defaultNewRemoveCommander(cfg *gwt.Config) RemoveCommander {
+	return gwt.NewDefaultRemoveCommand(cfg)
+}
+
 type options struct {
-	newCleanCommander NewCleanCommander
+	newCleanCommander  NewCleanCommander
+	newRemoveCommander NewRemoveCommander
 }
 
 // Option configures newRootCmd.
@@ -35,6 +48,13 @@ type Option func(*options)
 func WithNewCleanCommander(ncc NewCleanCommander) Option {
 	return func(o *options) {
 		o.newCleanCommander = ncc
+	}
+}
+
+// WithNewRemoveCommander sets the factory function for creating RemoveCommander instances.
+func WithNewRemoveCommander(nrc NewRemoveCommander) Option {
+	return func(o *options) {
+		o.newRemoveCommander = nrc
 	}
 }
 
@@ -68,7 +88,8 @@ func resolveDirectory(dirFlag, baseCwd string) (string, error) {
 
 func newRootCmd(opts ...Option) *cobra.Command {
 	o := &options{
-		newCleanCommander: defaultNewCleanCommander,
+		newCleanCommander:  defaultNewCleanCommander,
+		newRemoveCommander: defaultNewRemoveCommander,
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -371,7 +392,7 @@ stop processing of remaining branches.`,
 			force, _ := cmd.Flags().GetBool("force")
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
 
-			removeCmd := gwt.NewRemoveCommand(cfg)
+			removeCmd := o.newRemoveCommander(cfg)
 			var result gwt.RemoveResult
 
 			for _, branch := range args {

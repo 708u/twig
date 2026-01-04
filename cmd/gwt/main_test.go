@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -204,5 +205,206 @@ func TestCleanCmd(t *testing.T) {
 				t.Errorf("stdout = %q, want %q", stdout.String(), tt.wantStdout)
 			}
 		})
+	}
+}
+
+// mockRemoveCommander implements RemoveCommander for testing.
+type mockRemoveCommander struct {
+	calls   []removeCall
+	results []removeResult
+	idx     int
+}
+
+type removeCall struct {
+	branch string
+	cwd    string
+	opts   gwt.RemoveOptions
+}
+
+type removeResult struct {
+	wt  gwt.RemovedWorktree
+	err error
+}
+
+func (m *mockRemoveCommander) Run(branch, cwd string, opts gwt.RemoveOptions) (gwt.RemovedWorktree, error) {
+	m.calls = append(m.calls, removeCall{branch, cwd, opts})
+	if m.idx < len(m.results) {
+		r := m.results[m.idx]
+		m.idx++
+		return r.wt, r.err
+	}
+	return gwt.RemovedWorktree{Branch: branch, WorktreePath: "/test/" + branch}, nil
+}
+
+func TestRemoveCmd(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		args      []string
+		wantForce bool
+		wantDry   bool
+	}{
+		{
+			name:      "no_flags",
+			args:      []string{"remove", "feat/a"},
+			wantForce: false,
+			wantDry:   false,
+		},
+		{
+			name:      "force_flag",
+			args:      []string{"remove", "--force", "feat/a"},
+			wantForce: true,
+			wantDry:   false,
+		},
+		{
+			name:      "force_short_flag",
+			args:      []string{"remove", "-f", "feat/a"},
+			wantForce: true,
+			wantDry:   false,
+		},
+		{
+			name:      "dry_run_flag",
+			args:      []string{"remove", "--dry-run", "feat/a"},
+			wantForce: false,
+			wantDry:   true,
+		},
+		{
+			name:      "both_flags",
+			args:      []string{"remove", "--force", "--dry-run", "feat/a"},
+			wantForce: true,
+			wantDry:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mock := &mockRemoveCommander{}
+
+			cmd := newRootCmd(WithNewRemoveCommander(func(cfg *gwt.Config) RemoveCommander {
+				return mock
+			}))
+
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+
+			cmd.SetOut(stdout)
+			cmd.SetErr(stderr)
+			cmd.SetArgs(tt.args)
+
+			_ = cmd.Execute()
+
+			if len(mock.calls) != 1 {
+				t.Fatalf("expected 1 call, got %d", len(mock.calls))
+			}
+
+			call := mock.calls[0]
+			if call.opts.Force != tt.wantForce {
+				t.Errorf("Force = %v, want %v", call.opts.Force, tt.wantForce)
+			}
+			if call.opts.DryRun != tt.wantDry {
+				t.Errorf("DryRun = %v, want %v", call.opts.DryRun, tt.wantDry)
+			}
+		})
+	}
+}
+
+func TestRemoveCmd_OutputFormat(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		args       []string
+		results    []removeResult
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name: "success_output",
+			args: []string{"remove", "feat/a"},
+			results: []removeResult{
+				{wt: gwt.RemovedWorktree{Branch: "feat/a", WorktreePath: "/test/feat/a"}},
+			},
+			wantStdout: "gwt remove: feat/a\n",
+			wantStderr: "",
+		},
+		{
+			name: "error_output",
+			args: []string{"remove", "feat/a"},
+			results: []removeResult{
+				{wt: gwt.RemovedWorktree{}, err: errors.New("not found")},
+			},
+			wantStdout: "",
+			wantStderr: "error: feat/a: not found\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mock := &mockRemoveCommander{results: tt.results}
+
+			cmd := newRootCmd(WithNewRemoveCommander(func(cfg *gwt.Config) RemoveCommander {
+				return mock
+			}))
+
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+
+			cmd.SetOut(stdout)
+			cmd.SetErr(stderr)
+			cmd.SetArgs(tt.args)
+
+			_ = cmd.Execute()
+
+			if stdout.String() != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout.String(), tt.wantStdout)
+			}
+			if stderr.String() != tt.wantStderr {
+				t.Errorf("stderr = %q, want %q", stderr.String(), tt.wantStderr)
+			}
+		})
+	}
+}
+
+func TestRemoveCmd_MultipleBranches(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockRemoveCommander{}
+
+	cmd := newRootCmd(WithNewRemoveCommander(func(cfg *gwt.Config) RemoveCommander {
+		return mock
+	}))
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs([]string{"remove", "feat/a", "feat/b", "feat/c"})
+
+	_ = cmd.Execute()
+
+	if len(mock.calls) != 3 {
+		t.Fatalf("expected 3 calls, got %d", len(mock.calls))
+	}
+
+	branches := []string{mock.calls[0].branch, mock.calls[1].branch, mock.calls[2].branch}
+	expected := []string{"feat/a", "feat/b", "feat/c"}
+	for i, got := range branches {
+		if got != expected[i] {
+			t.Errorf("call[%d].branch = %q, want %q", i, got, expected[i])
+		}
+	}
+
+	// Check output contains all branches
+	out := stdout.String()
+	for _, b := range expected {
+		if !strings.Contains(out, b) {
+			t.Errorf("output should contain %q", b)
+		}
 	}
 }

@@ -19,13 +19,18 @@ type RemoveOptions struct {
 	DryRun bool
 }
 
-// NewRemoveCommand creates a new RemoveCommand with the given config.
-func NewRemoveCommand(cfg *Config) *RemoveCommand {
+// NewRemoveCommand creates a RemoveCommand with explicit dependencies.
+func NewRemoveCommand(fs FileSystem, git *GitRunner, cfg *Config) *RemoveCommand {
 	return &RemoveCommand{
-		FS:     osFS{},
-		Git:    NewGitRunner(cfg.WorktreeSourceDir),
+		FS:     fs,
+		Git:    git,
 		Config: cfg,
 	}
+}
+
+// NewDefaultRemoveCommand creates a RemoveCommand with production defaults.
+func NewDefaultRemoveCommand(cfg *Config) *RemoveCommand {
+	return NewRemoveCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir), cfg)
 }
 
 // RemovedWorktree holds the result of a single worktree removal.
