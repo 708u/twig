@@ -66,7 +66,6 @@ gwt add feat/new --source main --carry=@
 
 # Move changes from feat/a worktree
 gwt add feat/new --source main --carry=feat/a
-gwt add feat/new --source main --carry feat/a
 ```
 
 The `--carry` option accepts an optional value to specify where to take

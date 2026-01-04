@@ -719,6 +719,104 @@ worktree_destination_base_dir = %q
 		}
 	})
 
+	t.Run("CarryFlagWithoutValue", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		var calledOpts gwt.AddOptions
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/carry",
+				WorktreePath: "/path/to/worktree",
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			calledOpts = opts
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "feat/carry", "--carry"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// --carry without value should use source worktree (mainDir)
+		if calledOpts.CarryFrom != mainDir {
+			t.Errorf("CarryFrom = %q, want %q", calledOpts.CarryFrom, mainDir)
+		}
+	})
+
+	t.Run("CarryShortFlagWithoutValue", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		var calledOpts gwt.AddOptions
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/carry-short",
+				WorktreePath: "/path/to/worktree",
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			calledOpts = opts
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "feat/carry-short", "-c"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// -c without value should use source worktree (mainDir)
+		if calledOpts.CarryFrom != mainDir {
+			t.Errorf("CarryFrom = %q, want %q", calledOpts.CarryFrom, mainDir)
+		}
+	})
+
+	t.Run("CarrySpaceSeparatedValueNotAllowed", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/target",
+				WorktreePath: "/path/to/worktree",
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		// --carry feat/other uses space-separated syntax which is not allowed
+		// feat/other becomes a second positional argument, causing an error
+		cmd.SetArgs([]string{"-C", mainDir, "add", "feat/target", "--carry", "feat/other"})
+
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected error for space-separated --carry value, got nil")
+		}
+		if !strings.Contains(err.Error(), "accepts 1 arg(s), received 2") {
+			t.Errorf("error = %q, want to contain %q", err.Error(), "accepts 1 arg(s), received 2")
+		}
+	})
+
 	t.Run("SyncAndCarryMutuallyExclusive", func(t *testing.T) {
 		t.Parallel()
 
