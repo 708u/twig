@@ -13,25 +13,15 @@ import (
 	"github.com/708u/gwt/internal/testutil"
 )
 
+// All tests use testutil.Symlinks() because they don't need symlink patterns.
+
 func TestRemoveCommand_Integration(t *testing.T) {
 	t.Parallel()
 
 	t.Run("RemoveWorktreeAndBranch", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		wtPath := filepath.Join(repoDir, "feature", "to-remove")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/to-remove", wtPath)
@@ -75,19 +65,7 @@ worktree_destination_base_dir = %q
 	t.Run("DryRun", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		wtPath := filepath.Join(repoDir, "feature", "dry-run-test")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/dry-run-test", wtPath)
@@ -126,19 +104,7 @@ worktree_destination_base_dir = %q
 	t.Run("ForceRemoveWithUncommittedChanges", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		wtPath := filepath.Join(repoDir, "feature", "force-test")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/force-test", wtPath)
@@ -190,19 +156,7 @@ worktree_destination_base_dir = %q
 	t.Run("ErrorWithHintForLockedWorktree", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		wtPath := filepath.Join(repoDir, "feature", "locked-test")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/locked-test", wtPath)
@@ -250,19 +204,7 @@ worktree_destination_base_dir = %q
 	t.Run("ErrorWhenInsideWorktree", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		wtPath := filepath.Join(repoDir, "feature", "inside-test")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/inside-test", wtPath)
@@ -290,18 +232,7 @@ worktree_destination_base_dir = %q
 	t.Run("ErrorBranchNotInWorktree", func(t *testing.T) {
 		t.Parallel()
 
-		_, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-`, mainDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		_, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		testutil.RunGit(t, mainDir, "branch", "orphan-branch")
 
@@ -328,19 +259,7 @@ worktree_destination_base_dir = %q
 	t.Run("RemoveMultipleWorktrees", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		// Create multiple worktrees
 		branches := []string{"feature/multi-a", "feature/multi-b", "feature/multi-c"}
@@ -399,19 +318,7 @@ worktree_destination_base_dir = %q
 	t.Run("RemoveMultipleWithPartialFailure", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		// Create one valid worktree
 		validBranch := "feature/valid"
@@ -472,19 +379,7 @@ worktree_destination_base_dir = %q
 	t.Run("CleanupEmptyParentDirs", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		// Create a deeply nested worktree (3 levels) to verify arbitrary depth cleanup
 		wtPath := filepath.Join(repoDir, "feat", "nested", "very", "deep")
@@ -539,19 +434,7 @@ worktree_destination_base_dir = %q
 	t.Run("PreserveNonEmptyParentDirs", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		// Create two worktrees in same parent
 		wtPath1 := filepath.Join(repoDir, "feat", "test1")
@@ -613,19 +496,7 @@ worktree_destination_base_dir = %q
 	t.Run("DryRunShowsCleanupInfo", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		// Create a nested worktree
 		wtPath := filepath.Join(repoDir, "feat", "dry-cleanup")

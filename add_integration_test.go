@@ -20,18 +20,6 @@ func TestAddCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`symlinks = [".envrc"]
-worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
 		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# envrc"), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -92,7 +80,7 @@ worktree_destination_base_dir = %q
 	t.Run("DefaultDestinationBaseDir", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		gwtDir := filepath.Join(mainDir, ".gwt")
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
@@ -143,21 +131,9 @@ worktree_destination_base_dir = %q
 	t.Run("ExistingBranch", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		testutil.RunGit(t, mainDir, "branch", "existing-branch")
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
 
 		result, err := LoadConfig(mainDir)
 		if err != nil {
@@ -184,21 +160,9 @@ worktree_destination_base_dir = %q
 	t.Run("BranchAlreadyCheckedOut", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		testutil.RunGit(t, mainDir, "worktree", "add", filepath.Join(repoDir, "other-wt"), "-b", "test-branch")
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
 
 		result, err := LoadConfig(mainDir)
 		if err != nil {
@@ -223,7 +187,7 @@ worktree_destination_base_dir = %q
 	t.Run("LocalConfigSymlinksMerge", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		gwtDir := filepath.Join(mainDir, ".gwt")
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
@@ -304,21 +268,8 @@ worktree_destination_base_dir = %q
 	t.Run("NoMatchPatternWarning", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		// Configure symlinks with non-existent file pattern
-		settingsContent := fmt.Sprintf(`symlinks = ["nonexistent.txt", ".envrc"]
-worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t,
+			testutil.Symlinks("nonexistent.txt", ".envrc"))
 
 		// Only create .envrc (not nonexistent.txt)
 		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# envrc"), 0644); err != nil {
@@ -374,7 +325,8 @@ worktree_destination_base_dir = %q
 	t.Run("MultipleSymlinkPatterns", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
+		repoDir, mainDir := testutil.SetupTestRepo(t,
+			testutil.Symlinks(".envrc", ".tool-versions", "config/**/*.toml"))
 
 		// Mix of literal files and glob-matched files
 		literalFiles := []string{".envrc", ".tool-versions"}
@@ -395,20 +347,6 @@ worktree_destination_base_dir = %q
 			if err := os.WriteFile(filepath.Join(mainDir, f), []byte("content"), 0644); err != nil {
 				t.Fatal(err)
 			}
-		}
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		// Multiple patterns: literal files + glob pattern
-		settingsContent := fmt.Sprintf(`symlinks = [".envrc", ".tool-versions", "config/**/*.toml"]
-worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
 		}
 
 		result, err := LoadConfig(mainDir)
@@ -464,19 +402,7 @@ worktree_destination_base_dir = %q
 	t.Run("SyncUncommittedChanges", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		// Commit .gwt/settings.toml first
 		testutil.RunGit(t, mainDir, "add", ".gwt")
@@ -539,19 +465,7 @@ worktree_destination_base_dir = %q
 	t.Run("CarryUncommittedChanges", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		// Commit .gwt/settings.toml first
 		testutil.RunGit(t, mainDir, "add", ".gwt")
@@ -616,19 +530,7 @@ worktree_destination_base_dir = %q
 	t.Run("CarryFromDifferentWorktree", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		// Commit .gwt/settings.toml first
 		testutil.RunGit(t, mainDir, "add", ".gwt")
@@ -704,19 +606,7 @@ worktree_destination_base_dir = %q
 	t.Run("SyncWithNoChanges", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		// Commit .gwt/settings.toml to ensure no uncommitted changes
 		testutil.RunGit(t, mainDir, "add", ".gwt")
@@ -754,19 +644,7 @@ worktree_destination_base_dir = %q
 	t.Run("QuietOutputsOnlyPath", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		result, err := LoadConfig(mainDir)
 		if err != nil {
@@ -806,19 +684,7 @@ worktree_destination_base_dir = %q
 	t.Run("LockWorktree", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		_, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		result, err := LoadConfig(mainDir)
 		if err != nil {
@@ -847,19 +713,7 @@ worktree_destination_base_dir = %q
 	t.Run("LockWorktreeWithReason", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		_, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks())
 
 		result, err := LoadConfig(mainDir)
 		if err != nil {
