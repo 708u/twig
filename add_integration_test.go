@@ -569,10 +569,10 @@ worktree_destination_base_dir = %q
 		}
 
 		cmd := &AddCommand{
-			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
-			Config: result.Config,
-			Carry:  true,
+			FS:        osFS{},
+			Git:       NewGitRunner(mainDir),
+			Config:    result.Config,
+			CarryFrom: mainDir,
 		}
 
 		addResult, err := cmd.Run("feature/carry-test")
@@ -610,6 +610,94 @@ worktree_destination_base_dir = %q
 		status := testutil.RunGit(t, mainDir, "status", "--porcelain")
 		if strings.TrimSpace(status) != "" {
 			t.Errorf("source should be clean after carry, got: %q", status)
+		}
+	})
+
+	t.Run("CarryFromDifferentWorktree", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Commit .gwt/settings.toml first
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		// Create a feature worktree with uncommitted changes
+		featureWtPath := filepath.Join(repoDir, "feature", "source")
+		testutil.RunGit(t, mainDir, "worktree", "add", featureWtPath, "-b", "feature/source")
+
+		// Create uncommitted changes in feature worktree
+		modifiedFile := filepath.Join(featureWtPath, "from-feature.txt")
+		if err := os.WriteFile(modifiedFile, []byte("content from feature"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Carry from feature worktree, create new worktree based on main
+		cmd := &AddCommand{
+			FS:        osFS{},
+			Git:       NewGitRunner(mainDir),
+			Config:    result.Config,
+			CarryFrom: featureWtPath, // Carry from different worktree
+		}
+
+		addResult, err := cmd.Run("feature/carry-from-other")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify ChangesCarried is true
+		if !addResult.ChangesCarried {
+			t.Error("expected ChangesCarried to be true")
+		}
+
+		// Verify worktree was created
+		wtPath := filepath.Join(repoDir, "feature", "carry-from-other")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+
+		// Verify the file exists in new worktree
+		carriedFile := filepath.Join(wtPath, "from-feature.txt")
+		content, err := os.ReadFile(carriedFile)
+		if err != nil {
+			t.Fatalf("failed to read carried file: %v", err)
+		}
+		if string(content) != "content from feature" {
+			t.Errorf("carried file content = %q, want %q", string(content), "content from feature")
+		}
+
+		// Verify the file does NOT exist in feature worktree (carried away)
+		if _, err := os.Stat(modifiedFile); !os.IsNotExist(err) {
+			t.Errorf("source file should not exist after carry: %s", modifiedFile)
+		}
+
+		// Verify feature worktree is clean
+		status := testutil.RunGit(t, featureWtPath, "status", "--porcelain")
+		if strings.TrimSpace(status) != "" {
+			t.Errorf("feature worktree should be clean after carry, got: %q", status)
+		}
+
+		// Verify main worktree is still clean (wasn't affected)
+		mainStatus := testutil.RunGit(t, mainDir, "status", "--porcelain")
+		if strings.TrimSpace(mainStatus) != "" {
+			t.Errorf("main worktree should still be clean, got: %q", mainStatus)
 		}
 	})
 
@@ -712,6 +800,89 @@ worktree_destination_base_dir = %q
 		// Verify the path is a valid directory
 		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+	})
+
+	t.Run("LockWorktree", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: result.Config,
+			Lock:   true,
+		}
+
+		_, err = cmd.Run("feature/locked")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree is locked
+		out := testutil.RunGit(t, mainDir, "worktree", "list", "--porcelain")
+		if !strings.Contains(out, "locked") {
+			t.Errorf("worktree should be locked, got: %s", out)
+		}
+	})
+
+	t.Run("LockWorktreeWithReason", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &AddCommand{
+			FS:         osFS{},
+			Git:        NewGitRunner(mainDir),
+			Config:     result.Config,
+			Lock:       true,
+			LockReason: "USB drive work",
+		}
+
+		_, err = cmd.Run("feature/locked-reason")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree is locked with reason
+		out := testutil.RunGit(t, mainDir, "worktree", "list", "--porcelain")
+		if !strings.Contains(out, "locked USB drive work") {
+			t.Errorf("worktree should be locked with reason, got: %s", out)
 		}
 	})
 }

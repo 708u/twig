@@ -14,12 +14,14 @@ gwt add <name> [flags]
 
 ## Flags
 
-| Flag                | Short | Description                                          |
-|---------------------|-------|------------------------------------------------------|
-| `--sync`            | `-s`  | Sync uncommitted changes to new worktree             |
-| `--carry`           | `-c`  | Carry uncommitted changes to new worktree            |
-| `--quiet`           | `-q`  | Output only the worktree path                        |
-| `--source <branch>` |       | Use specified branch's worktree as source            |
+| Flag                  | Short | Description                                        |
+|-----------------------|-------|----------------------------------------------------|
+| `--sync`              | `-s`  | Sync uncommitted changes to new worktree           |
+| `--carry [<branch>]`  | `-c`  | Carry uncommitted changes (optionally from branch) |
+| `--quiet`             | `-q`  | Output only the worktree path                      |
+| `--source <branch>`   |       | Use specified branch's worktree as source          |
+| `--lock`              |       | Lock the worktree after creation                   |
+| `--reason <string>`   |       | Reason for locking (requires `--lock`)             |
 
 ## Behavior
 
@@ -46,7 +48,7 @@ to the source worktree automatically.
 
 With `--carry`, uncommitted changes are moved to the new worktree:
 
-1. Stashes current changes
+1. Stashes changes from the specified source
 2. Creates the new worktree
 3. Applies stash to new worktree
 4. Drops the stash (source worktree becomes clean)
@@ -55,9 +57,27 @@ Unlike `--sync` which copies changes to both worktrees, `--carry` moves
 changes so that only the new worktree has them.
 
 ```bash
-# Move current work to a new branch
+# Move current work to a new branch (from source worktree)
 gwt add feat/new --carry
+
+# Move changes from current worktree, but base branch on main
+gwt add feat/new --source main --carry=@
+
+# Move changes from feat/a worktree
+gwt add feat/new --source main --carry=feat/a
+gwt add feat/new --source main --carry feat/a
 ```
+
+The `--carry` option accepts an optional value to specify where to take
+changes from:
+
+| Value         | Description                                    |
+|---------------|------------------------------------------------|
+| (no value)    | Take changes from source worktree (default)    |
+| `@`           | Take changes from current worktree             |
+| `<branch>`    | Take changes from specified branch's worktree  |
+
+The `@` symbol follows git's HEAD alias convention, meaning "current location".
 
 If worktree creation or stash apply fails, changes are restored
 to the source worktree automatically.
@@ -91,13 +111,37 @@ When `--source` is specified:
 
 - Settings are loaded from the source branch's worktree
 - Symlinks are created from the source branch's worktree
-- With `--sync` or `--carry`, changes are stashed from the source branch's
+- With `--sync`, changes are stashed from the source branch's worktree
+- With `--carry` (no value), changes are stashed from the source branch's
+  worktree
+- With `--carry=@`, changes are stashed from the current worktree
+- With `--carry=<branch>`, changes are stashed from the specified branch's
   worktree
 
 Constraints:
 
 - Cannot be used together with `-C`
 - The specified branch must have an existing worktree
+
+### Lock Option
+
+With `--lock`, the worktree is locked after creation to prevent automatic
+pruning by `git worktree prune`. This is useful for worktrees on portable
+devices or network shares that are not always mounted.
+
+```bash
+# Create a locked worktree
+gwt add feat/usb-work --lock
+
+# Create a locked worktree with a reason
+gwt add feat/usb-work --lock --reason "USB drive work"
+```
+
+The `--reason` option requires `--lock` and adds an explanation for why
+the worktree is locked. This reason is displayed by `git worktree list`.
+
+Locked worktrees require `--force` (or `-f -f`) to be moved or removed
+with git commands.
 
 ### Default Source Configuration
 

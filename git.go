@@ -45,6 +45,18 @@ func (g *GitRunner) Run(args ...string) ([]byte, error) {
 
 type worktreeAddOptions struct {
 	createBranch bool
+	lock         bool
+	lockReason   string
+}
+
+func (o worktreeAddOptions) lockArgs() []string {
+	if !o.lock {
+		return nil
+	}
+	if o.lockReason != "" {
+		return []string{"--lock", "--reason", o.lockReason}
+	}
+	return []string{"--lock"}
 }
 
 // WorktreeAddOption is a functional option for WorktreeAdd.
@@ -57,6 +69,20 @@ func WithCreateBranch() WorktreeAddOption {
 	}
 }
 
+// WithLock locks the worktree after creation.
+func WithLock() WorktreeAddOption {
+	return func(o *worktreeAddOptions) {
+		o.lock = true
+	}
+}
+
+// WithLockReason sets the reason for locking the worktree.
+func WithLockReason(reason string) WorktreeAddOption {
+	return func(o *worktreeAddOptions) {
+		o.lockReason = reason
+	}
+}
+
 // WorktreeAdd creates a new worktree at the specified path.
 func (g *GitRunner) WorktreeAdd(path, branch string, opts ...WorktreeAddOption) ([]byte, error) {
 	var o worktreeAddOptions
@@ -65,9 +91,9 @@ func (g *GitRunner) WorktreeAdd(path, branch string, opts ...WorktreeAddOption) 
 	}
 
 	if o.createBranch {
-		return g.worktreeAddWithNewBranch(branch, path)
+		return g.worktreeAddWithNewBranch(branch, path, o)
 	}
-	return g.worktreeAdd(path, branch)
+	return g.worktreeAdd(path, branch, o)
 }
 
 // BranchExists checks if a branch exists in the local repository.
@@ -317,12 +343,18 @@ func (g *GitRunner) StashDropByHash(hash string) ([]byte, error) {
 
 // private methods for git command execution
 
-func (g *GitRunner) worktreeAdd(path, branch string) ([]byte, error) {
-	return g.Run("worktree", "add", path, branch)
+func (g *GitRunner) worktreeAdd(path, branch string, o worktreeAddOptions) ([]byte, error) {
+	args := []string{"worktree", "add"}
+	args = append(args, o.lockArgs()...)
+	args = append(args, path, branch)
+	return g.Run(args...)
 }
 
-func (g *GitRunner) worktreeAddWithNewBranch(branch, path string) ([]byte, error) {
-	return g.Run("worktree", "add", "-b", branch, path)
+func (g *GitRunner) worktreeAddWithNewBranch(branch, path string, o worktreeAddOptions) ([]byte, error) {
+	args := []string{"worktree", "add"}
+	args = append(args, o.lockArgs()...)
+	args = append(args, "-b", branch, path)
+	return g.Run(args...)
 }
 
 func (g *GitRunner) worktreeListPorcelain() ([]byte, error) {
