@@ -190,10 +190,10 @@ func TestRemoveCommand_Run(t *testing.T) {
 			wantDryRun: true,
 		},
 		{
-			name:   "force_level_1_unclean",
+			name:   "force_level_unclean",
 			branch: "feature/test",
 			cwd:    "/other/dir",
-			opts:   RemoveOptions{Force: 1},
+			opts:   RemoveOptions{Force: ForceLevelUnclean},
 			config: &Config{WorktreeSourceDir: "/repo/main"},
 			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
 				t.Helper()
@@ -203,13 +203,13 @@ func TestRemoveCommand_Run(t *testing.T) {
 				}
 			},
 			wantErr:        false,
-			wantForceLevel: 1,
+			wantForceLevel: int(ForceLevelUnclean),
 		},
 		{
-			name:   "force_level_2_locked",
+			name:   "force_level_locked",
 			branch: "feature/test",
 			cwd:    "/other/dir",
-			opts:   RemoveOptions{Force: 2},
+			opts:   RemoveOptions{Force: ForceLevelLocked},
 			config: &Config{WorktreeSourceDir: "/repo/main"},
 			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
 				t.Helper()
@@ -219,7 +219,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 				}
 			},
 			wantErr:        false,
-			wantForceLevel: 2,
+			wantForceLevel: int(ForceLevelLocked),
 		},
 		{
 			name:   "empty_branch",

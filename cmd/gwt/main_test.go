@@ -839,7 +839,7 @@ func TestRemoveCmd(t *testing.T) {
 			}
 
 			call := mock.calls[0]
-			if call.opts.Force != tt.wantForce {
+			if int(call.opts.Force) != tt.wantForce {
 				t.Errorf("Force = %v, want %v", call.opts.Force, tt.wantForce)
 			}
 			if call.opts.DryRun != tt.wantDry {

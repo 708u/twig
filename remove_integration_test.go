@@ -176,8 +176,8 @@ worktree_destination_base_dir = %q
 			t.Error("GitError.Hint() should return hint for uncommitted changes")
 		}
 
-		// Now verify -f (Force: 1) succeeds for uncommitted changes
-		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{Force: 1})
+		// Now verify -f (ForceLevelUnclean) succeeds for uncommitted changes
+		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{Force: ForceLevelUnclean})
 		if err != nil {
 			t.Fatalf("Run with force failed: %v", err)
 		}
@@ -245,14 +245,14 @@ worktree_destination_base_dir = %q
 			t.Fatalf("worktree should still be locked: %s", out)
 		}
 
-		// Verify -f (Force: 1) still fails for locked worktree
-		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{Force: 1})
+		// Verify -f (ForceLevelUnclean) still fails for locked worktree
+		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{Force: ForceLevelUnclean})
 		if err == nil {
 			t.Fatal("expected error for locked worktree with single -f")
 		}
 
-		// Now verify -ff (Force: 2) removes the locked worktree
-		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{Force: 2})
+		// Now verify -ff (ForceLevelLocked) removes the locked worktree
+		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{Force: ForceLevelLocked})
 		if err != nil {
 			t.Fatalf("force remove of locked worktree with -ff failed: %v", err)
 		}

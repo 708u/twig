@@ -297,19 +297,28 @@ func (g *GitRunner) WorktreeFindByBranch(branch string) (string, error) {
 	return "", fmt.Errorf("branch %q is not checked out in any worktree", branch)
 }
 
+// ForceLevel represents the force level for worktree removal.
+// Matches git worktree remove behavior.
+type ForceLevel int
+
+const (
+	// ForceLevelNone means no force - fail on uncommitted changes or locked.
+	ForceLevelNone ForceLevel = iota
+	// ForceLevelUnclean removes unclean worktrees (-f).
+	ForceLevelUnclean
+	// ForceLevelLocked also removes locked worktrees (-f -f).
+	ForceLevelLocked
+)
+
 type worktreeRemoveOptions struct {
-	// forceLevel specifies how many -f flags to pass.
-	// 0 = no force, 1 = remove unclean, 2 = remove locked.
-	forceLevel int
+	forceLevel ForceLevel
 }
 
 // WorktreeRemoveOption is a functional option for WorktreeRemove.
 type WorktreeRemoveOption func(*worktreeRemoveOptions)
 
 // WithForceRemove forces worktree removal.
-// level 1: remove unclean worktrees (-f)
-// level 2+: also remove locked worktrees (-f -f)
-func WithForceRemove(level int) WorktreeRemoveOption {
+func WithForceRemove(level ForceLevel) WorktreeRemoveOption {
 	return func(o *worktreeRemoveOptions) {
 		o.forceLevel = level
 	}
@@ -439,12 +448,12 @@ func (g *GitRunner) worktreeListPorcelain() ([]byte, error) {
 	return g.Run("worktree", "list", "--porcelain")
 }
 
-func (g *GitRunner) worktreeRemove(path string, forceLevel int) ([]byte, error) {
+func (g *GitRunner) worktreeRemove(path string, forceLevel ForceLevel) ([]byte, error) {
 	args := []string{"worktree", "remove"}
 	// git worktree remove:
 	// -f (once): remove unclean worktree
 	// -f -f (twice): also remove locked worktree
-	for i := 0; i < forceLevel; i++ {
+	for i := 0; i < int(forceLevel); i++ {
 		args = append(args, "-f")
 	}
 	args = append(args, path)

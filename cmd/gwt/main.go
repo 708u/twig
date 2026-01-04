@@ -431,7 +431,7 @@ stop processing of remaining branches.`,
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verbose, _ := cmd.Flags().GetBool("verbose")
-			force, _ := cmd.Flags().GetCount("force")
+			forceCount, _ := cmd.Flags().GetCount("force")
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
 
 			removeCmd := o.newRemoveCommander(cfg)
@@ -439,7 +439,7 @@ stop processing of remaining branches.`,
 
 			for _, branch := range args {
 				wt, err := removeCmd.Run(branch, cwd, gwt.RemoveOptions{
-					Force:  force,
+					Force:  gwt.ForceLevel(forceCount),
 					DryRun: dryRun,
 				})
 				if err != nil {
