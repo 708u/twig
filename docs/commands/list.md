@@ -10,27 +10,28 @@ gwt list [flags]
 
 ## Flags
 
-| Flag     | Short | Description                              |
-|----------|-------|------------------------------------------|
-| `--path` | `-p`  | Show full paths instead of branch names  |
+| Flag      | Short | Description                 |
+|-----------|-------|-----------------------------|
+| `--quiet` | `-q`  | Output only worktree paths  |
 
 ## Behavior
 
 - Lists all worktrees including the main worktree
-- Default output shows branch names only
-- With `--path`: shows full filesystem paths
+- Default output shows path, commit hash, and branch name
+  (compatible with `git worktree list`)
+- With `--quiet`: shows only worktree paths
 
 ## Examples
 
 ```txt
-# List branch names
+# Default output (git worktree list compatible)
 gwt list
-main
-feat/add-list-command
-feat/add-move-command
+/Users/user/repo                                   abc1234 [main]
+/Users/user/repo-worktree/feat/add-list-command    def5678 [feat/add-list-command]
+/Users/user/repo-worktree/feat/add-move-command    012abcd [feat/add-move-command]
 
-# List full paths (for cd integration)
-gwt list --path
+# Quiet output (paths only, for scripting)
+gwt list -q
 /Users/user/repo
 /Users/user/repo-worktree/feat/add-list-command
 /Users/user/repo-worktree/feat/add-move-command
@@ -43,7 +44,7 @@ Combine with fzf for quick worktree navigation:
 ```bash
 gcd() {
   local selected
-  selected=$(gwt list --path | fzf +m) &&
+  selected=$(gwt list -q | fzf +m) &&
   cd "$selected"
 }
 ```

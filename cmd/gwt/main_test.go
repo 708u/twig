@@ -223,6 +223,111 @@ func (m *mockAddCommander) Run(name string) (gwt.AddResult, error) {
 	return m.result, m.err
 }
 
+// mockListCommander is a test double for ListCommander interface.
+type mockListCommander struct {
+	result gwt.ListResult
+	err    error
+}
+
+func (m *mockListCommander) Run() (gwt.ListResult, error) {
+	return m.result, m.err
+}
+
+func TestListCmd(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		args       []string
+		result     gwt.ListResult
+		err        error
+		wantStdout string
+		wantErr    bool
+	}{
+		{
+			name: "default output",
+			args: []string{"list"},
+			result: gwt.ListResult{
+				Worktrees: []gwt.WorktreeInfo{
+					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
+					{Path: "/repo/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
+				},
+			},
+			wantStdout: "/repo/main    abc1234 [main]\n/repo/feat-a  def5678 [feat/a]\n",
+		},
+		{
+			name: "quiet flag outputs paths only",
+			args: []string{"list", "--quiet"},
+			result: gwt.ListResult{
+				Worktrees: []gwt.WorktreeInfo{
+					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
+					{Path: "/repo/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
+				},
+			},
+			wantStdout: "/repo/main\n/repo/feat-a\n",
+		},
+		{
+			name: "short flag -q",
+			args: []string{"list", "-q"},
+			result: gwt.ListResult{
+				Worktrees: []gwt.WorktreeInfo{
+					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
+				},
+			},
+			wantStdout: "/repo/main\n",
+		},
+		{
+			name: "empty list",
+			args: []string{"list"},
+			result: gwt.ListResult{
+				Worktrees: []gwt.WorktreeInfo{},
+			},
+			wantStdout: "",
+		},
+		{
+			name:    "error from commander",
+			args:    []string{"list"},
+			err:     errors.New("git error"),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mock := &mockListCommander{result: tt.result, err: tt.err}
+
+			cmd := newRootCmd(WithNewListCommander(func(dir string) ListCommander {
+				return mock
+			}))
+
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+
+			cmd.SetOut(stdout)
+			cmd.SetErr(stderr)
+			cmd.SetArgs(tt.args)
+
+			err := cmd.Execute()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if stdout.String() != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout.String(), tt.wantStdout)
+			}
+		})
+	}
+}
 // mockRemoveCommander implements RemoveCommander for testing.
 type mockRemoveCommander struct {
 	calls   []removeCall

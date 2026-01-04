@@ -36,6 +36,18 @@ func defaultNewCleanCommander(cfg *gwt.Config) CleanCommander {
 	return gwt.NewDefaultCleanCommand(cfg)
 }
 
+// ListCommander defines the interface for list operations.
+type ListCommander interface {
+	Run() (gwt.ListResult, error)
+}
+
+// NewListCommander is the factory function type for creating ListCommander instances.
+type NewListCommander func(dir string) ListCommander
+
+func defaultNewListCommander(dir string) ListCommander {
+	return gwt.NewDefaultListCommand(dir)
+}
+
 // RemoveCommander defines the interface for remove operations.
 type RemoveCommander interface {
 	Run(branch string, cwd string, opts gwt.RemoveOptions) (gwt.RemovedWorktree, error)
@@ -51,6 +63,7 @@ func defaultNewRemoveCommander(cfg *gwt.Config) RemoveCommander {
 type options struct {
 	newAddCommander    NewAddCommander
 	newCleanCommander  NewCleanCommander
+	newListCommander   NewListCommander
 	newRemoveCommander NewRemoveCommander
 }
 
@@ -68,6 +81,13 @@ func WithNewAddCommander(nac NewAddCommander) Option {
 func WithNewCleanCommander(ncc NewCleanCommander) Option {
 	return func(o *options) {
 		o.newCleanCommander = ncc
+	}
+}
+
+// WithNewListCommander sets the factory function for creating ListCommander instances.
+func WithNewListCommander(nlc NewListCommander) Option {
+	return func(o *options) {
+		o.newListCommander = nlc
 	}
 }
 
@@ -110,6 +130,7 @@ func newRootCmd(opts ...Option) *cobra.Command {
 	o := &options{
 		newAddCommander:    defaultNewAddCommander,
 		newCleanCommander:  defaultNewCleanCommander,
+		newListCommander:   defaultNewListCommander,
 		newRemoveCommander: defaultNewRemoveCommander,
 	}
 	for _, opt := range opts {
@@ -282,7 +303,7 @@ func newRootCmd(opts ...Option) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			quiet, _ := cmd.Flags().GetBool("quiet")
 
-			result, err := gwt.NewListCommand(cwd).Run()
+			result, err := o.newListCommander(cwd).Run()
 			if err != nil {
 				return err
 			}

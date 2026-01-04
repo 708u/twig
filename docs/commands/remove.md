@@ -18,6 +18,7 @@ gwt remove <branch>... [flags]
 |-------------|-------|----------------------------------------|
 | `--force`   | `-f`  | Force removal with uncommitted changes |
 | `--dry-run` |       | Show what would be removed             |
+| `--verbose` | `-v`  | Enable verbose output                  |
 
 ## Behavior
 
