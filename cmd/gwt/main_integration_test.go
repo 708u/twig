@@ -3,7 +3,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,21 +18,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 	t.Run("SourceBranchWorktree", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		// Setup gwt settings in main worktree
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`symlinks = [".envrc"]
-worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks(".envrc"))
 
 		// Commit the settings (but not .envrc - it should be symlinked, not tracked)
 		testutil.RunGit(t, mainDir, "add", ".gwt")
@@ -107,20 +92,6 @@ worktree_destination_base_dir = %q
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Setup gwt settings in main worktree
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`symlinks = [".envrc"]
-worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
-
 		// Commit the settings
 		testutil.RunGit(t, mainDir, "add", ".gwt")
 		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
@@ -166,7 +137,7 @@ worktree_destination_base_dir = %q
 	t.Run("SourceBranchNotFound", func(t *testing.T) {
 		t.Parallel()
 
-		_, mainDir := testutil.SetupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		git := gwt.NewGitRunner(mainDir)
 		_, err := git.WorktreeFindByBranch("nonexistent")
@@ -181,7 +152,7 @@ worktree_destination_base_dir = %q
 	t.Run("SourceBranchExistsButNoWorktree", func(t *testing.T) {
 		t.Parallel()
 
-		_, mainDir := testutil.SetupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		// Create a branch without a worktree
 		testutil.RunGit(t, mainDir, "branch", "orphan-branch")
@@ -203,22 +174,9 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 	t.Run("DefaultSourceAppliedWhenNoCliArg", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		// Setup gwt settings with default_source = "main"
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`symlinks = [".envrc"]
-worktree_source_dir = %q
-worktree_destination_base_dir = %q
-default_source = "main"
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		repoDir, mainDir := testutil.SetupTestRepo(t,
+			testutil.Symlinks(".envrc"),
+			testutil.DefaultSource("main"))
 
 		// Commit the settings
 		testutil.RunGit(t, mainDir, "add", ".gwt")
@@ -329,22 +287,7 @@ default_source = "main"
 	t.Run("DefaultSourceAppliedWithDirFlag", func(t *testing.T) {
 		t.Parallel()
 
-		repoDir, mainDir := testutil.SetupTestRepo(t)
-
-		// Setup gwt settings with default_source = "main"
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		settingsContent := fmt.Sprintf(`symlinks = [".envrc"]
-worktree_source_dir = %q
-worktree_destination_base_dir = %q
-default_source = "main"
-`, mainDir, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
-			t.Fatal(err)
-		}
+		_, mainDir := testutil.SetupTestRepo(t, testutil.DefaultSource("main"))
 
 		// Commit the settings
 		testutil.RunGit(t, mainDir, "add", ".gwt")
@@ -397,7 +340,7 @@ default_source = "main"
 	t.Run("LocalConfigOverridesDefaultSource", func(t *testing.T) {
 		t.Parallel()
 
-		_, mainDir := testutil.SetupTestRepo(t)
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		// Setup gwt settings with default_source = "main"
 		gwtDir := filepath.Join(mainDir, ".gwt")
