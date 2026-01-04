@@ -50,7 +50,7 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		addCmd := gwt.NewAddCommand(result.Config, gwt.AddOptions{})
+		addCmd := gwt.NewDefaultAddCommand(result.Config, gwt.AddOptions{})
 		_, err = addCmd.Run("feat/a")
 		if err != nil {
 			t.Fatalf("failed to create feat/a worktree: %v", err)
@@ -73,7 +73,7 @@ worktree_destination_base_dir = %q
 		}
 
 		// Create feat/b from main's config
-		addCmd = gwt.NewAddCommand(result.Config, gwt.AddOptions{})
+		addCmd = gwt.NewDefaultAddCommand(result.Config, gwt.AddOptions{})
 		addResult, err := addCmd.Run("feat/b")
 		if err != nil {
 			t.Fatalf("failed to create feat/b worktree: %v", err)
@@ -145,7 +145,7 @@ worktree_destination_base_dir = %q
 		}
 
 		// Create worktree using the resolved config
-		addCmd := gwt.NewAddCommand(result.Config, gwt.AddOptions{})
+		addCmd := gwt.NewDefaultAddCommand(result.Config, gwt.AddOptions{})
 		addResult, err := addCmd.Run("feat/coexist")
 		if err != nil {
 			t.Fatalf("failed to create worktree: %v", err)
@@ -235,7 +235,7 @@ default_source = "main"
 			t.Fatal(err)
 		}
 
-		addCmd := gwt.NewAddCommand(result.Config, gwt.AddOptions{})
+		addCmd := gwt.NewDefaultAddCommand(result.Config, gwt.AddOptions{})
 		_, err = addCmd.Run("feat/a")
 		if err != nil {
 			t.Fatalf("failed to create feat/a worktree: %v", err)
@@ -275,7 +275,7 @@ default_source = "main"
 		}
 
 		// Create feat/b using main's config
-		addCmd = gwt.NewAddCommand(resultMain.Config, gwt.AddOptions{})
+		addCmd = gwt.NewDefaultAddCommand(resultMain.Config, gwt.AddOptions{})
 		_, err = addCmd.Run("feat/b")
 		if err != nil {
 			t.Fatalf("failed to create feat/b worktree: %v", err)

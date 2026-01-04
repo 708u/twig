@@ -9,6 +9,9 @@ import (
 
 // SetupTestRepo creates a temporary git repository for testing.
 // Returns repoDir (parent directory) and mainDir (git repository root).
+//
+// TODO: Add option to create .gwt/settings.toml automatically.
+// Many tests duplicate the same setup code for gwt settings.
 func SetupTestRepo(t *testing.T) (repoDir, mainDir string) {
 	t.Helper()
 

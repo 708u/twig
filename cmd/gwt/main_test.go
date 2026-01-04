@@ -3,12 +3,14 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/708u/gwt"
+	"github.com/708u/gwt/internal/testutil"
 )
 
 func TestResolveDirectory(t *testing.T) {
@@ -208,6 +210,19 @@ func TestCleanCmd(t *testing.T) {
 	}
 }
 
+// mockAddCommander is a mock implementation of AddCommander for testing.
+type mockAddCommander struct {
+	result     gwt.AddResult
+	err        error
+	calledName string
+	calledOpts gwt.AddOptions
+}
+
+func (m *mockAddCommander) Run(name string) (gwt.AddResult, error) {
+	m.calledName = name
+	return m.result, m.err
+}
+
 // mockListCommander is a test double for ListCommander interface.
 type mockListCommander struct {
 	result gwt.ListResult
@@ -313,7 +328,6 @@ func TestListCmd(t *testing.T) {
 		})
 	}
 }
-
 // mockRemoveCommander implements RemoveCommander for testing.
 type mockRemoveCommander struct {
 	calls   []removeCall
@@ -340,6 +354,412 @@ func (m *mockRemoveCommander) Run(branch, cwd string, opts gwt.RemoveOptions) (g
 		return r.wt, r.err
 	}
 	return gwt.RemovedWorktree{Branch: branch, WorktreePath: "/test/" + branch}, nil
+}
+
+func TestAddCmd(t *testing.T) {
+	t.Parallel()
+
+	t.Run("BasicExecution", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/test",
+				WorktreePath: "/path/to/worktree",
+				Symlinks:     []gwt.SymlinkResult{},
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "feat/test"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if mock.calledName != "feat/test" {
+			t.Errorf("calledName = %q, want %q", mock.calledName, "feat/test")
+		}
+	})
+
+	t.Run("SyncFlag", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		var calledOpts gwt.AddOptions
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:        "feat/sync",
+				WorktreePath:  "/path/to/worktree",
+				ChangesSynced: true,
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			calledOpts = opts
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "--sync", "feat/sync"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !calledOpts.Sync {
+			t.Error("expected Sync option to be true")
+		}
+	})
+
+	t.Run("QuietFlag", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/quiet",
+				WorktreePath: "/path/to/worktree",
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "--quiet", "feat/quiet"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !strings.Contains(stdout.String(), "/path/to/worktree") {
+			t.Errorf("stdout = %q, want to contain worktree path", stdout.String())
+		}
+		if strings.Contains(stdout.String(), "gwt add:") {
+			t.Errorf("stdout = %q, should not contain 'gwt add:'", stdout.String())
+		}
+	})
+
+	t.Run("LockFlags", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		var calledOpts gwt.AddOptions
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/lock",
+				WorktreePath: "/path/to/worktree",
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			calledOpts = opts
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "--lock", "--reason", "USB work", "feat/lock"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !calledOpts.Lock {
+			t.Error("expected Lock option to be true")
+		}
+		if calledOpts.LockReason != "USB work" {
+			t.Errorf("LockReason = %q, want %q", calledOpts.LockReason, "USB work")
+		}
+	})
+
+	t.Run("ReasonWithoutLock", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/error",
+				WorktreePath: "/path/to/worktree",
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "--reason", "some reason", "feat/error"})
+
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "--reason requires --lock") {
+			t.Errorf("error = %q, want to contain %q", err.Error(), "--reason requires --lock")
+		}
+	})
+
+	t.Run("ErrorFromCommand", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/fail",
+				WorktreePath: "/path/to/worktree",
+			},
+			err: errors.New("worktree creation failed"),
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "feat/fail"})
+
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "worktree creation failed") {
+			t.Errorf("error = %q, want to contain %q", err.Error(), "worktree creation failed")
+		}
+	})
+
+	t.Run("OutputWithSymlinks", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/symlinks",
+				WorktreePath: "/path/to/worktree",
+				Symlinks: []gwt.SymlinkResult{
+					{Src: "/src/.envrc", Dst: "/dst/.envrc"},
+					{Src: "/src/.tool-versions", Dst: "/dst/.tool-versions"},
+				},
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "feat/symlinks"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !strings.Contains(stdout.String(), "2 symlinks") {
+			t.Errorf("stdout = %q, want to contain '2 symlinks'", stdout.String())
+		}
+	})
+
+	t.Run("OutputWithWarnings", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/warn",
+				WorktreePath: "/path/to/worktree",
+				Symlinks: []gwt.SymlinkResult{
+					{Src: "/src/.envrc", Dst: "/dst/.envrc"},
+					{Skipped: true, Reason: "pattern.txt does not match any files, skipping"},
+				},
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "feat/warn"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !strings.Contains(stdout.String(), "1 symlinks") {
+			t.Errorf("stdout = %q, want to contain '1 symlinks'", stdout.String())
+		}
+		if !strings.Contains(stderr.String(), "pattern.txt does not match any files") {
+			t.Errorf("stderr = %q, want to contain warning", stderr.String())
+		}
+	})
+
+	t.Run("SyncAndCarryMutuallyExclusive", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, filepath.Dir(mainDir))
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".gwt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/conflict",
+				WorktreePath: "/path/to/worktree",
+			},
+		}
+
+		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
+			return mock
+		}))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "--sync", "--carry=@", "feat/conflict"})
+
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "cannot use --sync and --carry together") {
+			t.Errorf("error = %q, want to contain %q", err.Error(), "cannot use --sync and --carry together")
+		}
+	})
 }
 
 func TestRemoveCmd(t *testing.T) {
