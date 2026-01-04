@@ -3,6 +3,7 @@
 package gwt
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -158,6 +159,24 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
+		// First, verify removal without --force fails with GitError and hint
+		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{})
+		if err == nil {
+			t.Fatal("expected error for uncommitted changes without --force")
+		}
+
+		var gitErr *GitError
+		if !errors.As(err, &gitErr) {
+			t.Fatalf("expected GitError, got %T: %v", err, err)
+		}
+		if gitErr.Op != OpWorktreeRemove {
+			t.Errorf("GitError.Op = %v, want %v", gitErr.Op, OpWorktreeRemove)
+		}
+		if hint := gitErr.Hint(); hint == "" {
+			t.Error("GitError.Hint() should return hint for uncommitted changes")
+		}
+
+		// Now verify --force succeeds
 		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{Force: true})
 		if err != nil {
 			t.Fatalf("Run with force failed: %v", err)
