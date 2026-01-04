@@ -1,6 +1,7 @@
 package gwt
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -17,6 +18,69 @@ type osGitExecutor struct{}
 
 func (e osGitExecutor) Run(args ...string) ([]byte, error) {
 	return exec.Command("git", args...).Output()
+}
+
+// GitOp represents the type of git operation.
+type GitOp int
+
+const (
+	OpWorktreeRemove GitOp = iota + 1
+	OpBranchDelete
+)
+
+func (op GitOp) String() string {
+	switch op {
+	case OpWorktreeRemove:
+		return "remove worktree"
+	case OpBranchDelete:
+		return "delete branch"
+	default:
+		return "unknown operation"
+	}
+}
+
+// GitError represents an error from a git operation with structured information.
+type GitError struct {
+	Op     GitOp
+	Stderr string
+	Err    error
+}
+
+func (e *GitError) Error() string {
+	if e.Stderr != "" {
+		return fmt.Sprintf("failed to %s: %v: %s", e.Op, e.Err, e.Stderr)
+	}
+	return fmt.Sprintf("failed to %s: %v", e.Op, e.Err)
+}
+
+func (e *GitError) Unwrap() error {
+	return e.Err
+}
+
+// Hint returns a helpful hint message based on the error content.
+func (e *GitError) Hint() string {
+	switch {
+	case strings.Contains(e.Stderr, "modified or untracked files"):
+		return "use 'gwt remove --force' to force removal"
+	case strings.Contains(e.Stderr, "locked working tree"):
+		return "run 'git worktree unlock <path>' first, or use 'gwt remove --force'"
+	default:
+		return ""
+	}
+}
+
+// newGitError creates a GitError from a git operation error.
+// It extracts stderr from exec.ExitError if available.
+func newGitError(op GitOp, err error) *GitError {
+	gitErr := &GitError{
+		Op:  op,
+		Err: err,
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+		gitErr.Stderr = strings.TrimSpace(string(exitErr.Stderr))
+	}
+	return gitErr
 }
 
 // GitRunner provides git operations using GitExecutor.
@@ -257,7 +321,7 @@ func (g *GitRunner) WorktreeRemove(path string, opts ...WorktreeRemoveOption) ([
 
 	out, err := g.worktreeRemove(path, o.force)
 	if err != nil {
-		return nil, fmt.Errorf("failed to remove worktree: %w", err)
+		return nil, newGitError(OpWorktreeRemove, err)
 	}
 	return out, nil
 }
@@ -286,7 +350,7 @@ func (g *GitRunner) BranchDelete(branch string, opts ...BranchDeleteOption) ([]b
 
 	out, err := g.branchDelete(branch, o.force)
 	if err != nil {
-		return nil, fmt.Errorf("failed to delete branch: %w", err)
+		return nil, newGitError(OpBranchDelete, err)
 	}
 	return out, nil
 }

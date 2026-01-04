@@ -1,6 +1,7 @@
 package gwt
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -19,13 +20,18 @@ type RemoveOptions struct {
 	DryRun bool
 }
 
-// NewRemoveCommand creates a new RemoveCommand with the given config.
-func NewRemoveCommand(cfg *Config) *RemoveCommand {
+// NewRemoveCommand creates a RemoveCommand with explicit dependencies.
+func NewRemoveCommand(fs FileSystem, git *GitRunner, cfg *Config) *RemoveCommand {
 	return &RemoveCommand{
-		FS:     osFS{},
-		Git:    NewGitRunner(cfg.WorktreeSourceDir),
+		FS:     fs,
+		Git:    git,
 		Config: cfg,
 	}
+}
+
+// NewDefaultRemoveCommand creates a RemoveCommand with production defaults.
+func NewDefaultRemoveCommand(cfg *Config) *RemoveCommand {
+	return NewRemoveCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir), cfg)
 }
 
 // RemovedWorktree holds the result of a single worktree removal.
@@ -70,7 +76,7 @@ func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 
 	for _, wt := range r.Removed {
 		if wt.Err != nil {
-			fmt.Fprintf(&stderr, "error: %s: %v\n", wt.Branch, wt.Err)
+			formatRemoveError(&stderr, wt.Branch, wt.Err, opts.Verbose)
 			continue
 		}
 		formatted := wt.Format(opts)
@@ -79,6 +85,24 @@ func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 	}
 
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
+}
+
+// formatRemoveError formats an error from the remove operation.
+// It shows a short error message, and optionally the detailed git error.
+func formatRemoveError(w *strings.Builder, branch string, err error, verbose bool) {
+	var gitErr *GitError
+	if errors.As(err, &gitErr) {
+		fmt.Fprintf(w, "error: %s: failed to %s\n", branch, gitErr.Op)
+		if verbose && gitErr.Stderr != "" {
+			fmt.Fprintf(w, "       git: %s\n", gitErr.Stderr)
+		}
+		if hint := gitErr.Hint(); hint != "" {
+			fmt.Fprintf(w, "hint: %s\n", hint)
+		}
+	} else {
+		// Fallback for non-GitError
+		fmt.Fprintf(w, "error: %s: %v\n", branch, err)
+	}
 }
 
 // Format formats the RemovedWorktree for display.
