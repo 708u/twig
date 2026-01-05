@@ -20,35 +20,7 @@ gwt init [flags]
 - Generates `.gwt/settings.toml` with default configuration template
 - If `settings.toml` already exists, skips creation (unless `--force` is used)
 
-### Generated Configuration
-
-The generated `settings.toml` contains:
-
-```toml
-# gwt project configuration
-# See: https://github.com/708u/gwt-worktree
-
-# Symlink patterns to create in new worktrees
-# Example: symlinks = [".envrc", ".tool-versions", "node_modules"]
-symlinks = []
-
-# Worktree destination base directory (default: ../<repo-name>-worktree)
-# worktree_destination_base_dir = "../my-worktrees"
-
-# Worktree source directory (default: current directory)
-# worktree_source_dir = "."
-
-# Default source branch for new worktrees
-# default_source = "main"
-```
-
-### Force Option
-
-With `--force`, overwrites the existing configuration file.
-
-```bash
-gwt init --force
-```
+See [Configuration](../configuration.md) for available settings.
 
 ## Examples
 
