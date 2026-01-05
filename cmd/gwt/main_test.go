@@ -107,15 +107,12 @@ func TestResolveCarryFrom(t *testing.T) {
 	t.Run("EmptyValue", func(t *testing.T) {
 		t.Parallel()
 
-		_, mainDir := testutil.SetupTestRepo(t)
-		git := gwt.NewGitRunner(mainDir)
-
-		_, err := resolveCarryFrom("", "/original", git)
+		_, err := resolveCarryFrom("", "/original", nil)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
-		if !strings.Contains(err.Error(), "failed to find worktree for branch") {
-			t.Errorf("error = %q, want to contain 'failed to find worktree for branch'", err.Error())
+		if !strings.Contains(err.Error(), "carry value cannot be empty") {
+			t.Errorf("error = %q, want to contain 'carry value cannot be empty'", err.Error())
 		}
 	})
 

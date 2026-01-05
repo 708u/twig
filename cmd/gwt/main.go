@@ -78,6 +78,8 @@ func resolveCarryFrom(carryValue, originalCwd string, git *gwt.GitRunner) (strin
 	switch carryValue {
 	case carryFromCurrent:
 		return originalCwd, nil
+	case "":
+		return "", fmt.Errorf("carry value cannot be empty")
 	default:
 		path, err := git.WorktreeFindByBranch(carryValue)
 		if err != nil {
