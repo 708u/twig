@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/708u/gwt"
-	"github.com/708u/gwt/internal/testutil"
+	"github.com/708u/twig"
+	"github.com/708u/twig/internal/testutil"
 )
 
 func TestAddCommand_SourceFlag_Integration(t *testing.T) {
@@ -21,8 +21,8 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.Symlinks(".envrc"))
 
 		// Commit the settings (but not .envrc - it should be symlinked, not tracked)
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		// Create .envrc in main after commit (local file to be symlinked)
 		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# main envrc"), 0644); err != nil {
@@ -30,12 +30,12 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		}
 
 		// Create first derived worktree (feat/a) from main
-		result, err := gwt.LoadConfig(mainDir)
+		result, err := twig.LoadConfig(mainDir)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		addCmd := gwt.NewDefaultAddCommand(result.Config, gwt.AddOptions{})
+		addCmd := twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
 		_, err = addCmd.Run("feat/a")
 		if err != nil {
 			t.Fatalf("failed to create feat/a worktree: %v", err)
@@ -45,20 +45,20 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 
 		// Now simulate --source main from feat/a worktree
 		// The PreRunE logic: resolve main branch to its worktree path, then reload config
-		git := gwt.NewGitRunner(featAPath)
+		git := twig.NewGitRunner(featAPath)
 		mainPath, err := git.WorktreeFindByBranch("main")
 		if err != nil {
 			t.Fatalf("failed to find main worktree: %v", err)
 		}
 
 		// Load config from main (as --source would do)
-		result, err = gwt.LoadConfig(mainPath)
+		result, err = twig.LoadConfig(mainPath)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		// Create feat/b from main's config
-		addCmd = gwt.NewDefaultAddCommand(result.Config, gwt.AddOptions{})
+		addCmd = twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
 		addResult, err := addCmd.Run("feat/b")
 		if err != nil {
 			t.Fatalf("failed to create feat/b worktree: %v", err)
@@ -93,8 +93,8 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
 		// Commit the settings
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		// Create .envrc in main
 		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# main envrc"), 0644); err != nil {
@@ -103,20 +103,20 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 
 		// Simulate -C pointing to mainDir and --source pointing to main
 		// This should work: -C sets working directory, --source sets source branch
-		git := gwt.NewGitRunner(mainDir)
+		git := twig.NewGitRunner(mainDir)
 		sourcePath, err := git.WorktreeFindByBranch("main")
 		if err != nil {
 			t.Fatalf("failed to find main worktree: %v", err)
 		}
 
 		// Load config from source (as --source would do after -C sets cwd)
-		result, err := gwt.LoadConfig(sourcePath)
+		result, err := twig.LoadConfig(sourcePath)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		// Create worktree using the resolved config
-		addCmd := gwt.NewDefaultAddCommand(result.Config, gwt.AddOptions{})
+		addCmd := twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
 		addResult, err := addCmd.Run("feat/coexist")
 		if err != nil {
 			t.Fatalf("failed to create worktree: %v", err)
@@ -139,7 +139,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		git := gwt.NewGitRunner(mainDir)
+		git := twig.NewGitRunner(mainDir)
 		_, err := git.WorktreeFindByBranch("nonexistent")
 		if err == nil {
 			t.Fatal("expected error for nonexistent branch")
@@ -157,7 +157,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		// Create a branch without a worktree
 		testutil.RunGit(t, mainDir, "branch", "orphan-branch")
 
-		git := gwt.NewGitRunner(mainDir)
+		git := twig.NewGitRunner(mainDir)
 		_, err := git.WorktreeFindByBranch("orphan-branch")
 		if err == nil {
 			t.Fatal("expected error for branch without worktree")
@@ -179,8 +179,8 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 			testutil.DefaultSource("main"))
 
 		// Commit the settings
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings with default_source")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings with default_source")
 
 		// Create .envrc in main
 		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# main envrc"), 0644); err != nil {
@@ -188,12 +188,12 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 		}
 
 		// Create first derived worktree (feat/a) from main
-		result, err := gwt.LoadConfig(mainDir)
+		result, err := twig.LoadConfig(mainDir)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		addCmd := gwt.NewDefaultAddCommand(result.Config, gwt.AddOptions{})
+		addCmd := twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
 		_, err = addCmd.Run("feat/a")
 		if err != nil {
 			t.Fatalf("failed to create feat/a worktree: %v", err)
@@ -208,7 +208,7 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 		}
 
 		// Load config from feat/a - it should have default_source = "main"
-		resultFeatA, err := gwt.LoadConfig(featAPath)
+		resultFeatA, err := twig.LoadConfig(featAPath)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -220,20 +220,20 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 
 		// When default_source is applied, config should be reloaded from main
 		// Simulate the PreRunE logic
-		git := gwt.NewGitRunner(featAPath)
+		git := twig.NewGitRunner(featAPath)
 		mainPath, err := git.WorktreeFindByBranch(resultFeatA.Config.DefaultSource)
 		if err != nil {
 			t.Fatalf("failed to find worktree for default_source: %v", err)
 		}
 
 		// Load config from main (as default_source would do)
-		resultMain, err := gwt.LoadConfig(mainPath)
+		resultMain, err := twig.LoadConfig(mainPath)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		// Create feat/b using main's config
-		addCmd = gwt.NewDefaultAddCommand(resultMain.Config, gwt.AddOptions{})
+		addCmd = twig.NewDefaultAddCommand(resultMain.Config, twig.AddOptions{})
 		_, err = addCmd.Run("feat/b")
 		if err != nil {
 			t.Fatalf("failed to create feat/b worktree: %v", err)
@@ -270,8 +270,8 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t, testutil.DefaultSource("main"))
 
 		// Commit the settings
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		// Create .envrc in main
 		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# main envrc"), 0644); err != nil {
@@ -280,7 +280,7 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 
 		// Simulate -C flag being set (dirFlag is not empty)
 		// Load config (as PersistentPreRunE would do with -C)
-		result, err := gwt.LoadConfig(mainDir)
+		result, err := twig.LoadConfig(mainDir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -304,25 +304,25 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		// Setup gwt settings with default_source = "main"
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		// Setup twig settings with default_source = "main"
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
 		projectSettings := `default_source = "main"`
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
 		// Create local settings that overrides default_source
 		localSettings := `default_source = "develop"`
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
 		// Load config
-		result, err := gwt.LoadConfig(mainDir)
+		result, err := twig.LoadConfig(mainDir)
 		if err != nil {
 			t.Fatal(err)
 		}

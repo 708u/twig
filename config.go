@@ -1,4 +1,4 @@
-package gwt
+package twig
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	configDir           = ".gwt"
+	configDir           = ".twig"
 	configFileName      = "settings.toml"
 	localConfigFileName = "settings.local.toml"
 )

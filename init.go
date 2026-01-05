@@ -1,18 +1,18 @@
-package gwt
+package twig
 
 import (
 	"fmt"
 	"path/filepath"
 )
 
-const settingsTemplate = `# gwt project configuration
-# See: https://github.com/708u/gwt-worktree
+const settingsTemplate = `# twig project configuration
+# See: https://github.com/708u/twig-worktree
 
 # Default source branch for new worktrees (prevents symlink chaining)
 default_source = "main"
 
 # Symlink patterns to create in new worktrees
-# Recommend: [".gwt/settings.local.toml"] to share local settings across worktrees
+# Recommend: [".twig/settings.local.toml"] to share local settings across worktrees
 symlinks = []
 
 # Worktree destination base directory (default: ../<repo-name>-worktree)
@@ -22,7 +22,7 @@ symlinks = []
 # extra_symlinks = [".envrc", ".tool-versions"]
 `
 
-// InitCommand initializes gwt configuration in a directory.
+// InitCommand initializes twig configuration in a directory.
 type InitCommand struct {
 	FS FileSystem
 }

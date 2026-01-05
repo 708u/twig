@@ -5,7 +5,7 @@ Create a new worktree with optional symlinks.
 ## Usage
 
 ```txt
-gwt add <name> [flags]
+twig add <name> [flags]
 ```
 
 ## Arguments
@@ -60,13 +60,13 @@ changes so that only the new worktree has them.
 
 ```bash
 # Move current work to a new branch
-gwt add feat/new --carry
+twig add feat/new --carry
 
 # Move changes from main worktree
-gwt add feat/new --carry=main
+twig add feat/new --carry=main
 
 # Move changes from feat/a worktree
-gwt add feat/new --source main --carry=feat/a
+twig add feat/new --source main --carry=feat/a
 ```
 
 The `--carry` option accepts an optional value to specify where to take
@@ -83,16 +83,16 @@ Use `--file` to carry only matching files:
 
 ```bash
 # Carry only Go files in root
-gwt add feat/new --carry --file "*.go"
+twig add feat/new --carry --file "*.go"
 
 # Carry all Go files recursively (globstar)
-gwt add feat/new --carry --file "**/*.go"
+twig add feat/new --carry --file "**/*.go"
 
 # Carry multiple patterns
-gwt add feat/new --carry --file "*.go" --file "cmd/**"
+twig add feat/new --carry --file "*.go" --file "cmd/**"
 
 # Carry specific file from another worktree
-gwt add feat/new --carry=feat/a --file config.toml
+twig add feat/new --carry=feat/a --file config.toml
 ```
 
 Patterns support globstar (`**`) for recursive matching.
@@ -119,7 +119,7 @@ With `--quiet`, only the worktree path is output to stdout.
 This is useful for piping to other commands.
 
 ```bash
-cd $(gwt add feat/x -q)
+cd $(twig add feat/x -q)
 ```
 
 When `--quiet` is specified, `--verbose` is ignored.
@@ -130,7 +130,7 @@ With `--source`, uses the specified branch's worktree as the source.
 
 ```bash
 # From a derived worktree, create a new worktree based on main
-gwt add feat/new --source main
+twig add feat/new --source main
 ```
 
 When `--source` is specified:
@@ -150,11 +150,11 @@ When used with `-C`:
 
 - `-C` sets the working directory and loads config from that location
 - `--source` searches for the branch within that directory's worktree group
-- This allows running `gwt add` from outside any worktree
+- This allows running `twig add` from outside any worktree
 
 ```bash
 # From any directory, create worktree using repo's settings
-gwt add feat/new -C /path/to/repo --source main
+twig add feat/new -C /path/to/repo --source main
 ```
 
 ### Lock Option
@@ -165,10 +165,10 @@ devices or network shares that are not always mounted.
 
 ```bash
 # Create a locked worktree
-gwt add feat/usb-work --lock
+twig add feat/usb-work --lock
 
 # Create a locked worktree with a reason
-gwt add feat/usb-work --lock --reason "USB drive work"
+twig add feat/usb-work --lock --reason "USB drive work"
 ```
 
 The `--reason` option requires `--lock` and adds an explanation for why
@@ -179,7 +179,7 @@ with git commands.
 
 ### Default Source Configuration
 
-The default source branch can be configured in `.gwt/settings.toml`:
+The default source branch can be configured in `.twig/settings.toml`:
 
 ```toml
 default_source = "main"
@@ -197,12 +197,12 @@ fully respected.
 
 ```bash
 # If /path/to/repo has default_source = "main" in its config:
-gwt add feat/new -C /path/to/repo
+twig add feat/new -C /path/to/repo
 # This is equivalent to:
-gwt add feat/new -C /path/to/repo --source main
+twig add feat/new -C /path/to/repo --source main
 ```
 
-The setting can be overridden in `.gwt/settings.local.toml` for personal
+The setting can be overridden in `.twig/settings.local.toml` for personal
 preferences:
 
 ```toml
@@ -215,7 +215,7 @@ branch with `--source`:
 
 ```bash
 # Explicitly use current worktree instead of default_source
-gwt add feat/x --source feat/a  # assuming you're on feat/a
+twig add feat/x --source feat/a  # assuming you're on feat/a
 ```
 
 ## Configuration

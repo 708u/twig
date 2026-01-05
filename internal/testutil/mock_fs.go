@@ -7,7 +7,7 @@ import (
 	"slices"
 )
 
-// MockFS is a mock implementation of gwt.FileSystem for testing.
+// MockFS is a mock implementation of twig.FileSystem for testing.
 type MockFS struct {
 	// Override functions (takes precedence if set)
 	StatFunc      func(name string) (fs.FileInfo, error)

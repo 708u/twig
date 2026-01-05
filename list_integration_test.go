@@ -1,6 +1,6 @@
 //go:build integration
 
-package gwt
+package twig
 
 import (
 	"path/filepath"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/708u/gwt/internal/testutil"
+	"github.com/708u/twig/internal/testutil"
 )
 
 func TestListCommand_Integration(t *testing.T) {

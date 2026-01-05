@@ -1,4 +1,4 @@
-package gwt
+package twig
 
 import (
 	"errors"
@@ -100,9 +100,9 @@ func (e *GitError) Unwrap() error {
 func (e *GitError) Hint() string {
 	switch {
 	case strings.Contains(e.Stderr, "modified or untracked files"):
-		return "use 'gwt remove --force' to force removal"
+		return "use 'twig remove --force' to force removal"
 	case strings.Contains(e.Stderr, "locked working tree"):
-		return "run 'git worktree unlock <path>' first, or use 'gwt remove --force'"
+		return "run 'git worktree unlock <path>' first, or use 'twig remove --force'"
 	default:
 		return ""
 	}

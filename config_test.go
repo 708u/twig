@@ -1,4 +1,4 @@
-package gwt
+package twig
 
 import (
 	"os"
@@ -14,22 +14,22 @@ func TestLoadConfig_SymlinksOverride(t *testing.T) {
 		t.Parallel()
 
 		tmpDir := t.TempDir()
-		gwtDir := filepath.Join(tmpDir, configDir)
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
 		// Project config with symlinks
 		projectSettings := `symlinks = [".envrc", ".config"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
 		// Local config overrides symlinks
 		localSettings := `symlinks = [".tool-versions"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -49,15 +49,15 @@ func TestLoadConfig_SymlinksOverride(t *testing.T) {
 		t.Parallel()
 
 		tmpDir := t.TempDir()
-		gwtDir := filepath.Join(tmpDir, configDir)
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
 		// Project config with symlinks
 		projectSettings := `symlinks = [".envrc", ".config"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -77,22 +77,22 @@ func TestLoadConfig_SymlinksOverride(t *testing.T) {
 		t.Parallel()
 
 		tmpDir := t.TempDir()
-		gwtDir := filepath.Join(tmpDir, configDir)
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
 		// Project config with symlinks
 		projectSettings := `symlinks = [".envrc"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
 		// Local config with empty symlinks array
 		localSettings := `symlinks = []
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -116,8 +116,8 @@ func TestLoadConfig_ExtraSymlinks(t *testing.T) {
 		t.Parallel()
 
 		tmpDir := t.TempDir()
-		gwtDir := filepath.Join(tmpDir, configDir)
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -125,7 +125,7 @@ func TestLoadConfig_ExtraSymlinks(t *testing.T) {
 		projectSettings := `symlinks = [".envrc"]
 extra_symlinks = [".tool-versions"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -151,8 +151,8 @@ extra_symlinks = [".tool-versions"]
 		t.Parallel()
 
 		tmpDir := t.TempDir()
-		gwtDir := filepath.Join(tmpDir, configDir)
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -160,7 +160,7 @@ extra_symlinks = [".tool-versions"]
 		projectSettings := `symlinks = [".envrc", ".tool-versions"]
 extra_symlinks = [".tool-versions", ".config"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -186,8 +186,8 @@ extra_symlinks = [".tool-versions", ".config"]
 		t.Parallel()
 
 		tmpDir := t.TempDir()
-		gwtDir := filepath.Join(tmpDir, configDir)
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -195,14 +195,14 @@ extra_symlinks = [".tool-versions", ".config"]
 		projectSettings := `symlinks = [".envrc"]
 extra_symlinks = [".project-extra"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
 		// Local config with extra_symlinks
 		localSettings := `extra_symlinks = [".local-extra"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -228,8 +228,8 @@ extra_symlinks = [".project-extra"]
 		t.Parallel()
 
 		tmpDir := t.TempDir()
-		gwtDir := filepath.Join(tmpDir, configDir)
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -237,7 +237,7 @@ extra_symlinks = [".project-extra"]
 		projectSettings := `symlinks = [".envrc", ".config"]
 extra_symlinks = [".project-extra"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -245,7 +245,7 @@ extra_symlinks = [".project-extra"]
 		localSettings := `symlinks = [".local-only"]
 extra_symlinks = [".local-extra"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -270,13 +270,13 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 
 		tmpDir := t.TempDir()
 		tmpDir, _ = filepath.EvalSymlinks(tmpDir)
-		gwtDir := filepath.Join(tmpDir, configDir)
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
 		// Empty config - WorktreeSourceDir should be set to tmpDir
-		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(""), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(""), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -295,8 +295,8 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 
 		tmpDir := t.TempDir()
 		tmpDir, _ = filepath.EvalSymlinks(tmpDir)
-		gwtDir := filepath.Join(tmpDir, configDir)
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -305,13 +305,13 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 
 		// Project config
 		projectSettings := "worktree_destination_base_dir = " + `"` + projectDestDir + `"` + "\n"
-		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
 		// Local config overrides
 		localSettings := "worktree_destination_base_dir = " + `"` + localDestDir + `"` + "\n"
-		if err := os.WriteFile(filepath.Join(gwtDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -330,8 +330,8 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 
 		tmpDir := t.TempDir()
 		tmpDir, _ = filepath.EvalSymlinks(tmpDir)
-		gwtDir := filepath.Join(tmpDir, configDir)
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -339,13 +339,13 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 
 		// Project config (empty)
 		projectSettings := ``
-		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
 		// Local config with worktree_destination_base_dir
 		localSettings := "worktree_destination_base_dir = " + `"` + localDestDir + `"` + "\n"
-		if err := os.WriteFile(filepath.Join(gwtDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 

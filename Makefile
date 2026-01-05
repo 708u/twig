@@ -1,7 +1,7 @@
 .PHONY: build
 
 install:
-	go install ./cmd/gwt
+	go install ./cmd/twig
 
 build:
-	go build -o out/gwt ./cmd/gwt
+	go build -o out/twig ./cmd/twig

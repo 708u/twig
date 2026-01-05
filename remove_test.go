@@ -1,4 +1,4 @@
-package gwt
+package twig
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/708u/gwt/internal/testutil"
+	"github.com/708u/twig/internal/testutil"
 )
 
 func TestRemoveResult_HasErrors(t *testing.T) {
@@ -82,7 +82,7 @@ func TestRemoveResult_Format(t *testing.T) {
 				Removed: []RemovedWorktree{{Branch: "feature/a", WorktreePath: "/repo/feature/a"}},
 			},
 			opts:       FormatOptions{},
-			wantStdout: "gwt remove: feature/a\n",
+			wantStdout: "twig remove: feature/a\n",
 			wantStderr: "",
 		},
 		{
@@ -94,7 +94,7 @@ func TestRemoveResult_Format(t *testing.T) {
 				},
 			},
 			opts:       FormatOptions{},
-			wantStdout: "gwt remove: feature/a\ngwt remove: feature/b\n",
+			wantStdout: "twig remove: feature/a\ntwig remove: feature/b\n",
 			wantStderr: "",
 		},
 		{
@@ -115,7 +115,7 @@ func TestRemoveResult_Format(t *testing.T) {
 				},
 			},
 			opts:       FormatOptions{},
-			wantStdout: "gwt remove: feature/a\n",
+			wantStdout: "twig remove: feature/a\n",
 			wantStderr: "error: feature/b: failed\n",
 		},
 		{
@@ -543,7 +543,7 @@ func TestRemovedWorktree_Format_WithCleanedDirs(t *testing.T) {
 			opts: FormatOptions{Verbose: true},
 			wantStdout: "Removed worktree and branch: feat/test\n" +
 				"Removed empty directory: /base/feat\n" +
-				"gwt remove: feat/test\n",
+				"twig remove: feat/test\n",
 		},
 		{
 			name: "normal_with_cleaned_dirs_not_shown",
@@ -554,7 +554,7 @@ func TestRemovedWorktree_Format_WithCleanedDirs(t *testing.T) {
 				DryRun:       false,
 			},
 			opts:       FormatOptions{Verbose: false},
-			wantStdout: "gwt remove: feat/test\n",
+			wantStdout: "twig remove: feat/test\n",
 		},
 	}
 
@@ -600,7 +600,7 @@ func TestGitError_Hint(t *testing.T) {
 				Op:     OpWorktreeRemove,
 				Stderr: "fatal: '/path' contains modified or untracked files",
 			},
-			want: "use 'gwt remove --force' to force removal",
+			want: "use 'twig remove --force' to force removal",
 		},
 		{
 			name: "locked_worktree",
@@ -608,7 +608,7 @@ func TestGitError_Hint(t *testing.T) {
 				Op:     OpWorktreeRemove,
 				Stderr: "fatal: cannot remove a locked working tree",
 			},
-			want: "run 'git worktree unlock <path>' first, or use 'gwt remove --force'",
+			want: "run 'git worktree unlock <path>' first, or use 'twig remove --force'",
 		},
 		{
 			name: "unknown_error",
@@ -663,7 +663,7 @@ func TestRemoveResult_Format_WithHint(t *testing.T) {
 				}},
 			},
 			opts:       FormatOptions{Verbose: false},
-			wantStderr: "error: feature/a: failed to remove worktree\nhint: use 'gwt remove --force' to force removal\n",
+			wantStderr: "error: feature/a: failed to remove worktree\nhint: use 'twig remove --force' to force removal\n",
 		},
 		{
 			name: "git_error_with_hint_verbose",
@@ -677,7 +677,7 @@ func TestRemoveResult_Format_WithHint(t *testing.T) {
 				}},
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStderr: "error: feature/a: failed to remove worktree\n       git: fatal: '/path' contains modified or untracked files\nhint: use 'gwt remove --force' to force removal\n",
+			wantStderr: "error: feature/a: failed to remove worktree\n       git: fatal: '/path' contains modified or untracked files\nhint: use 'twig remove --force' to force removal\n",
 		},
 		{
 			name: "git_error_without_hint",
@@ -705,7 +705,7 @@ func TestRemoveResult_Format_WithHint(t *testing.T) {
 				}},
 			},
 			opts:       FormatOptions{Verbose: false},
-			wantStderr: "error: feature/a: failed to remove worktree\nhint: run 'git worktree unlock <path>' first, or use 'gwt remove --force'\n",
+			wantStderr: "error: feature/a: failed to remove worktree\nhint: run 'git worktree unlock <path>' first, or use 'twig remove --force'\n",
 		},
 		{
 			name: "non_git_error_fallback",

@@ -5,5 +5,5 @@ out/
 .mcp.json
 .claude/settings.local.json
 
-# gwt local config
-.gwt/settings.local.toml
+# twig local config
+.twig/settings.local.toml

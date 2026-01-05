@@ -1,10 +1,10 @@
-package gwt
+package twig
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/708u/gwt/internal/testutil"
+	"github.com/708u/twig/internal/testutil"
 )
 
 func TestCleanResult_CleanableCount(t *testing.T) {
@@ -131,7 +131,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: false,
 			},
 			opts:       FormatOptions{},
-			wantStdout: "gwt clean: feat/a\ngwt clean: feat/b\n",
+			wantStdout: "twig clean: feat/a\ntwig clean: feat/b\n",
 			wantStderr: "",
 		},
 	}

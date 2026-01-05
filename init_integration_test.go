@@ -1,6 +1,6 @@
 //go:build integration
 
-package gwt
+package twig
 
 import (
 	"os"
@@ -27,10 +27,10 @@ func TestInitCommand_Integration(t *testing.T) {
 			t.Error("expected Created to be true")
 		}
 
-		// Verify .gwt directory was created
-		configDir := filepath.Join(tmpDir, ".gwt")
+		// Verify .twig directory was created
+		configDir := filepath.Join(tmpDir, ".twig")
 		if _, err := os.Stat(configDir); os.IsNotExist(err) {
-			t.Error(".gwt directory should exist")
+			t.Error(".twig directory should exist")
 		}
 
 		// Verify settings.toml was created
@@ -51,7 +51,7 @@ func TestInitCommand_Integration(t *testing.T) {
 			t.Fatalf("Run failed: %v", err)
 		}
 
-		settingsPath := filepath.Join(tmpDir, ".gwt", "settings.toml")
+		settingsPath := filepath.Join(tmpDir, ".twig", "settings.toml")
 		content, err := os.ReadFile(settingsPath)
 		if err != nil {
 			t.Fatalf("failed to read settings file: %v", err)
@@ -76,7 +76,7 @@ func TestInitCommand_Integration(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Create config directory and file first
-		configDir := filepath.Join(tmpDir, ".gwt")
+		configDir := filepath.Join(tmpDir, ".twig")
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -112,7 +112,7 @@ func TestInitCommand_Integration(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Create config directory and file first
-		configDir := filepath.Join(tmpDir, ".gwt")
+		configDir := filepath.Join(tmpDir, ".twig")
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -160,8 +160,8 @@ func TestInitCommand_Integration(t *testing.T) {
 		if !strings.Contains(formatted.Stdout, "Created") {
 			t.Errorf("output should contain 'Created': %s", formatted.Stdout)
 		}
-		if !strings.Contains(formatted.Stdout, ".gwt/settings.toml") {
-			t.Errorf("output should contain '.gwt/settings.toml': %s", formatted.Stdout)
+		if !strings.Contains(formatted.Stdout, ".twig/settings.toml") {
+			t.Errorf("output should contain '.twig/settings.toml': %s", formatted.Stdout)
 		}
 	})
 
@@ -171,7 +171,7 @@ func TestInitCommand_Integration(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Create settings file first
-		configDir := filepath.Join(tmpDir, ".gwt")
+		configDir := filepath.Join(tmpDir, ".twig")
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			t.Fatal(err)
 		}

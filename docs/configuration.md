@@ -1,13 +1,13 @@
 # Configuration
 
-gwt reads configuration from TOML files in the `.gwt/` directory.
+twig reads configuration from TOML files in the `.twig/` directory.
 
 ## Files
 
 | File                         | Purpose                                      |
 |------------------------------|----------------------------------------------|
-| `.gwt/settings.toml`         | Project-level settings (commit to repository)|
-| `.gwt/settings.local.toml`   | Local settings (add to .gitignore)           |
+| `.twig/settings.toml`         | Project-level settings (commit to repository)|
+| `.twig/settings.local.toml`   | Local settings (add to .gitignore)           |
 
 ## Fields
 
@@ -75,12 +75,12 @@ Use `extra_symlinks` to add personal patterns without overriding the base.
 Example:
 
 ```toml
-# .gwt/settings.toml (shared)
+# .twig/settings.toml (shared)
 symlinks = [".envrc", "config/**"]
 ```
 
 ```toml
-# .gwt/settings.local.toml (personal)
+# .twig/settings.local.toml (personal)
 extra_symlinks = [".tool-versions"]
 ```
 
@@ -89,7 +89,7 @@ Result: `.envrc`, `config/**`, `.tool-versions` are all symlinked.
 To completely replace project symlinks locally:
 
 ```toml
-# .gwt/settings.local.toml
+# .twig/settings.local.toml
 symlinks = [".my-envrc"]
 ```
 
@@ -98,14 +98,14 @@ Result: Only `.my-envrc` is symlinked (project symlinks ignored).
 ## Example Configuration
 
 ```toml
-# .gwt/settings.toml
+# .twig/settings.toml
 worktree_destination_base_dir = "/Users/dev/projects/myapp-worktree"
 default_source = "main"
 symlinks = [".envrc", ".tool-versions", "config/**"]
 ```
 
 ```toml
-# .gwt/settings.local.toml
+# .twig/settings.local.toml
 default_source = "develop"
 extra_symlinks = [".claude", ".local-config"]
 ```

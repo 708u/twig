@@ -1,9 +1,9 @@
-package gwt
+package twig
 
 import (
 	"testing"
 
-	"github.com/708u/gwt/internal/testutil"
+	"github.com/708u/twig/internal/testutil"
 )
 
 func TestListCommand_Run(t *testing.T) {

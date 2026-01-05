@@ -5,7 +5,7 @@ Remove merged worktrees that are no longer needed.
 ## Usage
 
 ```txt
-gwt clean [flags]
+twig clean [flags]
 ```
 
 ## Flags
@@ -70,15 +70,15 @@ The following conditions are never bypassed:
 - Current directory (dangerous to remove cwd)
 - Detached HEAD (RemoveCommand requires branch name)
 
-This matches `gwt remove` behavior where `-f` removes unclean worktrees
+This matches `twig remove` behavior where `-f` removes unclean worktrees
 and `-ff` also removes locked worktrees.
 
 ```bash
 # Force clean unmerged branches with uncommitted changes
-gwt clean -f --yes
+twig clean -f --yes
 
 # Also force clean locked worktrees
-gwt clean -ff --yes
+twig clean -ff --yes
 ```
 
 ### Target Branch Detection
@@ -114,17 +114,17 @@ skip:
 
 ```txt
 # Show candidates with confirmation prompt (default)
-gwt clean
+twig clean
 clean:
   feature/old-branch
   fix/completed
 
 Proceed? [y/N]: y
-gwt clean: feature/old-branch
-gwt clean: fix/completed
+twig clean: feature/old-branch
+twig clean: fix/completed
 
 # Show with skip reasons
-gwt clean -v
+twig clean -v
 clean:
   feature/old-branch
 
@@ -135,18 +135,18 @@ skip:
 Proceed? [y/N]:
 
 # Remove without confirmation
-gwt clean --yes
-gwt clean: feature/old-branch
-gwt clean: fix/completed
+twig clean --yes
+twig clean: feature/old-branch
+twig clean: fix/completed
 
 # Only check candidates (no prompt, no removal)
-gwt clean --check
+twig clean --check
 clean:
   feature/old-branch
   fix/completed
 
 # Check against specific branch
-gwt clean --target develop
+twig clean --target develop
 ```
 
 ## Exit Code

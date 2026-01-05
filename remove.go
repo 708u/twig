@@ -1,4 +1,4 @@
-package gwt
+package twig
 
 import (
 	"errors"
@@ -130,7 +130,7 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 		}
 	}
 
-	fmt.Fprintf(&stdout, "gwt remove: %s\n", r.Branch)
+	fmt.Fprintf(&stdout, "twig remove: %s\n", r.Branch)
 
 	return FormatResult{Stdout: stdout.String()}
 }

@@ -1,4 +1,4 @@
-package gwt
+package twig
 
 import (
 	"io/fs"

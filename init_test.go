@@ -1,11 +1,11 @@
-package gwt
+package twig
 
 import (
 	"errors"
 	"path/filepath"
 	"testing"
 
-	"github.com/708u/gwt/internal/testutil"
+	"github.com/708u/twig/internal/testutil"
 )
 
 func TestInitCommand_Run(t *testing.T) {
@@ -37,7 +37,7 @@ func TestInitCommand_Run(t *testing.T) {
 			opts: InitOptions{Force: false},
 			setupFS: func() *testutil.MockFS {
 				return &testutil.MockFS{
-					ExistingPaths: []string{filepath.Join("/test", ".gwt", "settings.toml")},
+					ExistingPaths: []string{filepath.Join("/test", ".twig", "settings.toml")},
 					WrittenFiles:  make(map[string][]byte),
 				}
 			},
@@ -49,7 +49,7 @@ func TestInitCommand_Run(t *testing.T) {
 			opts: InitOptions{Force: true},
 			setupFS: func() *testutil.MockFS {
 				return &testutil.MockFS{
-					ExistingPaths: []string{filepath.Join("/test", ".gwt", "settings.toml")},
+					ExistingPaths: []string{filepath.Join("/test", ".twig", "settings.toml")},
 					WrittenFiles:  make(map[string][]byte),
 				}
 			},
@@ -118,7 +118,7 @@ func TestInitCommand_Run(t *testing.T) {
 
 			// Verify file was written when created
 			if tt.wantCreated {
-				expectedPath := filepath.Join("/test", ".gwt", "settings.toml")
+				expectedPath := filepath.Join("/test", ".twig", "settings.toml")
 				if _, ok := mockFS.WrittenFiles[expectedPath]; !ok {
 					t.Errorf("expected file to be written at %s", expectedPath)
 				}
@@ -142,7 +142,7 @@ func TestInitResult_Format(t *testing.T) {
 				Created: true,
 			},
 			opts:       InitFormatOptions{},
-			wantStdout: "Created .gwt/settings.toml\n",
+			wantStdout: "Created .twig/settings.toml\n",
 		},
 		{
 			name: "skipped message",
@@ -150,7 +150,7 @@ func TestInitResult_Format(t *testing.T) {
 				Skipped: true,
 			},
 			opts:       InitFormatOptions{},
-			wantStdout: "Skipped .gwt/settings.toml (already exists)\n",
+			wantStdout: "Skipped .twig/settings.toml (already exists)\n",
 		},
 		{
 			name: "overwritten message",
@@ -159,7 +159,7 @@ func TestInitResult_Format(t *testing.T) {
 				Overwritten: true,
 			},
 			opts:       InitFormatOptions{},
-			wantStdout: "Created .gwt/settings.toml (overwritten)\n",
+			wantStdout: "Created .twig/settings.toml (overwritten)\n",
 		},
 	}
 

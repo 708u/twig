@@ -19,7 +19,7 @@ type setupConfig struct {
 	defaultSource string
 }
 
-// WithoutSettings skips creating .gwt/settings.toml.
+// WithoutSettings skips creating .twig/settings.toml.
 func WithoutSettings() SetupOption {
 	return func(c *setupConfig) {
 		c.skipSettings = true
@@ -51,7 +51,7 @@ func DefaultSource(branch string) SetupOption {
 // SetupTestRepo creates a temporary git repository for testing.
 // Returns repoDir (parent directory) and mainDir (git repository root).
 //
-// By default, creates .gwt/settings.toml without symlinks.
+// By default, creates .twig/settings.toml without symlinks.
 // Use Symlinks(...) to add symlink patterns.
 // Use WithoutSettings() to skip creating settings entirely.
 func SetupTestRepo(t *testing.T, opts ...SetupOption) (repoDir, mainDir string) {
@@ -88,8 +88,8 @@ func SetupTestRepo(t *testing.T, opts ...SetupOption) (repoDir, mainDir string) 
 func createSettings(t *testing.T, repoDir, mainDir string, cfg *setupConfig) {
 	t.Helper()
 
-	gwtDir := filepath.Join(mainDir, ".gwt")
-	if err := os.MkdirAll(gwtDir, 0755); err != nil {
+	twigDir := filepath.Join(mainDir, ".twig")
+	if err := os.MkdirAll(twigDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -115,7 +115,7 @@ func createSettings(t *testing.T, repoDir, mainDir string, cfg *setupConfig) {
 		content += fmt.Sprintf("default_source = %q\n", cfg.defaultSource)
 	}
 
-	settingsPath := filepath.Join(gwtDir, "settings.toml")
+	settingsPath := filepath.Join(twigDir, "settings.toml")
 	if err := os.WriteFile(settingsPath, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,7 @@ type MockWorktree struct {
 	Bare           bool
 }
 
-// MockGitExecutor is a mock implementation of gwt.GitExecutor for testing.
+// MockGitExecutor is a mock implementation of twig.GitExecutor for testing.
 type MockGitExecutor struct {
 	// RunFunc overrides the default behavior if set.
 	RunFunc func(args ...string) ([]byte, error)

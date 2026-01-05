@@ -1,6 +1,6 @@
 //go:build integration
 
-package gwt
+package twig
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/708u/gwt/internal/testutil"
+	"github.com/708u/twig/internal/testutil"
 )
 
 func TestCleanCommand_Integration(t *testing.T) {

@@ -5,7 +5,7 @@ List all worktrees.
 ## Usage
 
 ```txt
-gwt list [flags]
+twig list [flags]
 ```
 
 ## Flags
@@ -25,13 +25,13 @@ gwt list [flags]
 
 ```txt
 # Default output (git worktree list compatible)
-gwt list
+twig list
 /Users/user/repo                                   abc1234 [main]
 /Users/user/repo-worktree/feat/add-list-command    def5678 [feat/add-list-command]
 /Users/user/repo-worktree/feat/add-move-command    012abcd [feat/add-move-command]
 
 # Quiet output (paths only, for scripting)
-gwt list -q
+twig list -q
 /Users/user/repo
 /Users/user/repo-worktree/feat/add-list-command
 /Users/user/repo-worktree/feat/add-move-command
@@ -44,7 +44,7 @@ Combine with fzf for quick worktree navigation:
 ```bash
 gcd() {
   local selected
-  selected=$(gwt list -q | fzf +m) &&
+  selected=$(twig list -q | fzf +m) &&
   cd "$selected"
 }
 ```

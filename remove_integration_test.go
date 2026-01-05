@@ -1,6 +1,6 @@
 //go:build integration
 
-package gwt
+package twig
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/708u/gwt/internal/testutil"
+	"github.com/708u/twig/internal/testutil"
 )
 
 
@@ -187,7 +187,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		if gitErr.Op != OpWorktreeRemove {
 			t.Errorf("GitError.Op = %v, want %v", gitErr.Op, OpWorktreeRemove)
 		}
-		expectedHint := "run 'git worktree unlock <path>' first, or use 'gwt remove --force'"
+		expectedHint := "run 'git worktree unlock <path>' first, or use 'twig remove --force'"
 		if hint := gitErr.Hint(); hint != expectedHint {
 			t.Errorf("GitError.Hint() = %q, want %q", hint, expectedHint)
 		}

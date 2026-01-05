@@ -1,4 +1,4 @@
-package gwt
+package twig
 
 import (
 	"fmt"
@@ -121,7 +121,7 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 	} else if r.ChangesCarried {
 		syncInfo = ", carried"
 	}
-	stdout.WriteString(fmt.Sprintf("gwt add: %s (%d symlinks%s)\n", r.Branch, createdCount, syncInfo))
+	stdout.WriteString(fmt.Sprintf("twig add: %s (%d symlinks%s)\n", r.Branch, createdCount, syncInfo))
 
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 }
@@ -150,11 +150,11 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	var isCarry bool
 	var stashSourceGit *GitRunner
 	if c.Sync {
-		stashMsg = "gwt sync"
+		stashMsg = "twig sync"
 		stashSourceGit = c.Git
 	}
 	if c.CarryFrom != "" {
-		stashMsg = "gwt carry"
+		stashMsg = "twig carry"
 		isCarry = true
 		stashSourceGit = c.Git.InDir(c.CarryFrom)
 	}

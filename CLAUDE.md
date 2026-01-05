@@ -4,19 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-gwt is a Go CLI tool that simplifies git worktree workflows by automating
+twig is a Go CLI tool that simplifies git worktree workflows by automating
 related operations (branch creation, symlinks, etc.) in a single command.
 
 ## Project Structure
 
 ```txt
-cmd/gwt/         # CLI entrypoint (uses cobra)
+cmd/twig/         # CLI entrypoint (uses cobra)
 internal/testutil/  # Test mocks for FileSystem and GitExecutor
 *.go (root)      # Core library: commands, config, abstractions
 ```
 
-- `cmd/gwt`: CLI layer. Parses arguments and delegates to library.
-- Root package (`gwt`): Business logic as reusable library.
+- `cmd/twig`: CLI layer. Parses arguments and delegates to library.
+- Root package (`twig`): Business logic as reusable library.
   - Command structs (e.g., `AddCommand`) with injected dependencies
   - `Config`: Configuration loading from TOML files
   - Abstraction interfaces (`FileSystem`, `GitExecutor`) for testability
@@ -24,7 +24,7 @@ internal/testutil/  # Test mocks for FileSystem and GitExecutor
 
 ## Architecture
 
-### CLI Layer (cmd/gwt/)
+### CLI Layer (cmd/twig/)
 
 - Cobra framework with RunE pattern
 - No business logic - delegates to root package
@@ -54,7 +54,7 @@ Two-level design for testability:
 ### Configuration
 
 - TOML format with BurntSushi/toml
-- Two-tier: `.gwt/settings.toml` (project) + `settings.local.toml` (local)
+- Two-tier: `.twig/settings.toml` (project) + `settings.local.toml` (local)
 - Graceful handling of missing files
 
 ## Design Principles
@@ -67,7 +67,7 @@ Two-level design for testability:
 ## Common Commands
 
 ```bash
-make build                        # Build binary to out/gwt
+make build                        # Build binary to out/twig
 go test ./...                     # Run unit tests
 go test -tags=integration ./...   # Run integration tests
 ```

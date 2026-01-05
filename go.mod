@@ -1,4 +1,4 @@
-module github.com/708u/gwt
+module github.com/708u/twig
 
 go 1.25.5
 

@@ -1,4 +1,4 @@
-package gwt
+package twig
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/708u/gwt/internal/testutil"
+	"github.com/708u/twig/internal/testutil"
 )
 
 func TestAddCommand_Run(t *testing.T) {
@@ -485,7 +485,7 @@ func TestAddResult_Format(t *testing.T) {
 		{
 			name:       "default_output",
 			opts:       AddFormatOptions{},
-			wantStdout: "gwt add: feature/test (1 symlinks)\n",
+			wantStdout: "twig add: feature/test (1 symlinks)\n",
 			wantStderr: "",
 		},
 		{
@@ -503,7 +503,7 @@ func TestAddResult_Format(t *testing.T) {
 		{
 			name:       "verbose_output",
 			opts:       AddFormatOptions{Verbose: true},
-			wantStdout: "Created worktree at /worktrees/feature/test\nCreated symlink: /worktrees/feature/test/.envrc -> /repo/.envrc\ngwt add: feature/test (1 symlinks)\n",
+			wantStdout: "Created worktree at /worktrees/feature/test\nCreated symlink: /worktrees/feature/test/.envrc -> /repo/.envrc\ntwig add: feature/test (1 symlinks)\n",
 			wantStderr: "",
 		},
 	}
@@ -537,7 +537,7 @@ func TestAddResult_Format(t *testing.T) {
 		}
 
 		got := carriedResult.Format(AddFormatOptions{})
-		want := "gwt add: feature/test (1 symlinks, carried)\n"
+		want := "twig add: feature/test (1 symlinks, carried)\n"
 
 		if got.Stdout != want {
 			t.Errorf("Stdout = %q, want %q", got.Stdout, want)

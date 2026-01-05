@@ -1,4 +1,4 @@
-package gwt
+package twig
 
 import (
 	"fmt"
@@ -86,7 +86,7 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 				fmt.Fprintf(&stderr, "error: %s: %v\n", wt.Branch, wt.Err)
 				continue
 			}
-			fmt.Fprintf(&stdout, "gwt clean: %s\n", wt.Branch)
+			fmt.Fprintf(&stdout, "twig clean: %s\n", wt.Branch)
 		}
 		return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	}

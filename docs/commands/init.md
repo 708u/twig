@@ -1,11 +1,11 @@
 # init subcommand
 
-Initialize gwt configuration in the current directory.
+Initialize twig configuration in the current directory.
 
 ## Usage
 
 ```txt
-gwt init [flags]
+twig init [flags]
 ```
 
 ## Flags
@@ -16,8 +16,8 @@ gwt init [flags]
 
 ## Behavior
 
-- Creates `.gwt/` directory if it doesn't exist
-- Generates `.gwt/settings.toml` with default configuration template
+- Creates `.twig/` directory if it doesn't exist
+- Generates `.twig/settings.toml` with default configuration template
 - If `settings.toml` already exists, skips creation (unless `--force` is used)
 
 See [Configuration](../configuration.md) for available settings.
@@ -25,15 +25,15 @@ See [Configuration](../configuration.md) for available settings.
 ## Examples
 
 ```txt
-# Initialize gwt in current directory
-gwt init
-Created .gwt/settings.toml
+# Initialize twig in current directory
+twig init
+Created .twig/settings.toml
 
 # Running again without force skips
-gwt init
-Skipped .gwt/settings.toml (already exists)
+twig init
+Skipped .twig/settings.toml (already exists)
 
 # Force overwrite existing configuration
-gwt init --force
-Created .gwt/settings.toml (overwritten)
+twig init --force
+Created .twig/settings.toml (overwritten)
 ```

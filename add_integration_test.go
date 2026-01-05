@@ -1,6 +1,6 @@
 //go:build integration
 
-package gwt
+package twig
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/708u/gwt/internal/testutil"
+	"github.com/708u/twig/internal/testutil"
 )
 
 func TestAddCommand_Integration(t *testing.T) {
@@ -82,13 +82,13 @@ func TestAddCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
 		// Empty config - worktree_destination_base_dir should default based on config load dir
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(""), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(""), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -187,8 +187,8 @@ func TestAddCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -196,14 +196,14 @@ func TestAddCommand_Integration(t *testing.T) {
 		projectSettings := fmt.Sprintf(`symlinks = [".envrc", ".config"]
 worktree_destination_base_dir = %q
 `, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
 		// Local config overrides with only .tool-versions
 		localSettings := `symlinks = [".tool-versions"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -267,8 +267,8 @@ worktree_destination_base_dir = %q
 
 		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -277,7 +277,7 @@ worktree_destination_base_dir = %q
 extra_symlinks = [".tool-versions"]
 worktree_destination_base_dir = %q
 `, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -331,8 +331,8 @@ worktree_destination_base_dir = %q
 
 		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -340,14 +340,14 @@ worktree_destination_base_dir = %q
 		projectSettings := fmt.Sprintf(`symlinks = [".envrc"]
 worktree_destination_base_dir = %q
 `, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
 		// Local config adds extra_symlinks
 		localSettings := `extra_symlinks = [".local-only"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -401,8 +401,8 @@ worktree_destination_base_dir = %q
 
 		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -411,14 +411,14 @@ worktree_destination_base_dir = %q
 extra_symlinks = [".project-extra"]
 worktree_destination_base_dir = %q
 `, repoDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
 		// Local config adds extra_symlinks
 		localSettings := `extra_symlinks = [".local-extra"]
 `
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -488,22 +488,22 @@ worktree_destination_base_dir = %q
 		testutil.RunGit(t, mainDir, "config", "user.name", "Test User")
 		testutil.RunGit(t, mainDir, "commit", "--allow-empty", "-m", "initial")
 
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 
 		// Project config
 		projectSettings := fmt.Sprintf(`worktree_destination_base_dir = %q
 `, projectDestDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
 		// Local config overrides destination
 		localSettings := fmt.Sprintf(`worktree_destination_base_dir = %q
 `, localDestDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -685,9 +685,9 @@ worktree_destination_base_dir = %q
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Commit .gwt/settings.toml first
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		// Commit .twig/settings.toml first
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		// Create uncommitted changes in source
 		modifiedFile := filepath.Join(mainDir, "modified.txt")
@@ -748,9 +748,9 @@ worktree_destination_base_dir = %q
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Commit .gwt/settings.toml first
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		// Commit .twig/settings.toml first
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		// Create uncommitted changes in source
 		modifiedFile := filepath.Join(mainDir, "carried.txt")
@@ -813,9 +813,9 @@ worktree_destination_base_dir = %q
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Commit .gwt/settings.toml first
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		// Commit .twig/settings.toml first
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		// Create a feature worktree with uncommitted changes
 		featureWtPath := filepath.Join(repoDir, "feature", "source")
@@ -889,9 +889,9 @@ worktree_destination_base_dir = %q
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Commit .gwt/settings.toml to ensure no uncommitted changes
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		// Commit .twig/settings.toml to ensure no uncommitted changes
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		result, err := LoadConfig(mainDir)
 		if err != nil {
@@ -1026,9 +1026,9 @@ worktree_destination_base_dir = %q
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Commit .gwt/settings.toml first
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		// Commit .twig/settings.toml first
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		// Create multiple uncommitted files
 		goFile := filepath.Join(mainDir, "main.go")
@@ -1112,9 +1112,9 @@ worktree_destination_base_dir = %q
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Commit .gwt/settings.toml first
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		// Commit .twig/settings.toml first
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		// Create directory structure with multiple file types
 		cmdDir := filepath.Join(mainDir, "cmd")
@@ -1182,9 +1182,9 @@ worktree_destination_base_dir = %q
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Commit .gwt/settings.toml first
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		// Commit .twig/settings.toml first
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		// Create directory structure with Go files at different levels
 		subDir := filepath.Join(mainDir, "sub", "deep")

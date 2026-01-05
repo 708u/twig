@@ -1,4 +1,4 @@
-# gwt
+# twig
 
 A Git worktree extension that creates new worktrees with automatic branch creation and .gitignore symlink.
 

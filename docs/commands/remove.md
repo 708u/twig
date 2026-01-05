@@ -5,7 +5,7 @@ Remove worktrees and delete their associated branches.
 ## Usage
 
 ```txt
-gwt remove <branch>... [flags]
+twig remove <branch>... [flags]
 ```
 
 ## Arguments
@@ -36,7 +36,7 @@ worktrees and `git worktree remove -f -f` also removes locked worktrees.
 
 ### Empty Directory Cleanup
 
-After removing a worktree, gwt automatically removes any empty parent
+After removing a worktree, twig automatically removes any empty parent
 directories up to `WorktreeDestBaseDir`. This prevents orphan directories
 from blocking future branch creation.
 
@@ -44,7 +44,7 @@ Example:
 
 ```txt
 # Remove feat/test worktree
-gwt remove feat/test
+twig remove feat/test
 
 # If feat/ directory is now empty, it is also removed
 # This allows creating a 'feat' branch later
@@ -65,7 +65,7 @@ are reported at the end.
 
 ```txt
 # Remove multiple worktrees
-gwt remove feature/a feature/b feature/c
+twig remove feature/a feature/b feature/c
 ```
 
 ## Exit Code

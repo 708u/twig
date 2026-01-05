@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/708u/gwt"
-	"github.com/708u/gwt/internal/testutil"
+	"github.com/708u/twig"
+	"github.com/708u/twig/internal/testutil"
 )
 
 func TestResolveDirectory(t *testing.T) {
@@ -144,9 +144,9 @@ func TestResolveCarryFrom(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var git *gwt.GitRunner
+			var git *twig.GitRunner
 			if tt.worktrees != nil {
-				git = &gwt.GitRunner{
+				git = &twig.GitRunner{
 					Executor: &testutil.MockGitExecutor{Worktrees: tt.worktrees},
 					Dir:      "/mock",
 				}
@@ -174,11 +174,11 @@ func TestResolveCarryFrom(t *testing.T) {
 
 // mockCleanCommander is a test double for CleanCommander interface.
 type mockCleanCommander struct {
-	result gwt.CleanResult
+	result twig.CleanResult
 	err    error
 }
 
-func (m *mockCleanCommander) Run(cwd string, opts gwt.CleanOptions) (gwt.CleanResult, error) {
+func (m *mockCleanCommander) Run(cwd string, opts twig.CleanOptions) (twig.CleanResult, error) {
 	return m.result, m.err
 }
 
@@ -189,7 +189,7 @@ func TestCleanCmd(t *testing.T) {
 		name       string
 		args       []string
 		stdin      string
-		result     gwt.CleanResult
+		result     twig.CleanResult
 		wantStdout string
 		wantErr    bool
 	}{
@@ -197,8 +197,8 @@ func TestCleanCmd(t *testing.T) {
 			name:  "check_shows_candidates",
 			args:  []string{"clean", "--check"},
 			stdin: "",
-			result: gwt.CleanResult{
-				Candidates: []gwt.CleanCandidate{
+			result: twig.CleanResult{
+				Candidates: []twig.CleanCandidate{
 					{Branch: "feat/a", Skipped: false},
 				},
 				Check: true,
@@ -209,8 +209,8 @@ func TestCleanCmd(t *testing.T) {
 			name:  "check_no_candidates",
 			args:  []string{"clean", "--check"},
 			stdin: "",
-			result: gwt.CleanResult{
-				Candidates: []gwt.CleanCandidate{},
+			result: twig.CleanResult{
+				Candidates: []twig.CleanCandidate{},
 				Check:      true,
 			},
 			wantStdout: "No worktrees to clean\n",
@@ -219,8 +219,8 @@ func TestCleanCmd(t *testing.T) {
 			name:  "prompt_declined",
 			args:  []string{"clean"},
 			stdin: "n\n",
-			result: gwt.CleanResult{
-				Candidates: []gwt.CleanCandidate{
+			result: twig.CleanResult{
+				Candidates: []twig.CleanCandidate{
 					{Branch: "feat/a", Skipped: false},
 				},
 				Check: true,
@@ -231,10 +231,10 @@ func TestCleanCmd(t *testing.T) {
 			name:  "verbose_shows_skipped",
 			args:  []string{"clean", "--check", "-v"},
 			stdin: "",
-			result: gwt.CleanResult{
-				Candidates: []gwt.CleanCandidate{
+			result: twig.CleanResult{
+				Candidates: []twig.CleanCandidate{
 					{Branch: "feat/a", Skipped: false},
-					{Branch: "feat/b", Skipped: true, SkipReason: gwt.SkipNotMerged},
+					{Branch: "feat/b", Skipped: true, SkipReason: twig.SkipNotMerged},
 				},
 				Check: true,
 			},
@@ -281,23 +281,23 @@ func TestCleanCmd(t *testing.T) {
 
 // mockAddCommander is a mock implementation of AddCommander for testing.
 type mockAddCommander struct {
-	result     gwt.AddResult
+	result     twig.AddResult
 	err        error
 	calledName string
 }
 
-func (m *mockAddCommander) Run(name string) (gwt.AddResult, error) {
+func (m *mockAddCommander) Run(name string) (twig.AddResult, error) {
 	m.calledName = name
 	return m.result, m.err
 }
 
 // mockListCommander is a test double for ListCommander interface.
 type mockListCommander struct {
-	result gwt.ListResult
+	result twig.ListResult
 	err    error
 }
 
-func (m *mockListCommander) Run() (gwt.ListResult, error) {
+func (m *mockListCommander) Run() (twig.ListResult, error) {
 	return m.result, m.err
 }
 
@@ -307,7 +307,7 @@ func TestListCmd(t *testing.T) {
 	tests := []struct {
 		name       string
 		args       []string
-		result     gwt.ListResult
+		result     twig.ListResult
 		err        error
 		wantStdout string
 		wantErr    bool
@@ -315,8 +315,8 @@ func TestListCmd(t *testing.T) {
 		{
 			name: "default output",
 			args: []string{"list"},
-			result: gwt.ListResult{
-				Worktrees: []gwt.WorktreeInfo{
+			result: twig.ListResult{
+				Worktrees: []twig.WorktreeInfo{
 					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
 					{Path: "/repo/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
 				},
@@ -326,8 +326,8 @@ func TestListCmd(t *testing.T) {
 		{
 			name: "quiet flag outputs paths only",
 			args: []string{"list", "--quiet"},
-			result: gwt.ListResult{
-				Worktrees: []gwt.WorktreeInfo{
+			result: twig.ListResult{
+				Worktrees: []twig.WorktreeInfo{
 					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
 					{Path: "/repo/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
 				},
@@ -337,8 +337,8 @@ func TestListCmd(t *testing.T) {
 		{
 			name: "short flag -q",
 			args: []string{"list", "-q"},
-			result: gwt.ListResult{
-				Worktrees: []gwt.WorktreeInfo{
+			result: twig.ListResult{
+				Worktrees: []twig.WorktreeInfo{
 					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
 				},
 			},
@@ -347,8 +347,8 @@ func TestListCmd(t *testing.T) {
 		{
 			name: "empty list",
 			args: []string{"list"},
-			result: gwt.ListResult{
-				Worktrees: []gwt.WorktreeInfo{},
+			result: twig.ListResult{
+				Worktrees: []twig.WorktreeInfo{},
 			},
 			wantStdout: "",
 		},
@@ -404,33 +404,33 @@ type mockRemoveCommander struct {
 type removeCall struct {
 	branch string
 	cwd    string
-	opts   gwt.RemoveOptions
+	opts   twig.RemoveOptions
 }
 
 type removeResult struct {
-	wt  gwt.RemovedWorktree
+	wt  twig.RemovedWorktree
 	err error
 }
 
-func (m *mockRemoveCommander) Run(branch, cwd string, opts gwt.RemoveOptions) (gwt.RemovedWorktree, error) {
+func (m *mockRemoveCommander) Run(branch, cwd string, opts twig.RemoveOptions) (twig.RemovedWorktree, error) {
 	m.calls = append(m.calls, removeCall{branch, cwd, opts})
 	if m.idx < len(m.results) {
 		r := m.results[m.idx]
 		m.idx++
 		return r.wt, r.err
 	}
-	return gwt.RemovedWorktree{Branch: branch, WorktreePath: "/test/" + branch}, nil
+	return twig.RemovedWorktree{Branch: branch, WorktreePath: "/test/" + branch}, nil
 }
 
 // mockInitCommander implements InitCommander for testing.
 type mockInitCommander struct {
-	result     gwt.InitResult
+	result     twig.InitResult
 	err        error
 	calledDir  string
-	calledOpts gwt.InitOptions
+	calledOpts twig.InitOptions
 }
 
-func (m *mockInitCommander) Run(dir string, opts gwt.InitOptions) (gwt.InitResult, error) {
+func (m *mockInitCommander) Run(dir string, opts twig.InitOptions) (twig.InitResult, error) {
 	m.calledDir = dir
 	m.calledOpts = opts
 	return m.result, m.err
@@ -443,23 +443,23 @@ func TestAddCmd(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
 `, filepath.Dir(mainDir))
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/test",
 				WorktreePath: "/path/to/worktree",
-				Symlinks:     []gwt.SymlinkResult{},
+				Symlinks:     []twig.SymlinkResult{},
 			},
 		}
 
@@ -483,20 +483,20 @@ func TestAddCmd(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
 `, filepath.Dir(mainDir))
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:        "feat/sync",
 				WorktreePath:  "/path/to/worktree",
 				ChangesSynced: true,
@@ -523,20 +523,20 @@ func TestAddCmd(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
 `, filepath.Dir(mainDir))
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/quiet",
 				WorktreePath: "/path/to/worktree",
 			},
@@ -556,8 +556,8 @@ func TestAddCmd(t *testing.T) {
 		if !strings.Contains(stdout.String(), "/path/to/worktree") {
 			t.Errorf("stdout = %q, want to contain worktree path", stdout.String())
 		}
-		if strings.Contains(stdout.String(), "gwt add:") {
-			t.Errorf("stdout = %q, should not contain 'gwt add:'", stdout.String())
+		if strings.Contains(stdout.String(), "twig add:") {
+			t.Errorf("stdout = %q, should not contain 'twig add:'", stdout.String())
 		}
 	})
 
@@ -565,20 +565,20 @@ func TestAddCmd(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
 `, filepath.Dir(mainDir))
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/lock",
 				WorktreePath: "/path/to/worktree",
 			},
@@ -604,20 +604,20 @@ func TestAddCmd(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
 `, filepath.Dir(mainDir))
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/error",
 				WorktreePath: "/path/to/worktree",
 			},
@@ -643,20 +643,20 @@ func TestAddCmd(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
 `, filepath.Dir(mainDir))
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/fail",
 				WorktreePath: "/path/to/worktree",
 			},
@@ -683,23 +683,23 @@ func TestAddCmd(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
 `, filepath.Dir(mainDir))
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/symlinks",
 				WorktreePath: "/path/to/worktree",
-				Symlinks: []gwt.SymlinkResult{
+				Symlinks: []twig.SymlinkResult{
 					{Src: "/src/.envrc", Dst: "/dst/.envrc"},
 					{Src: "/src/.tool-versions", Dst: "/dst/.tool-versions"},
 				},
@@ -726,23 +726,23 @@ func TestAddCmd(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
 `, filepath.Dir(mainDir))
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/warn",
 				WorktreePath: "/path/to/worktree",
-				Symlinks: []gwt.SymlinkResult{
+				Symlinks: []twig.SymlinkResult{
 					{Src: "/src/.envrc", Dst: "/dst/.envrc"},
 					{Skipped: true, Reason: "pattern.txt does not match any files, skipping"},
 				},
@@ -774,7 +774,7 @@ func TestAddCmd(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t)
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/carry",
 				WorktreePath: "/path/to/worktree",
 			},
@@ -802,7 +802,7 @@ func TestAddCmd(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t)
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/carry-short",
 				WorktreePath: "/path/to/worktree",
 			},
@@ -830,7 +830,7 @@ func TestAddCmd(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t)
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/target",
 				WorktreePath: "/path/to/worktree",
 			},
@@ -858,20 +858,20 @@ func TestAddCmd(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
-		gwtDir := filepath.Join(mainDir, ".gwt")
-		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
 			t.Fatal(err)
 		}
 		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
 `, filepath.Dir(mainDir))
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
-		testutil.RunGit(t, mainDir, "add", ".gwt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/conflict",
 				WorktreePath: "/path/to/worktree",
 			},
@@ -919,7 +919,7 @@ func TestAddCmd(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		mock := &mockAddCommander{
-			result: gwt.AddResult{
+			result: twig.AddResult{
 				Branch:       "feat/file-test",
 				WorktreePath: "/path/to/worktree",
 			},
@@ -943,49 +943,49 @@ func TestRemoveCmd(t *testing.T) {
 	tests := []struct {
 		name      string
 		args      []string
-		wantForce gwt.WorktreeForceLevel
+		wantForce twig.WorktreeForceLevel
 		wantDry   bool
 	}{
 		{
 			name:      "no_flags",
 			args:      []string{"remove", "feat/a"},
-			wantForce: gwt.WorktreeForceLevelNone,
+			wantForce: twig.WorktreeForceLevelNone,
 			wantDry:   false,
 		},
 		{
 			name:      "force_flag",
 			args:      []string{"remove", "--force", "feat/a"},
-			wantForce: gwt.WorktreeForceLevelUnclean,
+			wantForce: twig.WorktreeForceLevelUnclean,
 			wantDry:   false,
 		},
 		{
 			name:      "force_short_flag",
 			args:      []string{"remove", "-f", "feat/a"},
-			wantForce: gwt.WorktreeForceLevelUnclean,
+			wantForce: twig.WorktreeForceLevelUnclean,
 			wantDry:   false,
 		},
 		{
 			name:      "force_double_short_flag",
 			args:      []string{"remove", "-ff", "feat/a"},
-			wantForce: gwt.WorktreeForceLevelLocked,
+			wantForce: twig.WorktreeForceLevelLocked,
 			wantDry:   false,
 		},
 		{
 			name:      "force_double_separate_flags",
 			args:      []string{"remove", "-f", "-f", "feat/a"},
-			wantForce: gwt.WorktreeForceLevelLocked,
+			wantForce: twig.WorktreeForceLevelLocked,
 			wantDry:   false,
 		},
 		{
 			name:      "dry_run_flag",
 			args:      []string{"remove", "--dry-run", "feat/a"},
-			wantForce: gwt.WorktreeForceLevelNone,
+			wantForce: twig.WorktreeForceLevelNone,
 			wantDry:   true,
 		},
 		{
 			name:      "force_and_dry_run",
 			args:      []string{"remove", "--force", "--dry-run", "feat/a"},
-			wantForce: gwt.WorktreeForceLevelUnclean,
+			wantForce: twig.WorktreeForceLevelUnclean,
 			wantDry:   true,
 		},
 	}
@@ -1036,16 +1036,16 @@ func TestRemoveCmd_OutputFormat(t *testing.T) {
 			name: "success_output",
 			args: []string{"remove", "feat/a"},
 			results: []removeResult{
-				{wt: gwt.RemovedWorktree{Branch: "feat/a", WorktreePath: "/test/feat/a"}},
+				{wt: twig.RemovedWorktree{Branch: "feat/a", WorktreePath: "/test/feat/a"}},
 			},
-			wantStdout: "gwt remove: feat/a\n",
+			wantStdout: "twig remove: feat/a\n",
 			wantStderr: "",
 		},
 		{
 			name: "error_output",
 			args: []string{"remove", "feat/a"},
 			results: []removeResult{
-				{wt: gwt.RemovedWorktree{}, err: errors.New("not found")},
+				{wt: twig.RemovedWorktree{}, err: errors.New("not found")},
 			},
 			wantStdout: "",
 			wantStderr: "error: feat/a: not found\n",
@@ -1125,7 +1125,7 @@ func TestInitCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		mock := &mockInitCommander{
-			result: gwt.InitResult{
+			result: twig.InitResult{
 				Created: true,
 			},
 		}
@@ -1154,7 +1154,7 @@ func TestInitCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		mock := &mockInitCommander{
-			result: gwt.InitResult{
+			result: twig.InitResult{
 				Created:     true,
 				Overwritten: true,
 			},
@@ -1182,7 +1182,7 @@ func TestInitCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		mock := &mockInitCommander{
-			result: gwt.InitResult{
+			result: twig.InitResult{
 				Created:     true,
 				Overwritten: true,
 			},
@@ -1235,7 +1235,7 @@ func TestInitCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		mock := &mockInitCommander{
-			result: gwt.InitResult{
+			result: twig.InitResult{
 				Skipped: true,
 			},
 		}
@@ -1262,7 +1262,7 @@ func TestInitCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		mock := &mockInitCommander{
-			result: gwt.InitResult{
+			result: twig.InitResult{
 				Created: true,
 			},
 		}
