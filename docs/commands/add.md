@@ -59,11 +59,11 @@ Unlike `--sync` which copies changes to both worktrees, `--carry` moves
 changes so that only the new worktree has them.
 
 ```bash
-# Move current work to a new branch (from source worktree)
+# Move current work to a new branch
 gwt add feat/new --carry
 
-# Move changes from current worktree, but base branch on main
-gwt add feat/new --source main --carry=@
+# Move changes from main worktree
+gwt add feat/new --carry=main
 
 # Move changes from feat/a worktree
 gwt add feat/new --source main --carry=feat/a
@@ -74,11 +74,8 @@ changes from:
 
 | Value         | Description                                    |
 |---------------|------------------------------------------------|
-| (no value)    | Take changes from source worktree (default)    |
-| `@`           | Take changes from current worktree             |
+| (no value)    | Take changes from current worktree (default)   |
 | `<branch>`    | Take changes from specified branch's worktree  |
-
-The `@` symbol follows git's HEAD alias convention, meaning "current location".
 
 #### Carrying Specific Files
 
@@ -141,9 +138,7 @@ When `--source` is specified:
 - Settings are loaded from the source branch's worktree
 - Symlinks are created from the source branch's worktree
 - With `--sync`, changes are stashed from the source branch's worktree
-- With `--carry` (no value), changes are stashed from the source branch's
-  worktree
-- With `--carry=@`, changes are stashed from the current worktree
+- With `--carry` (no value), changes are stashed from the current worktree
 - With `--carry=<branch>`, changes are stashed from the specified branch's
   worktree
 

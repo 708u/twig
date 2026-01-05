@@ -70,12 +70,13 @@ func WithRemoveCommander(cmd RemoveCommander) Option {
 	}
 }
 
+// carryFromCurrent is the sentinel value for --carry flag to use current worktree.
+const carryFromCurrent = "<current>"
+
 // resolveCarryFrom resolves the --carry flag value to a worktree path.
-func resolveCarryFrom(carryValue, cwd, originalCwd string, git *gwt.GitRunner) (string, error) {
+func resolveCarryFrom(carryValue, originalCwd string, git *gwt.GitRunner) (string, error) {
 	switch carryValue {
-	case "", "<source>":
-		return cwd, nil
-	case "@":
+	case carryFromCurrent:
 		return originalCwd, nil
 	default:
 		path, err := git.WorktreeFindByBranch(carryValue)
@@ -261,7 +262,7 @@ With --carry, use --file to carry only matching files:
 				carryValue, _ := cmd.Flags().GetString("carry")
 				git := gwt.NewGitRunner(cwd)
 				var err error
-				carryFrom, err = resolveCarryFrom(carryValue, cwd, originalCwd, git)
+				carryFrom, err = resolveCarryFrom(carryValue, originalCwd, git)
 				if err != nil {
 					return err
 				}
@@ -486,8 +487,8 @@ stop processing of remaining branches.`,
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
 
 	addCmd.Flags().BoolP("sync", "s", false, "Sync uncommitted changes to new worktree")
-	addCmd.Flags().StringP("carry", "c", "", "Move uncommitted changes from source worktree (@: from current, <branch>: from specified)")
-	addCmd.Flags().Lookup("carry").NoOptDefVal = "<source>"
+	addCmd.Flags().StringP("carry", "c", "", "Move uncommitted changes (<branch>: from specified worktree)")
+	addCmd.Flags().Lookup("carry").NoOptDefVal = carryFromCurrent
 	addCmd.Flags().BoolP("quiet", "q", false, "Output only the worktree path")
 	addCmd.Flags().String("source", "", "Source branch's worktree to use")
 	addCmd.Flags().Bool("lock", false, "Lock the worktree after creation")

@@ -104,43 +104,12 @@ func TestResolveDirectory(t *testing.T) {
 func TestResolveCarryFrom(t *testing.T) {
 	t.Parallel()
 
-	t.Run("EmptyValue", func(t *testing.T) {
+	t.Run("CurrentValue", func(t *testing.T) {
 		t.Parallel()
 
-		cwd := "/path/to/cwd"
 		originalCwd := "/path/to/original"
 
-		got, err := resolveCarryFrom("", cwd, originalCwd, nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got != cwd {
-			t.Errorf("got %q, want %q", got, cwd)
-		}
-	})
-
-	t.Run("SourceValue", func(t *testing.T) {
-		t.Parallel()
-
-		cwd := "/path/to/cwd"
-		originalCwd := "/path/to/original"
-
-		got, err := resolveCarryFrom("<source>", cwd, originalCwd, nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got != cwd {
-			t.Errorf("got %q, want %q", got, cwd)
-		}
-	})
-
-	t.Run("AtValue", func(t *testing.T) {
-		t.Parallel()
-
-		cwd := "/path/to/cwd"
-		originalCwd := "/path/to/original"
-
-		got, err := resolveCarryFrom("@", cwd, originalCwd, nil)
+		got, err := resolveCarryFrom(carryFromCurrent, originalCwd, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -156,7 +125,7 @@ func TestResolveCarryFrom(t *testing.T) {
 		git := gwt.NewGitRunner(mainDir)
 
 		// main branch already has a worktree at mainDir
-		got, err := resolveCarryFrom("main", mainDir, "/original", git)
+		got, err := resolveCarryFrom("main", "/original", git)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -171,7 +140,22 @@ func TestResolveCarryFrom(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t)
 		git := gwt.NewGitRunner(mainDir)
 
-		_, err := resolveCarryFrom("nonexistent", mainDir, "/original", git)
+		_, err := resolveCarryFrom("nonexistent", "/original", git)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "failed to find worktree for branch") {
+			t.Errorf("error = %q, want to contain 'failed to find worktree for branch'", err.Error())
+		}
+	})
+
+	t.Run("EmptyValue", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		git := gwt.NewGitRunner(mainDir)
+
+		_, err := resolveCarryFrom("", "/original", git)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
