@@ -108,6 +108,6 @@ worktree (e.g., main branch), preventing symlink chaining when creating
 worktrees from derived branches.
 
 Without `default_source`, symlinks are created from the current worktree.
-If you create worktree B from A, then C from B, the symlinks chain:
-`C -> B -> A`. With `default_source = "main"`, symlinks always point directly
-to main: `C -> main`, `B -> main`.
+For example, if you create `feat/api` from `main`, then `feat/api-v2` from
+`feat/api`, the symlinks chain: `feat/api-v2 -> feat/api -> main`.
+With `default_source = "main"`, symlinks always point directly to main.
