@@ -28,6 +28,45 @@ const (
 	OpBranchDelete
 )
 
+// Git command names.
+const (
+	GitCmdWorktree = "worktree"
+	GitCmdBranch   = "branch"
+	GitCmdStash    = "stash"
+	GitCmdStatus   = "status"
+	GitCmdRevParse = "rev-parse"
+)
+
+// Git worktree subcommands.
+const (
+	GitWorktreeAdd    = "add"
+	GitWorktreeRemove = "remove"
+	GitWorktreeList   = "list"
+	GitWorktreePrune  = "prune"
+)
+
+// Git stash subcommands.
+const (
+	GitStashPush  = "push"
+	GitStashApply = "apply"
+	GitStashDrop  = "drop"
+	GitStashList  = "list"
+)
+
+// Porcelain output format prefixes and values.
+const (
+	PorcelainWorktreePrefix = "worktree "
+	PorcelainHEADPrefix     = "HEAD "
+	PorcelainBranchPrefix   = "branch refs/heads/"
+	PorcelainDetached       = "detached"
+	PorcelainBare           = "bare"
+	PorcelainLocked         = "locked"
+	PorcelainPrunable       = "prunable"
+)
+
+// RefsHeadsPrefix is the git refs prefix for local branches.
+const RefsHeadsPrefix = "refs/heads/"
+
 func (op GitOp) String() string {
 	switch op {
 	case OpWorktreeRemove:
@@ -162,13 +201,13 @@ func (g *GitRunner) WorktreeAdd(path, branch string, opts ...WorktreeAddOption) 
 
 // BranchExists checks if a branch exists in the local repository.
 func (g *GitRunner) BranchExists(branch string) bool {
-	_, err := g.Run("rev-parse", "--verify", "refs/heads/"+branch)
+	_, err := g.Run(GitCmdRevParse, "--verify", RefsHeadsPrefix+branch)
 	return err == nil
 }
 
 // BranchList returns all local branch names.
 func (g *GitRunner) BranchList() ([]string, error) {
-	output, err := g.Run("branch", "--format=%(refname:short)")
+	output, err := g.Run(GitCmdBranch, "--format=%(refname:short)")
 	if err != nil {
 		return nil, err
 	}
@@ -223,24 +262,24 @@ func (g *GitRunner) WorktreeList() ([]WorktreeInfo, error) {
 	var current WorktreeInfo
 	for _, line := range strings.Split(string(out), "\n") {
 		switch {
-		case strings.HasPrefix(line, "worktree "):
-			current = WorktreeInfo{Path: strings.TrimPrefix(line, "worktree ")}
-		case strings.HasPrefix(line, "HEAD "):
-			current.HEAD = strings.TrimPrefix(line, "HEAD ")
-		case strings.HasPrefix(line, "branch refs/heads/"):
-			current.Branch = strings.TrimPrefix(line, "branch refs/heads/")
-		case line == "detached":
+		case strings.HasPrefix(line, PorcelainWorktreePrefix):
+			current = WorktreeInfo{Path: strings.TrimPrefix(line, PorcelainWorktreePrefix)}
+		case strings.HasPrefix(line, PorcelainHEADPrefix):
+			current.HEAD = strings.TrimPrefix(line, PorcelainHEADPrefix)
+		case strings.HasPrefix(line, PorcelainBranchPrefix):
+			current.Branch = strings.TrimPrefix(line, PorcelainBranchPrefix)
+		case line == PorcelainDetached:
 			current.Detached = true
-		case line == "bare":
+		case line == PorcelainBare:
 			current.Bare = true
-		case strings.HasPrefix(line, "locked"):
+		case strings.HasPrefix(line, PorcelainLocked):
 			current.Locked = true
-			if reason, ok := strings.CutPrefix(line, "locked "); ok {
+			if reason, ok := strings.CutPrefix(line, PorcelainLocked+" "); ok {
 				current.LockReason = reason
 			}
-		case strings.HasPrefix(line, "prunable"):
+		case strings.HasPrefix(line, PorcelainPrunable):
 			current.Prunable = true
-			if reason, ok := strings.CutPrefix(line, "prunable "); ok {
+			if reason, ok := strings.CutPrefix(line, PorcelainPrunable+" "); ok {
 				current.PrunableReason = reason
 			}
 		case line == "" && current.Path != "":
@@ -260,7 +299,7 @@ func (g *GitRunner) WorktreeListBranches() ([]string, error) {
 
 	var branches []string
 	for line := range strings.SplitSeq(string(output), "\n") {
-		if branch, ok := strings.CutPrefix(line, "branch refs/heads/"); ok {
+		if branch, ok := strings.CutPrefix(line, PorcelainBranchPrefix); ok {
 			branches = append(branches, branch)
 		}
 	}
@@ -284,10 +323,10 @@ func (g *GitRunner) WorktreeFindByBranch(branch string) (string, error) {
 	lines := strings.Split(string(out), "\n")
 	var currentPath string
 	for _, line := range lines {
-		if path, ok := strings.CutPrefix(line, "worktree "); ok {
+		if path, ok := strings.CutPrefix(line, PorcelainWorktreePrefix); ok {
 			currentPath = path
 		}
-		if branchName, ok := strings.CutPrefix(line, "branch refs/heads/"); ok {
+		if branchName, ok := strings.CutPrefix(line, PorcelainBranchPrefix); ok {
 			if branchName == branch {
 				return currentPath, nil
 			}
@@ -371,7 +410,7 @@ func (g *GitRunner) BranchDelete(branch string, opts ...BranchDeleteOption) ([]b
 // ChangedFiles returns a list of files with uncommitted changes
 // including staged, unstaged, and untracked files.
 func (g *GitRunner) ChangedFiles() ([]string, error) {
-	output, err := g.Run("status", "--porcelain", "-uall")
+	output, err := g.Run(GitCmdStatus, "--porcelain", "-uall")
 	if err != nil {
 		return nil, fmt.Errorf("failed to check git status: %w", err)
 	}
@@ -415,7 +454,7 @@ func (g *GitRunner) HasChanges() (bool, error) {
 // It can only stash tracked file changes, not untracked files.
 // See: https://git-scm.com/docs/git-stash
 func (g *GitRunner) StashPush(message string, pathspecs ...string) (string, error) {
-	args := []string{"stash", "push", "-u", "-m", message}
+	args := []string{GitCmdStash, GitStashPush, "-u", "-m", message}
 	if len(pathspecs) > 0 {
 		args = append(args, "--")
 		args = append(args, pathspecs...)
@@ -423,7 +462,7 @@ func (g *GitRunner) StashPush(message string, pathspecs ...string) (string, erro
 	if _, err := g.Run(args...); err != nil {
 		return "", err
 	}
-	out, err := g.Run("rev-parse", "stash@{0}")
+	out, err := g.Run(GitCmdRevParse, "stash@{0}")
 	if err != nil {
 		return "", err
 	}
@@ -432,7 +471,7 @@ func (g *GitRunner) StashPush(message string, pathspecs ...string) (string, erro
 
 // StashApplyByHash applies the stash with the given hash without dropping it.
 func (g *GitRunner) StashApplyByHash(hash string) ([]byte, error) {
-	return g.Run("stash", "apply", hash)
+	return g.Run(GitCmdStash, GitStashApply, hash)
 }
 
 // StashPopByHash applies and drops the stash with the given hash.
@@ -445,14 +484,14 @@ func (g *GitRunner) StashPopByHash(hash string) ([]byte, error) {
 
 // StashDropByHash drops the stash with the given hash.
 func (g *GitRunner) StashDropByHash(hash string) ([]byte, error) {
-	out, err := g.Run("stash", "list", "--format=%gd %H")
+	out, err := g.Run(GitCmdStash, GitStashList, "--format=%gd %H")
 	if err != nil {
 		return nil, err
 	}
 	for line := range strings.SplitSeq(string(out), "\n") {
 		if strings.HasSuffix(line, hash) {
 			ref := strings.Fields(line)[0]
-			return g.Run("stash", "drop", ref)
+			return g.Run(GitCmdStash, GitStashDrop, ref)
 		}
 	}
 	return nil, fmt.Errorf("stash not found: %s", hash)
@@ -461,25 +500,25 @@ func (g *GitRunner) StashDropByHash(hash string) ([]byte, error) {
 // private methods for git command execution
 
 func (g *GitRunner) worktreeAdd(path, branch string, o worktreeAddOptions) ([]byte, error) {
-	args := []string{"worktree", "add"}
+	args := []string{GitCmdWorktree, GitWorktreeAdd}
 	args = append(args, o.lockArgs()...)
 	args = append(args, path, branch)
 	return g.Run(args...)
 }
 
 func (g *GitRunner) worktreeAddWithNewBranch(branch, path string, o worktreeAddOptions) ([]byte, error) {
-	args := []string{"worktree", "add"}
+	args := []string{GitCmdWorktree, GitWorktreeAdd}
 	args = append(args, o.lockArgs()...)
 	args = append(args, "-b", branch, path)
 	return g.Run(args...)
 }
 
 func (g *GitRunner) worktreeListPorcelain() ([]byte, error) {
-	return g.Run("worktree", "list", "--porcelain")
+	return g.Run(GitCmdWorktree, GitWorktreeList, "--porcelain")
 }
 
 func (g *GitRunner) worktreeRemove(path string, forceLevel WorktreeForceLevel) ([]byte, error) {
-	args := []string{"worktree", "remove"}
+	args := []string{GitCmdWorktree, GitWorktreeRemove}
 	// git worktree remove:
 	// -f (once): remove unclean worktree
 	// -f -f (twice): also remove locked worktree
@@ -495,12 +534,12 @@ func (g *GitRunner) branchDelete(branch string, force bool) ([]byte, error) {
 	if force {
 		flag = "-D"
 	}
-	return g.Run("branch", flag, branch)
+	return g.Run(GitCmdBranch, flag, branch)
 }
 
 // IsBranchMerged checks if branch is merged into target.
 func (g *GitRunner) IsBranchMerged(branch, target string) (bool, error) {
-	out, err := g.Run("branch", "--merged", target, "--format=%(refname:short)")
+	out, err := g.Run(GitCmdBranch, "--merged", target, "--format=%(refname:short)")
 	if err != nil {
 		return false, fmt.Errorf("failed to check merged branches: %w", err)
 	}
@@ -514,7 +553,7 @@ func (g *GitRunner) IsBranchMerged(branch, target string) (bool, error) {
 
 // WorktreePrune removes references to worktrees that no longer exist.
 func (g *GitRunner) WorktreePrune() ([]byte, error) {
-	out, err := g.Run("worktree", "prune")
+	out, err := g.Run(GitCmdWorktree, GitWorktreePrune)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prune worktrees: %w", err)
 	}
