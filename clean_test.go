@@ -465,14 +465,17 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		wt         WorktreeInfo
 		cwd        string
 		target     string
+		force      WorktreeForceLevel
 		setupGit   func() *testutil.MockGitExecutor
 		wantReason SkipReason
 	}{
+		// Basic cases (no force)
 		{
 			name:   "no_skip_for_valid_candidate",
 			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:    "/other/dir",
 			target: "main",
+			force:  WorktreeForceLevelNone,
 			setupGit: func() *testutil.MockGitExecutor {
 				return &testutil.MockGitExecutor{
 					MergedBranches: map[string][]string{
@@ -487,6 +490,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 			wt:         WorktreeInfo{Path: "/repo/feat/a", Detached: true},
 			cwd:        "/other/dir",
 			target:     "main",
+			force:      WorktreeForceLevelNone,
 			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
 			wantReason: SkipDetached,
 		},
@@ -495,6 +499,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
 			cwd:        "/other/dir",
 			target:     "main",
+			force:      WorktreeForceLevelNone,
 			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
 			wantReason: SkipLocked,
 		},
@@ -503,6 +508,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:        "/repo/feat/a/subdir",
 			target:     "main",
+			force:      WorktreeForceLevelNone,
 			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
 			wantReason: SkipCurrentDir,
 		},
@@ -511,6 +517,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:    "/other/dir",
 			target: "main",
+			force:  WorktreeForceLevelNone,
 			setupGit: func() *testutil.MockGitExecutor {
 				return &testutil.MockGitExecutor{
 					HasChanges: true,
@@ -523,6 +530,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:    "/other/dir",
 			target: "main",
+			force:  WorktreeForceLevelNone,
 			setupGit: func() *testutil.MockGitExecutor {
 				return &testutil.MockGitExecutor{
 					MergedBranches: map[string][]string{
@@ -531,6 +539,86 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 				}
 			},
 			wantReason: SkipNotMerged,
+		},
+		// Force level: Unclean (-f)
+		{
+			name:   "force_unclean_bypasses_has_changes",
+			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:    "/other/dir",
+			target: "main",
+			force:  WorktreeForceLevelUnclean,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					HasChanges: true,
+				}
+			},
+			wantReason: "",
+		},
+		{
+			name:   "force_unclean_bypasses_not_merged",
+			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:    "/other/dir",
+			target: "main",
+			force:  WorktreeForceLevelUnclean,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					MergedBranches: map[string][]string{
+						"main": {},
+					},
+				}
+			},
+			wantReason: "",
+		},
+		{
+			name:       "force_unclean_does_not_bypass_locked",
+			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+			cwd:        "/other/dir",
+			target:     "main",
+			force:      WorktreeForceLevelUnclean,
+			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
+			wantReason: SkipLocked,
+		},
+		// Force level: Locked (-ff)
+		{
+			name:       "force_locked_bypasses_locked",
+			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+			cwd:        "/other/dir",
+			target:     "main",
+			force:      WorktreeForceLevelLocked,
+			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
+			wantReason: "",
+		},
+		{
+			name:   "force_locked_bypasses_has_changes",
+			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:    "/other/dir",
+			target: "main",
+			force:  WorktreeForceLevelLocked,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					HasChanges: true,
+				}
+			},
+			wantReason: "",
+		},
+		// Never bypassed (even with -ff)
+		{
+			name:       "force_locked_does_not_bypass_detached",
+			wt:         WorktreeInfo{Path: "/repo/feat/a", Detached: true},
+			cwd:        "/other/dir",
+			target:     "main",
+			force:      WorktreeForceLevelLocked,
+			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
+			wantReason: SkipDetached,
+		},
+		{
+			name:       "force_locked_does_not_bypass_current_dir",
+			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			cwd:        "/repo/feat/a/subdir",
+			target:     "main",
+			force:      WorktreeForceLevelLocked,
+			setupGit:   func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
+			wantReason: SkipCurrentDir,
 		},
 	}
 
@@ -544,7 +632,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 				Git: &GitRunner{Executor: mockGit},
 			}
 
-			got := cmd.checkSkipReason(tt.wt, tt.cwd, tt.target)
+			got := cmd.checkSkipReason(tt.wt, tt.cwd, tt.target, tt.force)
 
 			if got != tt.wantReason {
 				t.Errorf("got %q, want %q", got, tt.wantReason)

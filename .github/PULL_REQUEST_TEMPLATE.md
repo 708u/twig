@@ -1,3 +1,5 @@
+## Overview
+
 ## Why
 
 <!-- Background, purpose, or problem to solve -->
@@ -15,6 +17,10 @@
 - [ ] Feature
 - [ ] Bug fix
 - [ ] Refactoring
+- [ ] Documentation
+- [ ] Test
+- [ ] CI/CD
+- [ ] Performance
 - [ ] Other
 
 ## How to Test
