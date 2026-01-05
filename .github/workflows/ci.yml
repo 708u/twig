@@ -58,8 +58,32 @@ jobs:
       - name: Run integration tests
         run: go test -tags=integration -count=1 ./...
 
+  completion-check:
+    needs: check-changes
+    if: needs.check-changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+          cache: true
+
+      - name: Build twig
+        run: go build -o ./out/twig ./cmd/twig
+
+      - name: Check completion scripts are up to date
+        run: |
+          ./out/twig completion bash > completion/twig.bash
+          ./out/twig completion zsh > completion/twig.zsh
+          ./out/twig completion fish > completion/twig.fish
+          ./out/twig completion powershell > completion/twig.ps1
+          git diff --exit-code completion/
+
   required-checks:
-    needs: [lint, integration-test]
+    needs: [lint, integration-test, completion-check]
     if: always()
     runs-on: ubuntu-latest
     steps:
