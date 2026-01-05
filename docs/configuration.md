@@ -60,12 +60,12 @@ extra_symlinks = [".tool-versions", ".claude"]
 
 When both files exist, settings are merged:
 
-| Field                           | Behavior                 |
-|---------------------------------|--------------------------|
-| `worktree_destination_base_dir` | Local overrides project  |
-| `default_source`                | Local overrides project  |
-| `symlinks`                      | Local overrides project  |
-| `extra_symlinks`                | Collected from both      |
+| Field                           | Behavior                | Default                        |
+|---------------------------------|-------------------------|--------------------------------|
+| `worktree_destination_base_dir` | Local overrides project | `<repo-name>-worktree` sibling |
+| `default_source`                | Local overrides project | (current worktree)             |
+| `symlinks`                      | Local overrides project | `[]`                           |
+| `extra_symlinks`                | Collected from both     | `[]`                           |
 
 ## symlinks vs extra_symlinks
 
