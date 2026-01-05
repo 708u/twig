@@ -19,7 +19,7 @@ Base directory where new worktrees are created.
 worktree_destination_base_dir = "/path/to/worktrees"
 ```
 
-Default: `<repo-name>-worktree` sibling directory.
+Default: `../<repo-name>-worktree`
 
 ### default_source
 
@@ -62,7 +62,7 @@ When both files exist, settings are merged:
 
 | Field                           | Behavior                | Default                        |
 |---------------------------------|-------------------------|--------------------------------|
-| `worktree_destination_base_dir` | Local overrides project | `<repo-name>-worktree` sibling |
+| `worktree_destination_base_dir` | Local overrides project | `../<repo-name>-worktree`      |
 | `default_source`                | Local overrides project | (current worktree)             |
 | `symlinks`                      | Local overrides project | `[]`                           |
 | `extra_symlinks`                | Collected from both     | `[]`                           |
