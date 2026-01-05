@@ -83,7 +83,7 @@ twig completion fish | source
 # Initialize settings
 twig init
 
-# Create a new worktree
+# Create a new worktree and branch
 twig add feat/new-feature
 
 # Move uncommitted changes to a new worktree
