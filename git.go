@@ -377,7 +377,8 @@ func (g *GitRunner) HasChanges() (bool, error) {
 	return len(output) > 0, nil
 }
 
-// StashPush stashes all changes including untracked files.
+// StashPush stashes changes including untracked files.
+// If pathspecs are provided, only matching files are stashed.
 // Returns the stash commit hash for later reference.
 //
 // Race condition note:
@@ -389,8 +390,13 @@ func (g *GitRunner) HasChanges() (bool, error) {
 // "stash create" does not support -u/--include-untracked option (git limitation).
 // It can only stash tracked file changes, not untracked files.
 // See: https://git-scm.com/docs/git-stash
-func (g *GitRunner) StashPush(message string) (string, error) {
-	if _, err := g.Run("stash", "push", "-u", "-m", message); err != nil {
+func (g *GitRunner) StashPush(message string, pathspecs ...string) (string, error) {
+	args := []string{"stash", "push", "-u", "-m", message}
+	if len(pathspecs) > 0 {
+		args = append(args, "--")
+		args = append(args, pathspecs...)
+	}
+	if _, err := g.Run(args...); err != nil {
 		return "", err
 	}
 	out, err := g.Run("rev-parse", "stash@{0}")

@@ -5,12 +5,13 @@ Create a new worktree with optional symlinks.
 ## Usage
 
 ```txt
-gwt add <name> [flags]
+gwt add <name> [flags] [-- <glob>...]
 ```
 
 ## Arguments
 
 - `<name>`: Branch name (required)
+- `<glob>...`: File patterns to carry (optional, requires `--carry`)
 
 ## Flags
 
@@ -79,12 +80,41 @@ changes from:
 
 The `@` symbol follows git's HEAD alias convention, meaning "current location".
 
+#### Carrying Specific Files
+
+You can specify file patterns after `--` to carry only matching files:
+
+```bash
+# Carry only Go files in root
+gwt add feat/new --carry -- "*.go"
+
+# Carry all Go files recursively (globstar)
+gwt add feat/new --carry -- "**/*.go"
+
+# Carry multiple patterns
+gwt add feat/new --carry -- "cmd/**" "internal/**"
+
+# Carry specific file from another worktree
+gwt add feat/new --carry=feat/a -- config.toml
+```
+
+Patterns support globstar (`**`) for recursive matching.
+
+When file patterns are specified:
+
+- Only matching files are stashed and carried to the new worktree
+- Non-matching files remain in the source worktree
+- The source worktree is not completely clean after carry
+
+Without file patterns, all uncommitted changes are carried (default behavior).
+
 If worktree creation or stash apply fails, changes are restored
 to the source worktree automatically.
 
 Constraints:
 
 - Cannot be used together with `--sync`
+- File patterns require the `--carry` flag
 
 ### Quiet Option
 
