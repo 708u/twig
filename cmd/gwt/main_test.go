@@ -433,9 +433,8 @@ func TestAddCmd(t *testing.T) {
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
+		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, filepath.Dir(mainDir))
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -474,9 +473,8 @@ worktree_destination_base_dir = %q
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
+		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, filepath.Dir(mainDir))
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -515,9 +513,8 @@ worktree_destination_base_dir = %q
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
+		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, filepath.Dir(mainDir))
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -558,9 +555,8 @@ worktree_destination_base_dir = %q
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
+		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, filepath.Dir(mainDir))
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -598,9 +594,8 @@ worktree_destination_base_dir = %q
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
+		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, filepath.Dir(mainDir))
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -638,9 +633,8 @@ worktree_destination_base_dir = %q
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
+		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, filepath.Dir(mainDir))
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -679,9 +673,8 @@ worktree_destination_base_dir = %q
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
+		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, filepath.Dir(mainDir))
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -723,9 +716,8 @@ worktree_destination_base_dir = %q
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
+		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, filepath.Dir(mainDir))
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -856,9 +848,8 @@ worktree_destination_base_dir = %q
 		if err := os.MkdirAll(gwtDir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, filepath.Dir(mainDir))
+		settingsContent := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, filepath.Dir(mainDir))
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
 			t.Fatal(err)
 		}

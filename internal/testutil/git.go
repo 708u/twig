@@ -93,8 +93,7 @@ func createSettings(t *testing.T, repoDir, mainDir string, cfg *setupConfig) {
 		t.Fatal(err)
 	}
 
-	content := fmt.Sprintf("worktree_source_dir = %q\n", mainDir)
-	content += fmt.Sprintf("worktree_destination_base_dir = %q\n", repoDir)
+	content := fmt.Sprintf("worktree_destination_base_dir = %q\n", repoDir)
 
 	if len(cfg.symlinks) > 0 {
 		quoted := make([]string, len(cfg.symlinks))

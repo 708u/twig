@@ -265,7 +265,7 @@ extra_symlinks = [".local-extra"]
 func TestLoadConfig_WorktreeDirs(t *testing.T) {
 	t.Parallel()
 
-	t.Run("LocalOverridesSourceDir", func(t *testing.T) {
+	t.Run("WorktreeSourceDirIsConfigLoadDir", func(t *testing.T) {
 		t.Parallel()
 
 		tmpDir := t.TempDir()
@@ -275,24 +275,8 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		projectSrcDir := filepath.Join(tmpDir, "project-src")
-		localSrcDir := filepath.Join(tmpDir, "local-src")
-		if err := os.MkdirAll(projectSrcDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.MkdirAll(localSrcDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		// Project config
-		projectSettings := "worktree_source_dir = " + `"` + projectSrcDir + `"` + "\n"
-		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(projectSettings), 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		// Local config overrides
-		localSettings := "worktree_source_dir = " + `"` + localSrcDir + `"` + "\n"
-		if err := os.WriteFile(filepath.Join(gwtDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
+		// Empty config - WorktreeSourceDir should be set to tmpDir
+		if err := os.WriteFile(filepath.Join(gwtDir, configFileName), []byte(""), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -301,8 +285,8 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if result.Config.WorktreeSourceDir != localSrcDir {
-			t.Errorf("WorktreeSourceDir = %q, want %q", result.Config.WorktreeSourceDir, localSrcDir)
+		if result.Config.WorktreeSourceDir != tmpDir {
+			t.Errorf("WorktreeSourceDir = %q, want %q", result.Config.WorktreeSourceDir, tmpDir)
 		}
 	})
 
@@ -341,7 +325,7 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 		}
 	})
 
-	t.Run("NoWarningForLocalWorktreeDirs", func(t *testing.T) {
+	t.Run("NoWarningForLocalWorktreeDestDir", func(t *testing.T) {
 		t.Parallel()
 
 		tmpDir := t.TempDir()
@@ -351,11 +335,7 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		localSrcDir := filepath.Join(tmpDir, "local-src")
 		localDestDir := filepath.Join(tmpDir, "local-dest")
-		if err := os.MkdirAll(localSrcDir, 0755); err != nil {
-			t.Fatal(err)
-		}
 
 		// Project config (empty)
 		projectSettings := ``
@@ -363,9 +343,8 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Local config with worktree_*_dir
-		localSettings := "worktree_source_dir = " + `"` + localSrcDir + `"` + "\n"
-		localSettings += "worktree_destination_base_dir = " + `"` + localDestDir + `"` + "\n"
+		// Local config with worktree_destination_base_dir
+		localSettings := "worktree_destination_base_dir = " + `"` + localDestDir + `"` + "\n"
 		if err := os.WriteFile(filepath.Join(gwtDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
 			t.Fatal(err)
 		}

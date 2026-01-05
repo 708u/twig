@@ -87,10 +87,8 @@ func TestAddCommand_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Omit worktree_destination_base_dir - should default to parent of srcDir
-		settingsContent := fmt.Sprintf(`worktree_source_dir = %q
-`, mainDir)
-		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		// Empty config - worktree_destination_base_dir should default based on config load dir
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(""), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -196,9 +194,8 @@ func TestAddCommand_Integration(t *testing.T) {
 
 		// Project config with .envrc and .config
 		projectSettings := fmt.Sprintf(`symlinks = [".envrc", ".config"]
-worktree_source_dir = %q
 worktree_destination_base_dir = %q
-`, mainDir, repoDir)
+`, repoDir)
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -278,9 +275,8 @@ worktree_destination_base_dir = %q
 		// Project config with symlinks and extra_symlinks
 		projectSettings := fmt.Sprintf(`symlinks = [".envrc"]
 extra_symlinks = [".tool-versions"]
-worktree_source_dir = %q
 worktree_destination_base_dir = %q
-`, mainDir, repoDir)
+`, repoDir)
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -342,9 +338,8 @@ worktree_destination_base_dir = %q
 
 		// Project config with symlinks only
 		projectSettings := fmt.Sprintf(`symlinks = [".envrc"]
-worktree_source_dir = %q
 worktree_destination_base_dir = %q
-`, mainDir, repoDir)
+`, repoDir)
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -414,9 +409,8 @@ worktree_destination_base_dir = %q
 		// Project config with symlinks and extra_symlinks
 		projectSettings := fmt.Sprintf(`symlinks = [".envrc"]
 extra_symlinks = [".project-extra"]
-worktree_source_dir = %q
 worktree_destination_base_dir = %q
-`, mainDir, repoDir)
+`, repoDir)
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -500,9 +494,8 @@ worktree_destination_base_dir = %q
 		}
 
 		// Project config
-		projectSettings := fmt.Sprintf(`worktree_source_dir = %q
-worktree_destination_base_dir = %q
-`, mainDir, projectDestDir)
+		projectSettings := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, projectDestDir)
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}

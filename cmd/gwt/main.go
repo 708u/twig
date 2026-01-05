@@ -225,7 +225,7 @@ With --carry, use --file to carry only matching files:
 				return fmt.Errorf("failed to find worktree for branch %q: %w", source, err)
 			}
 
-			// Update cwd and reload config
+			// Load config from source worktree
 			cwd = sourcePath
 			result, err := gwt.LoadConfig(cwd)
 			if err != nil {

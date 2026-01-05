@@ -30,8 +30,8 @@ gwt add <name> [flags]
 - Creates worktree at `WorktreeDestBaseDir/<name>`
 - If the branch already exists, uses that branch
 - If the branch doesn't exist, creates a new branch with `-b` flag
-- Creates symlinks from `WorktreeSourceDir` to worktree
-  based on `Config.Symlinks` patterns
+- Creates symlinks from source worktree to new worktree
+  based on `symlinks` patterns (see [Configuration](../configuration.md))
 - Warns when symlink patterns don't match any files
 
 ### Sync Option

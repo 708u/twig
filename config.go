@@ -20,8 +20,8 @@ type Config struct {
 	Symlinks            []string `toml:"symlinks"`
 	ExtraSymlinks       []string `toml:"extra_symlinks"`
 	WorktreeDestBaseDir string   `toml:"worktree_destination_base_dir"`
-	WorktreeSourceDir   string   `toml:"worktree_source_dir"`
 	DefaultSource       string   `toml:"default_source"`
+	WorktreeSourceDir   string   // Set by LoadConfig to the config load directory
 }
 
 // LoadConfigResult contains the loaded config and any warnings.
@@ -84,21 +84,10 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 		defaultSource = localCfg.DefaultSource
 	}
 
-	// worktree_source_dir: local overrides project
-	var srcDirConfig string
-	if projCfg != nil && projCfg.WorktreeSourceDir != "" {
-		srcDirConfig = projCfg.WorktreeSourceDir
-	}
-	if localCfg != nil && localCfg.WorktreeSourceDir != "" {
-		srcDirConfig = localCfg.WorktreeSourceDir
-	}
-	srcDir := dir
-	if srcDirConfig != "" {
-		srcDir = srcDirConfig
-	}
-	srcDir, err = filepath.Abs(srcDir)
+	// SourceDir is always the directory where config is loaded from
+	srcDir, err := filepath.Abs(dir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve worktree source directory: %w", err)
+		return nil, fmt.Errorf("failed to resolve source directory: %w", err)
 	}
 
 	// worktree_destination_base_dir: local overrides project
@@ -124,8 +113,8 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 			Symlinks:            symlinks,
 			ExtraSymlinks:       extraSymlinks,
 			WorktreeDestBaseDir: destBaseDir,
-			WorktreeSourceDir:   srcDir,
 			DefaultSource:       defaultSource,
+			WorktreeSourceDir:   srcDir,
 		},
 		Warnings: warnings,
 	}, nil
