@@ -191,9 +191,21 @@ func newRootCmd(opts ...Option) *cobra.Command {
 	}
 
 	addCmd := &cobra.Command{
-		Use:   "add <name> [-- <glob>...]",
+		Use:   "add <name>",
 		Short: "Create a new worktree with a new branch",
-		Args:  cobra.MinimumNArgs(1),
+		Long: `Create a new worktree with a new branch.
+
+Creates worktree at WorktreeDestBaseDir/<name> and sets up symlinks
+based on configuration.
+
+Use --sync to copy uncommitted changes (both worktrees keep them).
+Use --carry to move uncommitted changes (only new worktree has them).
+
+With --carry, use --file to carry only matching files:
+
+  gwt add feat/new --carry --file "*.go"
+  gwt add feat/new --carry --file "*.go" --file "cmd/**"`,
+		Args: cobra.ExactArgs(1),
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) >= 1 {
 				return nil, cobra.ShellCompDirectiveNoFileComp
@@ -255,19 +267,12 @@ func newRootCmd(opts ...Option) *cobra.Command {
 			lockReason, _ := cmd.Flags().GetString("reason")
 			carryEnabled := cmd.Flags().Changed("carry")
 
-			// Parse file patterns after --
-			var carryFiles []string
-			dashPos := cmd.ArgsLenAtDash()
-			if dashPos >= 0 {
-				carryFiles = args[dashPos:]
-			} else if len(args) > 1 {
-				// Extra args without -- are not allowed
-				return fmt.Errorf("accepts 1 arg(s), received %d", len(args))
-			}
+			// Get file patterns from --file flag
+			carryFiles, _ := cmd.Flags().GetStringArray("file")
 
-			// File patterns require --carry
+			// --file requires --carry
 			if len(carryFiles) > 0 && !carryEnabled {
-				return fmt.Errorf("file patterns require --carry flag")
+				return fmt.Errorf("--file requires --carry flag")
 			}
 
 			// --reason requires --lock
@@ -496,6 +501,39 @@ stop processing of remaining branches.`,
 	addCmd.Flags().String("source", "", "Source branch's worktree to use")
 	addCmd.Flags().Bool("lock", false, "Lock the worktree after creation")
 	addCmd.Flags().String("reason", "", "Reason for locking (requires --lock)")
+	addCmd.Flags().StringArrayP("file", "F", nil, "File patterns to carry (requires --carry)")
+	addCmd.RegisterFlagCompletionFunc("file", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		// Resolve target directory from -C flag
+		dir, err := resolveCompletionDirectory(cmd)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+
+		// If --source is specified, resolve to that worktree
+		if source, _ := cmd.Flags().GetString("source"); source != "" {
+			git := gwt.NewGitRunner(dir)
+			if sourcePath, err := git.WorktreeFindByBranch(source); err == nil {
+				dir = sourcePath
+			}
+		}
+
+		// Get changed files from the target directory
+		git := gwt.NewGitRunner(dir)
+		files, err := git.ChangedFiles()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+
+		// Filter by prefix
+		var completions []string
+		for _, file := range files {
+			if strings.HasPrefix(file, toComplete) {
+				completions = append(completions, file)
+			}
+		}
+
+		return completions, cobra.ShellCompDirectiveNoSpace
+	})
 	rootCmd.AddCommand(addCmd)
 
 	listCmd.Flags().BoolP("quiet", "q", false, "Output only worktree paths")

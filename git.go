@@ -368,13 +368,37 @@ func (g *GitRunner) BranchDelete(branch string, opts ...BranchDeleteOption) ([]b
 	return out, nil
 }
 
+// ChangedFiles returns a list of files with uncommitted changes
+// including staged, unstaged, and untracked files.
+func (g *GitRunner) ChangedFiles() ([]string, error) {
+	output, err := g.Run("status", "--porcelain", "-uall")
+	if err != nil {
+		return nil, fmt.Errorf("failed to check git status: %w", err)
+	}
+
+	var files []string
+	for _, line := range strings.Split(string(output), "\n") {
+		if len(line) < 3 {
+			continue
+		}
+		// Format: "XY filename" where XY is 2-char status
+		file := strings.TrimSpace(line[2:])
+		// Handle renamed files "old -> new"
+		if idx := strings.Index(file, " -> "); idx != -1 {
+			file = file[idx+4:]
+		}
+		files = append(files, file)
+	}
+	return files, nil
+}
+
 // HasChanges checks if there are any uncommitted changes (staged, unstaged, or untracked).
 func (g *GitRunner) HasChanges() (bool, error) {
-	output, err := g.Run("status", "--porcelain")
+	files, err := g.ChangedFiles()
 	if err != nil {
-		return false, fmt.Errorf("failed to check git status: %w", err)
+		return false, err
 	}
-	return len(output) > 0, nil
+	return len(files) > 0, nil
 }
 
 // StashPush stashes changes including untracked files.

@@ -5,13 +5,12 @@ Create a new worktree with optional symlinks.
 ## Usage
 
 ```txt
-gwt add <name> [flags] [-- <glob>...]
+gwt add <name> [flags]
 ```
 
 ## Arguments
 
 - `<name>`: Branch name (required)
-- `<glob>...`: File patterns to carry (optional, requires `--carry`)
 
 ## Flags
 
@@ -19,6 +18,7 @@ gwt add <name> [flags] [-- <glob>...]
 |-----------------------|-------|----------------------------------------------------|
 | `--sync`              | `-s`  | Sync uncommitted changes to new worktree           |
 | `--carry [<branch>]`  | `-c`  | Carry uncommitted changes (optionally from branch) |
+| `--file <pattern>`    | `-F`  | File patterns to carry (requires `--carry`)        |
 | `--quiet`             | `-q`  | Output only the worktree path                      |
 | `--verbose`           | `-v`  | Enable verbose output                              |
 | `--source <branch>`   |       | Use specified branch's worktree as source          |
@@ -82,31 +82,31 @@ The `@` symbol follows git's HEAD alias convention, meaning "current location".
 
 #### Carrying Specific Files
 
-You can specify file patterns after `--` to carry only matching files:
+Use `--file` to carry only matching files:
 
 ```bash
 # Carry only Go files in root
-gwt add feat/new --carry -- "*.go"
+gwt add feat/new --carry --file "*.go"
 
 # Carry all Go files recursively (globstar)
-gwt add feat/new --carry -- "**/*.go"
+gwt add feat/new --carry --file "**/*.go"
 
 # Carry multiple patterns
-gwt add feat/new --carry -- "cmd/**" "internal/**"
+gwt add feat/new --carry --file "*.go" --file "cmd/**"
 
 # Carry specific file from another worktree
-gwt add feat/new --carry=feat/a -- config.toml
+gwt add feat/new --carry=feat/a --file config.toml
 ```
 
 Patterns support globstar (`**`) for recursive matching.
 
-When file patterns are specified:
+When `--file` is specified:
 
 - Only matching files are stashed and carried to the new worktree
 - Non-matching files remain in the source worktree
 - The source worktree is not completely clean after carry
 
-Without file patterns, all uncommitted changes are carried (default behavior).
+Without `--file`, all uncommitted changes are carried (default behavior).
 
 If worktree creation or stash apply fails, changes are restored
 to the source worktree automatically.
@@ -114,7 +114,7 @@ to the source worktree automatically.
 Constraints:
 
 - Cannot be used together with `--sync`
-- File patterns require the `--carry` flag
+- `--file` requires the `--carry` flag
 
 ### Quiet Option
 

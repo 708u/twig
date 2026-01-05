@@ -3,6 +3,7 @@
 package gwt
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -86,6 +87,148 @@ func TestGitRunner_WorktreeRemove_Integration(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "failed to remove worktree") {
 			t.Errorf("error %q should contain 'failed to remove worktree'", err.Error())
+		}
+	})
+}
+
+func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
+	t.Parallel()
+
+	writeFile := func(t *testing.T, dir, name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("NoChanges", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		runner := NewGitRunner(mainDir)
+
+		files, err := runner.ChangedFiles()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(files) != 0 {
+			t.Errorf("expected empty list, got %v", files)
+		}
+	})
+
+	t.Run("StagedFile", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		writeFile(t, mainDir, "staged.txt", "content")
+		testutil.RunGit(t, mainDir, "add", "staged.txt")
+
+		runner := NewGitRunner(mainDir)
+
+		files, err := runner.ChangedFiles()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(files) != 1 || files[0] != "staged.txt" {
+			t.Errorf("expected [staged.txt], got %v", files)
+		}
+	})
+
+	t.Run("UnstagedFile", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		// Create and commit a file first
+		writeFile(t, mainDir, "tracked.txt", "original")
+		testutil.RunGit(t, mainDir, "add", "tracked.txt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add tracked file")
+
+		// Modify it
+		writeFile(t, mainDir, "tracked.txt", "modified")
+
+		runner := NewGitRunner(mainDir)
+
+		files, err := runner.ChangedFiles()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(files) != 1 || files[0] != "tracked.txt" {
+			t.Errorf("expected [tracked.txt], got %v", files)
+		}
+	})
+
+	t.Run("UntrackedFile", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		writeFile(t, mainDir, "untracked.txt", "content")
+
+		runner := NewGitRunner(mainDir)
+
+		files, err := runner.ChangedFiles()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(files) != 1 || files[0] != "untracked.txt" {
+			t.Errorf("expected [untracked.txt], got %v", files)
+		}
+	})
+
+	t.Run("MixedChanges", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		// Tracked and modified (commit first, then modify)
+		writeFile(t, mainDir, "tracked.txt", "original")
+		testutil.RunGit(t, mainDir, "add", "tracked.txt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add tracked")
+		writeFile(t, mainDir, "tracked.txt", "modified")
+
+		// Staged (add after commit)
+		writeFile(t, mainDir, "staged.txt", "content")
+		testutil.RunGit(t, mainDir, "add", "staged.txt")
+
+		// Untracked
+		writeFile(t, mainDir, "untracked.txt", "content")
+
+		runner := NewGitRunner(mainDir)
+
+		files, err := runner.ChangedFiles()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(files) != 3 {
+			t.Errorf("expected 3 files, got %v", files)
+		}
+	})
+
+	t.Run("RenamedFile", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		// Create and commit a file
+		writeFile(t, mainDir, "old.txt", "content")
+		testutil.RunGit(t, mainDir, "add", "old.txt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add old file")
+
+		// Rename it
+		testutil.RunGit(t, mainDir, "mv", "old.txt", "new.txt")
+
+		runner := NewGitRunner(mainDir)
+
+		files, err := runner.ChangedFiles()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// Should return the new name
+		if len(files) != 1 || files[0] != "new.txt" {
+			t.Errorf("expected [new.txt], got %v", files)
 		}
 	})
 }
