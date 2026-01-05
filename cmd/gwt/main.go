@@ -22,13 +22,6 @@ type CleanCommander interface {
 	Run(cwd string, opts gwt.CleanOptions) (gwt.CleanResult, error)
 }
 
-// NewCleanCommander is the factory function type for creating CleanCommander instances.
-type NewCleanCommander func(cfg *gwt.Config) CleanCommander
-
-func defaultNewCleanCommander(cfg *gwt.Config) CleanCommander {
-	return gwt.NewDefaultCleanCommand(cfg)
-}
-
 // ListCommander defines the interface for list operations.
 type ListCommander interface {
 	Run() (gwt.ListResult, error)
@@ -47,9 +40,9 @@ func defaultNewRemoveCommander(cfg *gwt.Config) RemoveCommander {
 }
 
 type options struct {
-	addCommander       AddCommander // nil = use default
-	newCleanCommander  NewCleanCommander
-	listCommander      ListCommander // nil = use default
+	addCommander       AddCommander   // nil = use default
+	cleanCommander     CleanCommander // nil = use default
+	listCommander      ListCommander  // nil = use default
 	newRemoveCommander NewRemoveCommander
 }
 
@@ -63,10 +56,10 @@ func WithAddCommander(cmd AddCommander) Option {
 	}
 }
 
-// WithNewCleanCommander sets the factory function for creating CleanCommander instances.
-func WithNewCleanCommander(ncc NewCleanCommander) Option {
+// WithCleanCommander sets the CleanCommander instance for testing.
+func WithCleanCommander(cmd CleanCommander) Option {
 	return func(o *options) {
-		o.newCleanCommander = ncc
+		o.cleanCommander = cmd
 	}
 }
 
@@ -130,7 +123,6 @@ func resolveDirectory(dirFlag, baseCwd string) (string, error) {
 
 func newRootCmd(opts ...Option) *cobra.Command {
 	o := &options{
-		newCleanCommander:  defaultNewCleanCommander,
 		newRemoveCommander: defaultNewRemoveCommander,
 	}
 	for _, opt := range opts {
@@ -338,7 +330,12 @@ Safety checks (all must pass):
 			target, _ := cmd.Flags().GetString("target")
 			forceCount, _ := cmd.Flags().GetCount("force")
 
-			cleanCmd := o.newCleanCommander(cfg)
+			var cleanCmd CleanCommander
+			if o.cleanCommander != nil {
+				cleanCmd = o.cleanCommander
+			} else {
+				cleanCmd = gwt.NewDefaultCleanCommand(cfg)
+			}
 
 			// First pass: analyze candidates (always in check mode first)
 			result, err := cleanCmd.Run(cwd, gwt.CleanOptions{

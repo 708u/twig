@@ -257,9 +257,7 @@ func TestCleanCmd(t *testing.T) {
 
 			mock := &mockCleanCommander{result: tt.result}
 
-			cmd := newRootCmd(WithNewCleanCommander(func(cfg *gwt.Config) CleanCommander {
-				return mock
-			}))
+			cmd := newRootCmd(WithCleanCommander(mock))
 
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
