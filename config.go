@@ -18,6 +18,7 @@ const (
 // All path fields are resolved to absolute paths by LoadConfig.
 type Config struct {
 	Symlinks            []string `toml:"symlinks"`
+	ExtraSymlinks       []string `toml:"extra_symlinks"`
 	WorktreeDestBaseDir string   `toml:"worktree_destination_base_dir"`
 	WorktreeSourceDir   string   `toml:"worktree_source_dir"`
 	DefaultSource       string   `toml:"default_source"`
@@ -30,66 +31,85 @@ type LoadConfigResult struct {
 }
 
 func LoadConfig(dir string) (*LoadConfigResult, error) {
-	seen := make(map[string]bool)
-	var symlinks []string
 	var warnings []string
 
 	projCfg, err := loadConfigFile(filepath.Join(dir, configDir, configFileName))
 	if err != nil {
 		return nil, err
 	}
-	if projCfg != nil {
-		for _, s := range projCfg.Symlinks {
-			if !seen[s] {
-				seen[s] = true
-				symlinks = append(symlinks, s)
-			}
-		}
-	}
 
 	localCfg, err := loadConfigFile(filepath.Join(dir, configDir, localConfigFileName))
 	if err != nil {
 		return nil, err
 	}
-	// DefaultSource: project config value, can be overridden by local config
+
+	// symlinks: local overrides project if local has any symlinks
+	var symlinks []string
+	if localCfg != nil && len(localCfg.Symlinks) > 0 {
+		symlinks = localCfg.Symlinks
+	} else if projCfg != nil {
+		symlinks = projCfg.Symlinks
+	}
+
+	// extra_symlinks: collect from both configs, deduplicate, append to symlinks
+	seen := make(map[string]bool)
+	for _, s := range symlinks {
+		seen[s] = true
+	}
+	var extraSymlinks []string
+	if projCfg != nil {
+		for _, s := range projCfg.ExtraSymlinks {
+			if !seen[s] {
+				seen[s] = true
+				extraSymlinks = append(extraSymlinks, s)
+			}
+		}
+	}
+	if localCfg != nil {
+		for _, s := range localCfg.ExtraSymlinks {
+			if !seen[s] {
+				seen[s] = true
+				extraSymlinks = append(extraSymlinks, s)
+			}
+		}
+	}
+	symlinks = append(symlinks, extraSymlinks...)
+
+	// default_source: local overrides project
 	var defaultSource string
 	if projCfg != nil && projCfg.DefaultSource != "" {
 		defaultSource = projCfg.DefaultSource
 	}
-
-	if localCfg != nil {
-		for _, s := range localCfg.Symlinks {
-			if !seen[s] {
-				seen[s] = true
-				symlinks = append(symlinks, s)
-			}
-		}
-		// Local config can override default_source
-		if localCfg.DefaultSource != "" {
-			defaultSource = localCfg.DefaultSource
-		}
-		// Warn if local config contains project-level settings
-		if localCfg.WorktreeDestBaseDir != "" {
-			warnings = append(warnings, localConfigFileName+": 'worktree_destination_base_dir' is ignored (project-level setting)")
-		}
-		if localCfg.WorktreeSourceDir != "" {
-			warnings = append(warnings, localConfigFileName+": 'worktree_source_dir' is ignored (project-level setting)")
-		}
+	if localCfg != nil && localCfg.DefaultSource != "" {
+		defaultSource = localCfg.DefaultSource
 	}
 
-	srcDir := dir
+	// worktree_source_dir: local overrides project
+	var srcDirConfig string
 	if projCfg != nil && projCfg.WorktreeSourceDir != "" {
-		srcDir = projCfg.WorktreeSourceDir
+		srcDirConfig = projCfg.WorktreeSourceDir
+	}
+	if localCfg != nil && localCfg.WorktreeSourceDir != "" {
+		srcDirConfig = localCfg.WorktreeSourceDir
+	}
+	srcDir := dir
+	if srcDirConfig != "" {
+		srcDir = srcDirConfig
 	}
 	srcDir, err = filepath.Abs(srcDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve worktree source directory: %w", err)
 	}
 
-	destBaseDir := ""
+	// worktree_destination_base_dir: local overrides project
+	var destBaseDirConfig string
 	if projCfg != nil && projCfg.WorktreeDestBaseDir != "" {
-		destBaseDir = projCfg.WorktreeDestBaseDir
+		destBaseDirConfig = projCfg.WorktreeDestBaseDir
 	}
+	if localCfg != nil && localCfg.WorktreeDestBaseDir != "" {
+		destBaseDirConfig = localCfg.WorktreeDestBaseDir
+	}
+	destBaseDir := destBaseDirConfig
 	if destBaseDir == "" {
 		repoName := filepath.Base(srcDir)
 		destBaseDir = filepath.Join(srcDir, "..", repoName+"-worktree")
@@ -102,6 +122,7 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 	return &LoadConfigResult{
 		Config: &Config{
 			Symlinks:            symlinks,
+			ExtraSymlinks:       extraSymlinks,
 			WorktreeDestBaseDir: destBaseDir,
 			WorktreeSourceDir:   srcDir,
 			DefaultSource:       defaultSource,

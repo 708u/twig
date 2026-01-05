@@ -222,3 +222,8 @@ branch with `--source`:
 # Explicitly use current worktree instead of default_source
 gwt add feat/x --source feat/a  # assuming you're on feat/a
 ```
+
+## Configuration
+
+See [Configuration](../configuration.md) for details on settings files,
+available fields, and merge rules.

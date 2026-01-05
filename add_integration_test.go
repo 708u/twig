@@ -184,7 +184,7 @@ func TestAddCommand_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("LocalConfigSymlinksMerge", func(t *testing.T) {
+	t.Run("LocalConfigSymlinksOverride", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
@@ -194,8 +194,8 @@ func TestAddCommand_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Project config with .envrc
-		projectSettings := fmt.Sprintf(`symlinks = [".envrc"]
+		// Project config with .envrc and .config
+		projectSettings := fmt.Sprintf(`symlinks = [".envrc", ".config"]
 worktree_source_dir = %q
 worktree_destination_base_dir = %q
 `, mainDir, repoDir)
@@ -203,10 +203,85 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		// Local config with .tool-versions and duplicate .envrc
-		localSettings := `symlinks = [".tool-versions", ".envrc"]
+		// Local config overrides with only .tool-versions
+		localSettings := `symlinks = [".tool-versions"]
 `
 		if err := os.WriteFile(filepath.Join(gwtDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create source files
+		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# envrc"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(mainDir, ".config"), []byte("config"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(mainDir, ".tool-versions"), []byte("go 1.21"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify local overrides project (only .tool-versions)
+		if len(result.Config.Symlinks) != 1 {
+			t.Errorf("expected 1 symlink (local override), got %d: %v", len(result.Config.Symlinks), result.Config.Symlinks)
+		}
+		if result.Config.Symlinks[0] != ".tool-versions" {
+			t.Errorf("expected symlink to be .tool-versions, got %v", result.Config.Symlinks)
+		}
+
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: result.Config,
+		}
+
+		_, err = cmd.Run("feature/local-override")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		wtPath := filepath.Join(repoDir, "feature", "local-override")
+
+		// Verify only .tool-versions is symlinked (local overrides project)
+		linkPath := filepath.Join(wtPath, ".tool-versions")
+		info, err := os.Lstat(linkPath)
+		if err != nil {
+			t.Errorf("symlink not created: .tool-versions")
+		} else if info.Mode()&os.ModeSymlink == 0 {
+			t.Errorf(".tool-versions is not a symlink")
+		}
+
+		// Verify .envrc and .config are NOT symlinked (overridden)
+		for _, rel := range []string{".envrc", ".config"} {
+			linkPath := filepath.Join(wtPath, rel)
+			if _, err := os.Lstat(linkPath); err == nil {
+				t.Errorf("%s should not be symlinked (local overrides project)", rel)
+			}
+		}
+	})
+
+	t.Run("ExtraSymlinksFromProjectConfig", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Project config with symlinks and extra_symlinks
+		projectSettings := fmt.Sprintf(`symlinks = [".envrc"]
+extra_symlinks = [".tool-versions"]
+worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -223,7 +298,7 @@ worktree_destination_base_dir = %q
 			t.Fatal(err)
 		}
 
-		// Verify merged symlinks with deduplication
+		// Verify symlinks includes both
 		if len(result.Config.Symlinks) != 2 {
 			t.Errorf("expected 2 symlinks, got %d: %v", len(result.Config.Symlinks), result.Config.Symlinks)
 		}
@@ -234,12 +309,12 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/local-merge")
+		_, err = cmd.Run("feature/extra-symlinks")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
 
-		wtPath := filepath.Join(repoDir, "feature", "local-merge")
+		wtPath := filepath.Join(repoDir, "feature", "extra-symlinks")
 
 		// Verify both files are symlinked
 		for _, rel := range []string{".envrc", ".tool-versions"} {
@@ -252,16 +327,229 @@ worktree_destination_base_dir = %q
 			if info.Mode()&os.ModeSymlink == 0 {
 				t.Errorf("%s is not a symlink", rel)
 			}
+		}
+	})
 
-			target, err := os.Readlink(linkPath)
+	t.Run("ExtraSymlinksFromLocalConfig", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Project config with symlinks only
+		projectSettings := fmt.Sprintf(`symlinks = [".envrc"]
+worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Local config adds extra_symlinks
+		localSettings := `extra_symlinks = [".local-only"]
+`
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create source files
+		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# envrc"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(mainDir, ".local-only"), []byte("local"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify symlinks includes project symlinks + local extra_symlinks
+		if len(result.Config.Symlinks) != 2 {
+			t.Errorf("expected 2 symlinks, got %d: %v", len(result.Config.Symlinks), result.Config.Symlinks)
+		}
+
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: result.Config,
+		}
+
+		_, err = cmd.Run("feature/local-extra")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		wtPath := filepath.Join(repoDir, "feature", "local-extra")
+
+		// Verify both files are symlinked
+		for _, rel := range []string{".envrc", ".local-only"} {
+			linkPath := filepath.Join(wtPath, rel)
+			info, err := os.Lstat(linkPath)
 			if err != nil {
-				t.Errorf("failed to read symlink %s: %v", rel, err)
+				t.Errorf("symlink not created: %s", rel)
 				continue
 			}
-			expectedTarget := filepath.Join(mainDir, rel)
-			if target != expectedTarget {
-				t.Errorf("symlink target = %q, want %q", target, expectedTarget)
+			if info.Mode()&os.ModeSymlink == 0 {
+				t.Errorf("%s is not a symlink", rel)
 			}
+		}
+	})
+
+	t.Run("ExtraSymlinksFromBothConfigs", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Project config with symlinks and extra_symlinks
+		projectSettings := fmt.Sprintf(`symlinks = [".envrc"]
+extra_symlinks = [".project-extra"]
+worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, repoDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Local config adds extra_symlinks
+		localSettings := `extra_symlinks = [".local-extra"]
+`
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create source files
+		if err := os.WriteFile(filepath.Join(mainDir, ".envrc"), []byte("# envrc"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(mainDir, ".project-extra"), []byte("project"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(mainDir, ".local-extra"), []byte("local"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify symlinks includes all: base + project extra + local extra
+		if len(result.Config.Symlinks) != 3 {
+			t.Errorf("expected 3 symlinks, got %d: %v", len(result.Config.Symlinks), result.Config.Symlinks)
+		}
+
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: result.Config,
+		}
+
+		_, err = cmd.Run("feature/both-extra")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		wtPath := filepath.Join(repoDir, "feature", "both-extra")
+
+		// Verify all files are symlinked
+		for _, rel := range []string{".envrc", ".project-extra", ".local-extra"} {
+			linkPath := filepath.Join(wtPath, rel)
+			info, err := os.Lstat(linkPath)
+			if err != nil {
+				t.Errorf("symlink not created: %s", rel)
+				continue
+			}
+			if info.Mode()&os.ModeSymlink == 0 {
+				t.Errorf("%s is not a symlink", rel)
+			}
+		}
+	})
+
+	t.Run("LocalWorktreeDirOverride", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		tmpDir, _ = filepath.EvalSymlinks(tmpDir)
+		mainDir := filepath.Join(tmpDir, "repo", "main")
+		projectDestDir := filepath.Join(tmpDir, "project-worktrees")
+		localDestDir := filepath.Join(tmpDir, "local-worktrees")
+
+		if err := os.MkdirAll(mainDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		testutil.RunGit(t, mainDir, "init")
+		testutil.RunGit(t, mainDir, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, mainDir, "config", "user.name", "Test User")
+		testutil.RunGit(t, mainDir, "commit", "--allow-empty", "-m", "initial")
+
+		gwtDir := filepath.Join(mainDir, ".gwt")
+		if err := os.MkdirAll(gwtDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Project config
+		projectSettings := fmt.Sprintf(`worktree_source_dir = %q
+worktree_destination_base_dir = %q
+`, mainDir, projectDestDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.toml"), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Local config overrides destination
+		localSettings := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, localDestDir)
+		if err := os.WriteFile(filepath.Join(gwtDir, "settings.local.toml"), []byte(localSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify local override is applied
+		if result.Config.WorktreeDestBaseDir != localDestDir {
+			t.Errorf("WorktreeDestBaseDir = %q, want %q", result.Config.WorktreeDestBaseDir, localDestDir)
+		}
+
+		// Verify no warnings
+		if len(result.Warnings) > 0 {
+			t.Errorf("expected no warnings, got: %v", result.Warnings)
+		}
+
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: result.Config,
+		}
+
+		_, err = cmd.Run("feature/local-dest")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree created in local destination
+		wtPath := filepath.Join(localDestDir, "feature", "local-dest")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree not created at local destination: %s", wtPath)
+		}
+
+		// Verify worktree NOT created in project destination
+		projectWtPath := filepath.Join(projectDestDir, "feature", "local-dest")
+		if _, err := os.Stat(projectWtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should not exist at project destination: %s", projectWtPath)
 		}
 	})
 

@@ -15,6 +15,7 @@ type SetupOption func(*setupConfig)
 type setupConfig struct {
 	skipSettings  bool
 	symlinks      []string
+	extraSymlinks []string
 	defaultSource string
 }
 
@@ -30,6 +31,13 @@ func WithoutSettings() SetupOption {
 func Symlinks(patterns ...string) SetupOption {
 	return func(c *setupConfig) {
 		c.symlinks = patterns
+	}
+}
+
+// ExtraSymlinks sets the extra_symlinks patterns for settings.toml.
+func ExtraSymlinks(patterns ...string) SetupOption {
+	return func(c *setupConfig) {
+		c.extraSymlinks = patterns
 	}
 }
 
@@ -94,6 +102,14 @@ func createSettings(t *testing.T, repoDir, mainDir string, cfg *setupConfig) {
 			quoted[i] = fmt.Sprintf("%q", s)
 		}
 		content += fmt.Sprintf("symlinks = [%s]\n", strings.Join(quoted, ", "))
+	}
+
+	if len(cfg.extraSymlinks) > 0 {
+		quoted := make([]string, len(cfg.extraSymlinks))
+		for i, s := range cfg.extraSymlinks {
+			quoted[i] = fmt.Sprintf("%q", s)
+		}
+		content += fmt.Sprintf("extra_symlinks = [%s]\n", strings.Join(quoted, ", "))
 	}
 
 	if cfg.defaultSource != "" {
