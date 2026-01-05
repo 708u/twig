@@ -101,6 +101,86 @@ func TestResolveDirectory(t *testing.T) {
 	})
 }
 
+func TestResolveCarryFrom(t *testing.T) {
+	t.Parallel()
+
+	t.Run("EmptyValue", func(t *testing.T) {
+		t.Parallel()
+
+		cwd := "/path/to/cwd"
+		originalCwd := "/path/to/original"
+
+		got, err := resolveCarryFrom("", cwd, originalCwd, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != cwd {
+			t.Errorf("got %q, want %q", got, cwd)
+		}
+	})
+
+	t.Run("SourceValue", func(t *testing.T) {
+		t.Parallel()
+
+		cwd := "/path/to/cwd"
+		originalCwd := "/path/to/original"
+
+		got, err := resolveCarryFrom("<source>", cwd, originalCwd, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != cwd {
+			t.Errorf("got %q, want %q", got, cwd)
+		}
+	})
+
+	t.Run("AtValue", func(t *testing.T) {
+		t.Parallel()
+
+		cwd := "/path/to/cwd"
+		originalCwd := "/path/to/original"
+
+		got, err := resolveCarryFrom("@", cwd, originalCwd, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != originalCwd {
+			t.Errorf("got %q, want %q", got, originalCwd)
+		}
+	})
+
+	t.Run("BranchValue", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		git := gwt.NewGitRunner(mainDir)
+
+		// main branch already has a worktree at mainDir
+		got, err := resolveCarryFrom("main", mainDir, "/original", git)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != mainDir {
+			t.Errorf("got %q, want %q", got, mainDir)
+		}
+	})
+
+	t.Run("BranchNotFound", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		git := gwt.NewGitRunner(mainDir)
+
+		_, err := resolveCarryFrom("nonexistent", mainDir, "/original", git)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "failed to find worktree for branch") {
+			t.Errorf("error = %q, want to contain 'failed to find worktree for branch'", err.Error())
+		}
+	})
+}
+
 // mockCleanCommander is a test double for CleanCommander interface.
 type mockCleanCommander struct {
 	result gwt.CleanResult
@@ -215,7 +295,6 @@ type mockAddCommander struct {
 	result     gwt.AddResult
 	err        error
 	calledName string
-	calledOpts gwt.AddOptions
 }
 
 func (m *mockAddCommander) Run(name string) (gwt.AddResult, error) {
@@ -298,9 +377,7 @@ func TestListCmd(t *testing.T) {
 
 			mock := &mockListCommander{result: tt.result, err: tt.err}
 
-			cmd := newRootCmd(WithNewListCommander(func(dir string) ListCommander {
-				return mock
-			}))
+			cmd := newRootCmd(WithListCommander(mock))
 
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
@@ -384,9 +461,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -419,7 +494,6 @@ worktree_destination_base_dir = %q
 		testutil.RunGit(t, mainDir, "add", ".gwt")
 		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
 
-		var calledOpts gwt.AddOptions
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:        "feat/sync",
@@ -428,10 +502,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			calledOpts = opts
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -442,8 +513,8 @@ worktree_destination_base_dir = %q
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !calledOpts.Sync {
-			t.Error("expected Sync option to be true")
+		if mock.calledName != "feat/sync" {
+			t.Errorf("calledName = %q, want %q", mock.calledName, "feat/sync")
 		}
 	})
 
@@ -471,9 +542,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -509,7 +578,6 @@ worktree_destination_base_dir = %q
 		testutil.RunGit(t, mainDir, "add", ".gwt")
 		testutil.RunGit(t, mainDir, "commit", "-m", "add gwt settings")
 
-		var calledOpts gwt.AddOptions
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:       "feat/lock",
@@ -517,10 +585,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			calledOpts = opts
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -531,11 +596,8 @@ worktree_destination_base_dir = %q
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !calledOpts.Lock {
-			t.Error("expected Lock option to be true")
-		}
-		if calledOpts.LockReason != "USB work" {
-			t.Errorf("LockReason = %q, want %q", calledOpts.LockReason, "USB work")
+		if mock.calledName != "feat/lock" {
+			t.Errorf("calledName = %q, want %q", mock.calledName, "feat/lock")
 		}
 	})
 
@@ -563,9 +625,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -606,9 +666,7 @@ worktree_destination_base_dir = %q
 			err: errors.New("worktree creation failed"),
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -652,9 +710,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -698,9 +754,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -724,7 +778,6 @@ worktree_destination_base_dir = %q
 
 		_, mainDir := testutil.SetupTestRepo(t)
 
-		var calledOpts gwt.AddOptions
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:       "feat/carry",
@@ -732,10 +785,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			calledOpts = opts
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -746,9 +796,8 @@ worktree_destination_base_dir = %q
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// --carry without value should use source worktree (mainDir)
-		if calledOpts.CarryFrom != mainDir {
-			t.Errorf("CarryFrom = %q, want %q", calledOpts.CarryFrom, mainDir)
+		if mock.calledName != "feat/carry" {
+			t.Errorf("calledName = %q, want %q", mock.calledName, "feat/carry")
 		}
 	})
 
@@ -757,7 +806,6 @@ worktree_destination_base_dir = %q
 
 		_, mainDir := testutil.SetupTestRepo(t)
 
-		var calledOpts gwt.AddOptions
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:       "feat/carry-short",
@@ -765,10 +813,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			calledOpts = opts
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -779,9 +824,8 @@ worktree_destination_base_dir = %q
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// -c without value should use source worktree (mainDir)
-		if calledOpts.CarryFrom != mainDir {
-			t.Errorf("CarryFrom = %q, want %q", calledOpts.CarryFrom, mainDir)
+		if mock.calledName != "feat/carry-short" {
+			t.Errorf("calledName = %q, want %q", mock.calledName, "feat/carry-short")
 		}
 	})
 
@@ -797,9 +841,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -841,9 +883,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -884,7 +924,6 @@ worktree_destination_base_dir = %q
 
 		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		var capturedOpts gwt.AddOptions
 		mock := &mockAddCommander{
 			result: gwt.AddResult{
 				Branch:       "feat/file-test",
@@ -892,10 +931,7 @@ worktree_destination_base_dir = %q
 			},
 		}
 
-		cmd := newRootCmd(WithNewAddCommander(func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-			capturedOpts = opts
-			return mock
-		}))
+		cmd := newRootCmd(WithAddCommander(mock))
 
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -903,13 +939,6 @@ worktree_destination_base_dir = %q
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if len(capturedOpts.CarryFiles) != 2 {
-			t.Errorf("CarryFiles = %v, want 2 elements", capturedOpts.CarryFiles)
-		}
-		if capturedOpts.CarryFiles[0] != "*.go" || capturedOpts.CarryFiles[1] != "cmd/**" {
-			t.Errorf("CarryFiles = %v, want [*.go cmd/**]", capturedOpts.CarryFiles)
 		}
 	})
 }

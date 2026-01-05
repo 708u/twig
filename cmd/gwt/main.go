@@ -17,13 +17,6 @@ type AddCommander interface {
 	Run(name string) (gwt.AddResult, error)
 }
 
-// NewAddCommander is a factory function type for creating AddCommander instances.
-type NewAddCommander func(cfg *gwt.Config, opts gwt.AddOptions) AddCommander
-
-func defaultNewAddCommander(cfg *gwt.Config, opts gwt.AddOptions) AddCommander {
-	return gwt.NewDefaultAddCommand(cfg, opts)
-}
-
 // CleanCommander defines the interface for clean operations.
 type CleanCommander interface {
 	Run(cwd string, opts gwt.CleanOptions) (gwt.CleanResult, error)
@@ -41,13 +34,6 @@ type ListCommander interface {
 	Run() (gwt.ListResult, error)
 }
 
-// NewListCommander is the factory function type for creating ListCommander instances.
-type NewListCommander func(dir string) ListCommander
-
-func defaultNewListCommander(dir string) ListCommander {
-	return gwt.NewDefaultListCommand(dir)
-}
-
 // RemoveCommander defines the interface for remove operations.
 type RemoveCommander interface {
 	Run(branch string, cwd string, opts gwt.RemoveOptions) (gwt.RemovedWorktree, error)
@@ -61,19 +47,19 @@ func defaultNewRemoveCommander(cfg *gwt.Config) RemoveCommander {
 }
 
 type options struct {
-	newAddCommander    NewAddCommander
+	addCommander       AddCommander // nil = use default
 	newCleanCommander  NewCleanCommander
-	newListCommander   NewListCommander
+	listCommander      ListCommander // nil = use default
 	newRemoveCommander NewRemoveCommander
 }
 
 // Option configures newRootCmd.
 type Option func(*options)
 
-// WithNewAddCommander sets the factory function for creating AddCommander instances.
-func WithNewAddCommander(nac NewAddCommander) Option {
+// WithAddCommander sets the AddCommander instance for testing.
+func WithAddCommander(cmd AddCommander) Option {
 	return func(o *options) {
-		o.newAddCommander = nac
+		o.addCommander = cmd
 	}
 }
 
@@ -84,10 +70,10 @@ func WithNewCleanCommander(ncc NewCleanCommander) Option {
 	}
 }
 
-// WithNewListCommander sets the factory function for creating ListCommander instances.
-func WithNewListCommander(nlc NewListCommander) Option {
+// WithListCommander sets the ListCommander instance for testing.
+func WithListCommander(cmd ListCommander) Option {
 	return func(o *options) {
-		o.newListCommander = nlc
+		o.listCommander = cmd
 	}
 }
 
@@ -95,6 +81,22 @@ func WithNewListCommander(nlc NewListCommander) Option {
 func WithNewRemoveCommander(nrc NewRemoveCommander) Option {
 	return func(o *options) {
 		o.newRemoveCommander = nrc
+	}
+}
+
+// resolveCarryFrom resolves the --carry flag value to a worktree path.
+func resolveCarryFrom(carryValue, cwd, originalCwd string, git *gwt.GitRunner) (string, error) {
+	switch carryValue {
+	case "", "<source>":
+		return cwd, nil
+	case "@":
+		return originalCwd, nil
+	default:
+		path, err := git.WorktreeFindByBranch(carryValue)
+		if err != nil {
+			return "", fmt.Errorf("failed to find worktree for branch %q: %w", carryValue, err)
+		}
+		return path, nil
 	}
 }
 
@@ -128,9 +130,7 @@ func resolveDirectory(dirFlag, baseCwd string) (string, error) {
 
 func newRootCmd(opts ...Option) *cobra.Command {
 	o := &options{
-		newAddCommander:    defaultNewAddCommander,
 		newCleanCommander:  defaultNewCleanCommander,
-		newListCommander:   defaultNewListCommander,
 		newRemoveCommander: defaultNewRemoveCommander,
 	}
 	for _, opt := range opts {
@@ -276,31 +276,26 @@ With --carry, use --file to carry only matching files:
 			var carryFrom string
 			if carryEnabled {
 				carryValue, _ := cmd.Flags().GetString("carry")
-				switch carryValue {
-				case "", "<source>":
-					// --carry without value (or --carry=<source>): use source worktree (cwd)
-					carryFrom = cwd
-				case "@":
-					// --carry=@: use original worktree (where command was executed)
-					carryFrom = originalCwd
-				default:
-					// --carry=<branch>: resolve branch to worktree path
-					git := gwt.NewGitRunner(cwd)
-					path, err := git.WorktreeFindByBranch(carryValue)
-					if err != nil {
-						return fmt.Errorf("failed to find worktree for branch %q: %w", carryValue, err)
-					}
-					carryFrom = path
+				git := gwt.NewGitRunner(cwd)
+				var err error
+				carryFrom, err = resolveCarryFrom(carryValue, cwd, originalCwd, git)
+				if err != nil {
+					return err
 				}
 			}
 
-			addCmd := o.newAddCommander(cfg, gwt.AddOptions{
-				Sync:       sync,
-				CarryFrom:  carryFrom,
-				CarryFiles: carryFiles,
-				Lock:       lock,
-				LockReason: lockReason,
-			})
+			var addCmd AddCommander
+			if o.addCommander != nil {
+				addCmd = o.addCommander
+			} else {
+				addCmd = gwt.NewDefaultAddCommand(cfg, gwt.AddOptions{
+					Sync:       sync,
+					CarryFrom:  carryFrom,
+					CarryFiles: carryFiles,
+					Lock:       lock,
+					LockReason: lockReason,
+				})
+			}
 			result, err := addCmd.Run(args[0])
 			if err != nil {
 				return err
@@ -325,7 +320,13 @@ With --carry, use --file to carry only matching files:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			quiet, _ := cmd.Flags().GetBool("quiet")
 
-			result, err := o.newListCommander(cwd).Run()
+			var listCmd ListCommander
+			if o.listCommander != nil {
+				listCmd = o.listCommander
+			} else {
+				listCmd = gwt.NewDefaultListCommand(cwd)
+			}
+			result, err := listCmd.Run()
 			if err != nil {
 				return err
 			}
