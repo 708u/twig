@@ -1,0 +1,15 @@
+# twig project configuration
+# See: https://github.com/708u/twig-worktree
+
+# Default source branch for new worktrees (prevents symlink chaining)
+default_source = "main"
+
+# Symlink patterns to create in new worktrees
+# Recommend: [".twig/settings.local.toml"] to share local settings across worktrees
+symlinks = []
+
+# Worktree destination base directory (default: ../<repo-name>-worktree)
+# worktree_destination_base_dir = "../my-worktrees"
+
+# Additional symlink patterns (collected from both project and local configs)
+# extra_symlinks = [".envrc", ".tool-versions"]
