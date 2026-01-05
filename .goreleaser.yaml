@@ -29,6 +29,12 @@ homebrew_casks:
       owner: 708u
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/twig"]
+          end
 
 archives:
   - formats: [tar.gz]
