@@ -171,12 +171,18 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 			var pathspecs []string
 			if isCarry && len(c.CarryFiles) > 0 {
 				// Expand glob patterns to actual file paths using doublestar
+				seen := make(map[string]bool)
 				for _, pattern := range c.CarryFiles {
 					matches, err := c.FS.Glob(c.CarryFrom, pattern)
 					if err != nil {
 						return result, fmt.Errorf("invalid glob pattern %q: %w", pattern, err)
 					}
-					pathspecs = append(pathspecs, matches...)
+					for _, match := range matches {
+						if !seen[match] {
+							seen[match] = true
+							pathspecs = append(pathspecs, match)
+						}
+					}
 				}
 			}
 			hash, err := stashSourceGit.StashPush(stashMsg, pathspecs...)
