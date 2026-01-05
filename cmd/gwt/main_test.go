@@ -377,9 +377,7 @@ func TestListCmd(t *testing.T) {
 
 			mock := &mockListCommander{result: tt.result, err: tt.err}
 
-			cmd := newRootCmd(WithNewListCommander(func(dir string) ListCommander {
-				return mock
-			}))
+			cmd := newRootCmd(WithListCommander(mock))
 
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}

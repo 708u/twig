@@ -34,13 +34,6 @@ type ListCommander interface {
 	Run() (gwt.ListResult, error)
 }
 
-// NewListCommander is the factory function type for creating ListCommander instances.
-type NewListCommander func(dir string) ListCommander
-
-func defaultNewListCommander(dir string) ListCommander {
-	return gwt.NewDefaultListCommand(dir)
-}
-
 // RemoveCommander defines the interface for remove operations.
 type RemoveCommander interface {
 	Run(branch string, cwd string, opts gwt.RemoveOptions) (gwt.RemovedWorktree, error)
@@ -56,7 +49,7 @@ func defaultNewRemoveCommander(cfg *gwt.Config) RemoveCommander {
 type options struct {
 	addCommander       AddCommander // nil = use default
 	newCleanCommander  NewCleanCommander
-	newListCommander   NewListCommander
+	listCommander      ListCommander // nil = use default
 	newRemoveCommander NewRemoveCommander
 }
 
@@ -77,10 +70,10 @@ func WithNewCleanCommander(ncc NewCleanCommander) Option {
 	}
 }
 
-// WithNewListCommander sets the factory function for creating ListCommander instances.
-func WithNewListCommander(nlc NewListCommander) Option {
+// WithListCommander sets the ListCommander instance for testing.
+func WithListCommander(cmd ListCommander) Option {
 	return func(o *options) {
-		o.newListCommander = nlc
+		o.listCommander = cmd
 	}
 }
 
@@ -138,7 +131,6 @@ func resolveDirectory(dirFlag, baseCwd string) (string, error) {
 func newRootCmd(opts ...Option) *cobra.Command {
 	o := &options{
 		newCleanCommander:  defaultNewCleanCommander,
-		newListCommander:   defaultNewListCommander,
 		newRemoveCommander: defaultNewRemoveCommander,
 	}
 	for _, opt := range opts {
@@ -306,7 +298,13 @@ func newRootCmd(opts ...Option) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			quiet, _ := cmd.Flags().GetBool("quiet")
 
-			result, err := o.newListCommander(cwd).Run()
+			var listCmd ListCommander
+			if o.listCommander != nil {
+				listCmd = o.listCommander
+			} else {
+				listCmd = gwt.NewDefaultListCommand(cwd)
+			}
+			result, err := listCmd.Run()
 			if err != nil {
 				return err
 			}
