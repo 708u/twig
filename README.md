@@ -25,6 +25,8 @@ twig clean -v                       # confirm before deletion, show all skipped 
 ### Create worktree and branch in one command
 
 `twig add feat/xxx` executes worktree creation, branch creation, and symlink setup all at once.
+Use `--source` to create from any branch regardless of current worktree.
+Set `default_source` in config to always branch from a fixed base (e.g., main).
 
 ### Automatic symlink management via config
 
@@ -33,9 +35,13 @@ Start working immediately in new worktrees.
 
 ### Move uncommitted changes to a new branch
 
-Use `--carry` to continue work from another session in a new worktree.
-When you think of a refactoring idea while working, you can write the task to markdown
-and start working on it in a separate worktree.
+Use `--carry` to move changes to a new worktree, or `--sync` to copy them to both.
+Use `--file` with `--carry` to move only specific files matching a glob pattern.
+
+Examples:
+
+- Move refactoring ideas to a separate worktree and continue main work
+- Extract WIP changes to a new branch before switching tasks
 
 ### Bulk delete merged worktrees
 
@@ -115,13 +121,13 @@ Details: [docs/configuration.md](docs/configuration.md)
 
 ## Command Specs
 
-| Command                              | Description                          |
-| ------------------------------------ | ------------------------------------ |
-| [init](docs/commands/init.md)        | Initialize settings                  |
-| [add](docs/commands/add.md)          | Create worktree and branch           |
-| [list](docs/commands/list.md)        | List worktrees                       |
-| [remove](docs/commands/remove.md)    | Delete worktree and branch           |
-| [clean](docs/commands/clean.md)      | Bulk delete merged worktrees         |
+| Command                              | Description                                      |
+| ------------------------------------ | ------------------------------------------------ |
+| [init](docs/commands/init.md)        | Initialize settings                              |
+| [add](docs/commands/add.md)          | Create worktree and branch                       |
+| [list](docs/commands/list.md)        | List worktrees                                   |
+| [remove](docs/commands/remove.md)    | Delete worktree and branch (multiple supported)  |
+| [clean](docs/commands/clean.md)      | Bulk delete merged worktrees                     |
 
 See the documentation above for detailed flags and specifications.
 
