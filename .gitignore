@@ -7,3 +7,5 @@ out/
 
 # twig local config
 .twig/settings.local.toml
+# Added by goreleaser init:
+dist/
