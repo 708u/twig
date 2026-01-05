@@ -17,6 +17,10 @@
 - [ ] Feature
 - [ ] Bug fix
 - [ ] Refactoring
+- [ ] Documentation
+- [ ] Test
+- [ ] CI/CD
+- [ ] Performance
 - [ ] Other
 
 ## How to Test
