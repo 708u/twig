@@ -49,6 +49,34 @@ Requires Git 2.15+.
 go install github.com/708u/twig/cmd/twig@latest
 ```
 
+## Shell Completion
+
+Shell completion is available for all commands and flags.
+For example, `twig remove <TAB>` completes existing branch names.
+
+Add the following to your shell configuration:
+
+### Bash
+
+```bash
+# Add to ~/.bashrc
+eval "$(twig completion bash)"
+```
+
+### Zsh
+
+```bash
+# Add to ~/.zshrc
+eval "$(twig completion zsh)"
+```
+
+### Fish
+
+```sh
+# Add to ~/.config/fish/config.fish
+twig completion fish | source
+```
+
 ## Quick Start
 
 ```bash
