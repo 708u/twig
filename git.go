@@ -368,16 +368,41 @@ func (g *GitRunner) BranchDelete(branch string, opts ...BranchDeleteOption) ([]b
 	return out, nil
 }
 
-// HasChanges checks if there are any uncommitted changes (staged, unstaged, or untracked).
-func (g *GitRunner) HasChanges() (bool, error) {
-	output, err := g.Run("status", "--porcelain")
+// ChangedFiles returns a list of files with uncommitted changes
+// including staged, unstaged, and untracked files.
+func (g *GitRunner) ChangedFiles() ([]string, error) {
+	output, err := g.Run("status", "--porcelain", "-uall")
 	if err != nil {
-		return false, fmt.Errorf("failed to check git status: %w", err)
+		return nil, fmt.Errorf("failed to check git status: %w", err)
 	}
-	return len(output) > 0, nil
+
+	var files []string
+	for _, line := range strings.Split(string(output), "\n") {
+		if len(line) < 3 {
+			continue
+		}
+		// Format: "XY filename" where XY is 2-char status
+		file := strings.TrimSpace(line[2:])
+		// Handle renamed files "old -> new"
+		if idx := strings.Index(file, " -> "); idx != -1 {
+			file = file[idx+4:]
+		}
+		files = append(files, file)
+	}
+	return files, nil
 }
 
-// StashPush stashes all changes including untracked files.
+// HasChanges checks if there are any uncommitted changes (staged, unstaged, or untracked).
+func (g *GitRunner) HasChanges() (bool, error) {
+	files, err := g.ChangedFiles()
+	if err != nil {
+		return false, err
+	}
+	return len(files) > 0, nil
+}
+
+// StashPush stashes changes including untracked files.
+// If pathspecs are provided, only matching files are stashed.
 // Returns the stash commit hash for later reference.
 //
 // Race condition note:
@@ -389,8 +414,13 @@ func (g *GitRunner) HasChanges() (bool, error) {
 // "stash create" does not support -u/--include-untracked option (git limitation).
 // It can only stash tracked file changes, not untracked files.
 // See: https://git-scm.com/docs/git-stash
-func (g *GitRunner) StashPush(message string) (string, error) {
-	if _, err := g.Run("stash", "push", "-u", "-m", message); err != nil {
+func (g *GitRunner) StashPush(message string, pathspecs ...string) (string, error) {
+	args := []string{"stash", "push", "-u", "-m", message}
+	if len(pathspecs) > 0 {
+		args = append(args, "--")
+		args = append(args, pathspecs...)
+	}
+	if _, err := g.Run(args...); err != nil {
 		return "", err
 	}
 	out, err := g.Run("rev-parse", "stash@{0}")

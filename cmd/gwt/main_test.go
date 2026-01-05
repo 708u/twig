@@ -896,6 +896,49 @@ worktree_destination_base_dir = %q
 			t.Errorf("error = %q, want to contain %q", err.Error(), "cannot use --sync and --carry together")
 		}
 	})
+
+	t.Run("file_requires_carry", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		cmd := newRootCmd()
+
+		var stderr bytes.Buffer
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "--file", "*.go", "feat/test"})
+
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "--file requires --carry flag") {
+			t.Errorf("error = %q, want to contain %q", err.Error(), "--file requires --carry flag")
+		}
+	})
+
+	t.Run("file_with_carry", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		mock := &mockAddCommander{
+			result: gwt.AddResult{
+				Branch:       "feat/file-test",
+				WorktreePath: "/path/to/worktree",
+			},
+		}
+
+		cmd := newRootCmd(WithAddCommander(mock))
+
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "--carry", "--file", "*.go", "--file", "cmd/**", "feat/file-test"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 }
 
 func TestRemoveCmd(t *testing.T) {

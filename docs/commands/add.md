@@ -18,6 +18,7 @@ gwt add <name> [flags]
 |-----------------------|-------|----------------------------------------------------|
 | `--sync`              | `-s`  | Sync uncommitted changes to new worktree           |
 | `--carry [<branch>]`  | `-c`  | Carry uncommitted changes (optionally from branch) |
+| `--file <pattern>`    | `-F`  | File patterns to carry (requires `--carry`)        |
 | `--quiet`             | `-q`  | Output only the worktree path                      |
 | `--verbose`           | `-v`  | Enable verbose output                              |
 | `--source <branch>`   |       | Use specified branch's worktree as source          |
@@ -79,12 +80,41 @@ changes from:
 
 The `@` symbol follows git's HEAD alias convention, meaning "current location".
 
+#### Carrying Specific Files
+
+Use `--file` to carry only matching files:
+
+```bash
+# Carry only Go files in root
+gwt add feat/new --carry --file "*.go"
+
+# Carry all Go files recursively (globstar)
+gwt add feat/new --carry --file "**/*.go"
+
+# Carry multiple patterns
+gwt add feat/new --carry --file "*.go" --file "cmd/**"
+
+# Carry specific file from another worktree
+gwt add feat/new --carry=feat/a --file config.toml
+```
+
+Patterns support globstar (`**`) for recursive matching.
+
+When `--file` is specified:
+
+- Only matching files are stashed and carried to the new worktree
+- Non-matching files remain in the source worktree
+- The source worktree is not completely clean after carry
+
+Without `--file`, all uncommitted changes are carried (default behavior).
+
 If worktree creation or stash apply fails, changes are restored
 to the source worktree automatically.
 
 Constraints:
 
 - Cannot be used together with `--sync`
+- `--file` requires the `--carry` flag
 
 ### Quiet Option
 
