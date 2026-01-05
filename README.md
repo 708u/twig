@@ -1,11 +1,101 @@
 # twig
 
-A Git worktree extension that creates new worktrees with automatic branch creation and .gitignore symlink.
+A CLI tool that creates, deletes, and manages git worktrees and branches in a single command.
+Focused on simplifying git operations, keeping features minimal.
+
+## Motivation
+
+twig is designed to be friendly for both humans and agentic coding tools,
+and to integrate easily with other CLI tools:
+
+- `--quiet` minimizes output to paths only, making it easy to pass to other tools
+- For human use, `--verbose` and interactive confirmations ensure safety
+
+Examples:
+
+```bash
+cd $(twig add feat/x -q)            # cd into the created worktree
+twig list -q | fzf                  # select a worktree with fzf
+twig list -q | xargs -I {} code {}  # open all worktrees in VSCode
+twig clean -v                       # confirm before deletion, show all skipped items
+```
 
 ## Features
 
-- Creates a new git worktree with a new branch in one command
-- Automatically symlinks .gitignore from the main worktree
+### Create worktree and branch in one command
+
+`twig add feat/xxx` executes worktree creation, branch creation, and symlink setup all at once.
+
+### Automatic symlink management via config
+
+Create new worktrees with personal settings like .envrc and Claude configs carried over.
+Start working immediately in new worktrees.
+
+### Move uncommitted changes to a new branch
+
+Use `--carry` to continue work from another session in a new worktree.
+When you think of a refactoring idea while working, you can write the task to markdown
+and start working on it in a separate worktree.
+
+### Bulk delete merged worktrees
+
+`twig clean` deletes merged worktrees and their branches together.
+
+## Installation
+
+Requires Git 2.15+.
+
+```bash
+go install github.com/708u/twig/cmd/twig@latest
+```
+
+## Quick Start
+
+```bash
+# Initialize settings
+twig init
+
+# Create a new worktree
+twig add feat/new-feature
+
+# Move uncommitted changes to a new worktree
+twig add feat/wip --carry
+
+# List worktrees
+twig list
+
+# Bulk delete merged worktrees
+twig clean
+
+# Delete a specific worktree
+twig remove feat/done
+```
+
+## Configuration
+
+Configure in `.twig/settings.toml`:
+
+- `worktree_destination_base_dir`: Destination directory for worktrees
+- `default_source`: Source branch for symlinks (creates symlinks from main even when adding from a derived worktree)
+- `symlinks`: Glob patterns for symlink targets
+
+Personal settings can be overridden in `.twig/settings.local.toml` (.gitignore recommended).
+
+- `extra_symlinks`: Add personal patterns while preserving team settings
+
+Details: [docs/configuration.md](docs/configuration.md)
+
+## Command Specs
+
+| Command                              | Description                          |
+| ------------------------------------ | ------------------------------------ |
+| [init](docs/commands/init.md)        | Initialize settings                  |
+| [add](docs/commands/add.md)          | Create worktree and branch           |
+| [list](docs/commands/list.md)        | List worktrees                       |
+| [remove](docs/commands/remove.md)    | Delete worktree and branch           |
+| [clean](docs/commands/clean.md)      | Bulk delete merged worktrees         |
+
+See the documentation above for detailed flags and specifications.
 
 ## License
 
