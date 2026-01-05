@@ -104,60 +104,97 @@ func TestResolveDirectory(t *testing.T) {
 func TestResolveCarryFrom(t *testing.T) {
 	t.Parallel()
 
-	t.Run("EmptyValue", func(t *testing.T) {
+	t.Run("WithoutGit", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := resolveCarryFrom("", "/original", nil)
-		if err == nil {
-			t.Fatal("expected error, got nil")
+		tests := []struct {
+			name        string
+			carryValue  string
+			originalCwd string
+			want        string
+			wantErr     string
+		}{
+			{
+				name:        "EmptyValue",
+				carryValue:  "",
+				originalCwd: "/original",
+				wantErr:     "carry value cannot be empty",
+			},
+			{
+				name:        "CurrentValue",
+				carryValue:  carryFromCurrent,
+				originalCwd: "/path/to/original",
+				want:        "/path/to/original",
+			},
 		}
-		if !strings.Contains(err.Error(), "carry value cannot be empty") {
-			t.Errorf("error = %q, want to contain 'carry value cannot be empty'", err.Error())
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				got, err := resolveCarryFrom(tt.carryValue, tt.originalCwd, nil)
+				if tt.wantErr != "" {
+					if err == nil {
+						t.Fatal("expected error, got nil")
+					}
+					if !strings.Contains(err.Error(), tt.wantErr) {
+						t.Errorf("error = %q, want to contain %q", err.Error(), tt.wantErr)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got != tt.want {
+					t.Errorf("got %q, want %q", got, tt.want)
+				}
+			})
 		}
 	})
 
-	t.Run("CurrentValue", func(t *testing.T) {
-		t.Parallel()
-
-		originalCwd := "/path/to/original"
-
-		got, err := resolveCarryFrom(carryFromCurrent, originalCwd, nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got != originalCwd {
-			t.Errorf("got %q, want %q", got, originalCwd)
-		}
-	})
-
-	t.Run("BranchValue", func(t *testing.T) {
+	t.Run("WithGit", func(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
 		git := gwt.NewGitRunner(mainDir)
 
-		// main branch already has a worktree at mainDir
-		got, err := resolveCarryFrom("main", "/original", git)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		tests := []struct {
+			name       string
+			carryValue string
+			want       string
+			wantErr    string
+		}{
+			{
+				name:       "BranchValue",
+				carryValue: "main",
+				want:       mainDir,
+			},
+			{
+				name:       "BranchNotFound",
+				carryValue: "nonexistent",
+				wantErr:    "failed to find worktree for branch",
+			},
 		}
-		if got != mainDir {
-			t.Errorf("got %q, want %q", got, mainDir)
-		}
-	})
 
-	t.Run("BranchNotFound", func(t *testing.T) {
-		t.Parallel()
-
-		_, mainDir := testutil.SetupTestRepo(t)
-		git := gwt.NewGitRunner(mainDir)
-
-		_, err := resolveCarryFrom("nonexistent", "/original", git)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if !strings.Contains(err.Error(), "failed to find worktree for branch") {
-			t.Errorf("error = %q, want to contain 'failed to find worktree for branch'", err.Error())
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got, err := resolveCarryFrom(tt.carryValue, "/original", git)
+				if tt.wantErr != "" {
+					if err == nil {
+						t.Fatal("expected error, got nil")
+					}
+					if !strings.Contains(err.Error(), tt.wantErr) {
+						t.Errorf("error = %q, want to contain %q", err.Error(), tt.wantErr)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got != tt.want {
+					t.Errorf("got %q, want %q", got, tt.want)
+				}
+			})
 		}
 	})
 }
