@@ -77,26 +77,26 @@ func TestCleanResult_Format(t *testing.T) {
 			name: "check_with_candidates",
 			result: CleanResult{
 				Candidates: []CleanCandidate{
-					{Branch: "feat/a", Skipped: false},
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
 					{Branch: "feat/b", Skipped: true, SkipReason: SkipNotMerged},
 				},
 				Check: true,
 			},
 			opts:       FormatOptions{},
-			wantStdout: "clean:\n  feat/a\n",
+			wantStdout: "clean:\n  feat/a (merged)\n",
 			wantStderr: "",
 		},
 		{
 			name: "check_verbose_shows_skipped",
 			result: CleanResult{
 				Candidates: []CleanCandidate{
-					{Branch: "feat/a", Skipped: false},
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
 					{Branch: "feat/b", Skipped: true, SkipReason: SkipNotMerged},
 				},
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "clean:\n  feat/a\n\nskip:\n  feat/b (not merged)\n",
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b (not merged)\n",
 			wantStderr: "",
 		},
 		{
@@ -132,6 +132,58 @@ func TestCleanResult_Format(t *testing.T) {
 			},
 			opts:       FormatOptions{},
 			wantStdout: "twig clean: feat/a\ntwig clean: feat/b\n",
+			wantStderr: "",
+		},
+		// Prunable branch tests
+		{
+			name: "prunable_only",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/prunable", Prunable: true, Skipped: false, CleanReason: CleanMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "clean:\n  feat/prunable (prunable, merged)\n",
+			wantStderr: "",
+		},
+		{
+			name: "clean_and_prunable",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+					{Branch: "feat/prunable", Prunable: true, Skipped: false, CleanReason: CleanUpstreamGone},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "clean:\n  feat/a (merged)\n  feat/prunable (prunable, upstream gone)\n",
+			wantStderr: "",
+		},
+		{
+			name: "clean_prunable_and_skipped_verbose",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+					{Branch: "feat/prunable", Prunable: true, Skipped: false, CleanReason: CleanMerged},
+					{Branch: "feat/wip", Skipped: true, SkipReason: SkipNotMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "clean:\n  feat/a (merged)\n  feat/prunable (prunable, merged)\n\nskip:\n  feat/wip (not merged)\n",
+			wantStderr: "",
+		},
+		{
+			name: "prunable_skipped_shows_no_worktrees",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/prunable", Prunable: true, Skipped: true, SkipReason: SkipNotMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "No worktrees to clean\n",
 			wantStderr: "",
 		},
 	}
@@ -342,6 +394,74 @@ func TestCleanCommand_Run(t *testing.T) {
 			wantCandidates: 1,
 			wantSkipped:    0,
 		},
+		// Orphaned branch tests
+		{
+			name: "detects_prunable_as_orphaned",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/orphaned", Branch: "feat/orphaned", Prunable: true},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/orphaned"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0,
+		},
+		{
+			name: "orphaned_not_merged_is_skipped",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/orphaned", Branch: "feat/orphaned", Prunable: true},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1,
+		},
+		{
+			name: "mixed_worktree_and_orphaned",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+						{Path: "/repo/feat/orphaned", Branch: "feat/orphaned", Prunable: true},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a", "feat/orphaned"},
+					},
+				}
+			},
+			wantCandidates: 2,
+			wantSkipped:    0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -452,6 +572,93 @@ func TestCleanCommand_ResolveTarget(t *testing.T) {
 
 			if got != tt.wantTarget {
 				t.Errorf("got %q, want %q", got, tt.wantTarget)
+			}
+		})
+	}
+}
+
+func TestCleanCommand_CheckPrunableSkipReason(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		branch     string
+		target     string
+		force      WorktreeForceLevel
+		setupGit   func() *testutil.MockGitExecutor
+		wantReason SkipReason
+	}{
+		{
+			name:   "no_skip_for_merged_branch",
+			branch: "feat/a",
+			target: "main",
+			force:  WorktreeForceLevelNone,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					MergedBranches: map[string][]string{
+						"main": {"feat/a"},
+					},
+				}
+			},
+			wantReason: "",
+		},
+		{
+			name:   "skip_not_merged",
+			branch: "feat/a",
+			target: "main",
+			force:  WorktreeForceLevelNone,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					MergedBranches: map[string][]string{
+						"main": {},
+					},
+				}
+			},
+			wantReason: SkipNotMerged,
+		},
+		{
+			name:   "force_bypasses_not_merged",
+			branch: "feat/a",
+			target: "main",
+			force:  WorktreeForceLevelUnclean,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					MergedBranches: map[string][]string{
+						"main": {},
+					},
+				}
+			},
+			wantReason: "",
+		},
+		{
+			name:   "upstream_gone_is_merged",
+			branch: "feat/a",
+			target: "main",
+			force:  WorktreeForceLevelNone,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					MergedBranches:       map[string][]string{"main": {}},
+					UpstreamGoneBranches: []string{"feat/a"},
+				}
+			},
+			wantReason: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := tt.setupGit()
+
+			cmd := &CleanCommand{
+				Git: &GitRunner{Executor: mockGit},
+			}
+
+			got := cmd.checkPrunableSkipReason(tt.branch, tt.target, tt.force)
+
+			if got != tt.wantReason {
+				t.Errorf("got %q, want %q", got, tt.wantReason)
 			}
 		})
 	}

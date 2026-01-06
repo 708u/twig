@@ -199,11 +199,11 @@ func TestCleanCmd(t *testing.T) {
 			stdin: "",
 			result: twig.CleanResult{
 				Candidates: []twig.CleanCandidate{
-					{Branch: "feat/a", Skipped: false},
+					{Branch: "feat/a", Skipped: false, CleanReason: twig.CleanMerged},
 				},
 				Check: true,
 			},
-			wantStdout: "clean:\n  feat/a\n",
+			wantStdout: "clean:\n  feat/a (merged)\n",
 		},
 		{
 			name:  "check_no_candidates",
@@ -221,11 +221,11 @@ func TestCleanCmd(t *testing.T) {
 			stdin: "n\n",
 			result: twig.CleanResult{
 				Candidates: []twig.CleanCandidate{
-					{Branch: "feat/a", Skipped: false},
+					{Branch: "feat/a", Skipped: false, CleanReason: twig.CleanMerged},
 				},
 				Check: true,
 			},
-			wantStdout: "clean:\n  feat/a\n\nProceed? [y/N]: ",
+			wantStdout: "clean:\n  feat/a (merged)\n\nProceed? [y/N]: ",
 		},
 		{
 			name:  "verbose_shows_skipped",
@@ -233,12 +233,12 @@ func TestCleanCmd(t *testing.T) {
 			stdin: "",
 			result: twig.CleanResult{
 				Candidates: []twig.CleanCandidate{
-					{Branch: "feat/a", Skipped: false},
+					{Branch: "feat/a", Skipped: false, CleanReason: twig.CleanMerged},
 					{Branch: "feat/b", Skipped: true, SkipReason: twig.SkipNotMerged},
 				},
 				Check: true,
 			},
-			wantStdout: "clean:\n  feat/a\n\nskip:\n  feat/b (not merged)\n",
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b (not merged)\n",
 		},
 	}
 
