@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -330,6 +331,172 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 		// Local config should override project config
 		if result.Config.DefaultSource != "develop" {
 			t.Errorf("DefaultSource = %q, want %q", result.Config.DefaultSource, "develop")
+		}
+	})
+}
+
+func TestCleanCommand_InteractiveConfirmation_Integration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ConfirmWithY", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a merged worktree (no commits = already merged)
+		wtPath := filepath.Join(repoDir, "feature", "interactive-y")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/interactive-y", wtPath)
+
+		// Create command with real implementation (no mock)
+		cmd := newRootCmd()
+
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		stdin := strings.NewReader("y\n")
+
+		cmd.SetOut(stdout)
+		cmd.SetErr(stderr)
+		cmd.SetIn(stdin)
+		cmd.SetArgs([]string{"-C", mainDir, "clean"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Fatalf("Execute failed: %v", err)
+		}
+
+		// Verify worktree was removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+
+		// Verify branch was deleted
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/interactive-y")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+
+		// Verify output contains prompt
+		if !strings.Contains(stdout.String(), "Proceed? [y/N]:") {
+			t.Errorf("stdout should contain prompt, got: %s", stdout.String())
+		}
+	})
+
+	t.Run("DeclineWithN", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a merged worktree (no commits = already merged)
+		wtPath := filepath.Join(repoDir, "feature", "interactive-n")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/interactive-n", wtPath)
+
+		// Create command with real implementation (no mock)
+		cmd := newRootCmd()
+
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		stdin := strings.NewReader("n\n")
+
+		cmd.SetOut(stdout)
+		cmd.SetErr(stderr)
+		cmd.SetIn(stdin)
+		cmd.SetArgs([]string{"-C", mainDir, "clean"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Fatalf("Execute failed: %v", err)
+		}
+
+		// Verify worktree still exists
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree should still exist: %s", wtPath)
+		}
+
+		// Verify branch still exists
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/interactive-n")
+		if strings.TrimSpace(out) == "" {
+			t.Error("branch should still exist")
+		}
+
+		// Verify output contains prompt
+		if !strings.Contains(stdout.String(), "Proceed? [y/N]:") {
+			t.Errorf("stdout should contain prompt, got: %s", stdout.String())
+		}
+	})
+
+	t.Run("ConfirmWithYes", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a merged worktree (no commits = already merged)
+		wtPath := filepath.Join(repoDir, "feature", "interactive-yes")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/interactive-yes", wtPath)
+
+		// Create command with real implementation (no mock)
+		cmd := newRootCmd()
+
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		stdin := strings.NewReader("yes\n")
+
+		cmd.SetOut(stdout)
+		cmd.SetErr(stderr)
+		cmd.SetIn(stdin)
+		cmd.SetArgs([]string{"-C", mainDir, "clean"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Fatalf("Execute failed: %v", err)
+		}
+
+		// Verify worktree was removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+
+		// Verify branch was deleted
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/interactive-yes")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+	})
+
+	t.Run("EmptyInputDeclinesConfirmation", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a merged worktree (no commits = already merged)
+		wtPath := filepath.Join(repoDir, "feature", "interactive-empty")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/interactive-empty", wtPath)
+
+		// Create command with real implementation (no mock)
+		cmd := newRootCmd()
+
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		stdin := strings.NewReader("\n") // Just Enter
+
+		cmd.SetOut(stdout)
+		cmd.SetErr(stderr)
+		cmd.SetIn(stdin)
+		cmd.SetArgs([]string{"-C", mainDir, "clean"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Fatalf("Execute failed: %v", err)
+		}
+
+		// Verify worktree still exists (empty input = decline)
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree should still exist: %s", wtPath)
+		}
+
+		// Verify branch still exists
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/interactive-empty")
+		if strings.TrimSpace(out) == "" {
+			t.Error("branch should still exist")
 		}
 	})
 }
