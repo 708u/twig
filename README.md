@@ -51,6 +51,14 @@ Examples:
 
 Requires Git 2.15+.
 
+### Homebrew
+
+```bash
+brew install 708u/tap/twig
+```
+
+### Go
+
 ```bash
 go install github.com/708u/twig/cmd/twig@latest
 ```
