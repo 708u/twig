@@ -34,6 +34,27 @@ twig remove <branch>... [flags]
 This matches git's behavior where `git worktree remove -f` removes unclean
 worktrees and `git worktree remove -f -f` also removes locked worktrees.
 
+### Prunable Worktrees
+
+When a worktree directory is deleted externally (via `rm -rf` or other means),
+the branch remains but the worktree becomes "prunable". The remove command
+handles this gracefully:
+
+```bash
+# Worktree deleted externally
+rm -rf /path/to/feat/x
+
+# twig remove still works - prunes the stale record and deletes the branch
+twig remove feat/x
+```
+
+For prunable worktrees:
+
+- Stale worktree records are pruned automatically
+- Branch is deleted as usual
+- No cwd check is performed (directory doesn't exist)
+- `--dry-run` shows "Would prune stale worktree record"
+
 ### Empty Directory Cleanup
 
 After removing a worktree, twig automatically removes any empty parent

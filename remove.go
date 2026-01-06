@@ -41,6 +41,7 @@ type RemovedWorktree struct {
 	Branch       string
 	WorktreePath string
 	CleanedDirs  []string // Empty parent directories that were removed
+	Pruned       bool     // Stale worktree record was pruned (directory was already deleted)
 	DryRun       bool
 	GitOutput    []byte
 	Err          error // nil if success
@@ -112,7 +113,11 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 	var stdout strings.Builder
 
 	if r.DryRun {
-		fmt.Fprintf(&stdout, "Would remove worktree: %s\n", r.WorktreePath)
+		if r.Pruned {
+			fmt.Fprintf(&stdout, "Would prune stale worktree record\n")
+		} else if r.WorktreePath != "" {
+			fmt.Fprintf(&stdout, "Would remove worktree: %s\n", r.WorktreePath)
+		}
 		fmt.Fprintf(&stdout, "Would delete branch: %s\n", r.Branch)
 		for _, dir := range r.CleanedDirs {
 			fmt.Fprintf(&stdout, "Would remove empty directory: %s\n", dir)
@@ -124,7 +129,11 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 		if len(r.GitOutput) > 0 {
 			stdout.Write(r.GitOutput)
 		}
-		fmt.Fprintf(&stdout, "Removed worktree and branch: %s\n", r.Branch)
+		if r.Pruned {
+			fmt.Fprintf(&stdout, "Pruned stale worktree and deleted branch: %s\n", r.Branch)
+		} else {
+			fmt.Fprintf(&stdout, "Removed worktree and branch: %s\n", r.Branch)
+		}
 		for _, dir := range r.CleanedDirs {
 			fmt.Fprintf(&stdout, "Removed empty directory: %s\n", dir)
 		}
@@ -136,7 +145,7 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 }
 
 // Run removes the worktree and branch for the given branch name.
-// cwd is the current working directory (absolute path) passed from CLI layer.
+// cwd is used to prevent removal when inside the target worktree.
 func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (RemovedWorktree, error) {
 	var result RemovedWorktree
 	result.Branch = branch
@@ -149,18 +158,25 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 		return result, fmt.Errorf("worktree source directory is not configured")
 	}
 
-	wtPath, err := c.Git.WorktreeFindByBranch(branch)
+	wtInfo, err := c.Git.WorktreeFindByBranch(branch)
 	if err != nil {
 		return result, err
 	}
-	result.WorktreePath = wtPath
+	result.WorktreePath = wtInfo.Path
+	result.Pruned = wtInfo.Prunable
 
-	if strings.HasPrefix(cwd, wtPath) {
-		return result, fmt.Errorf("cannot remove: current directory is inside worktree %s", wtPath)
+	// Handle prunable worktree (directory already deleted externally)
+	if wtInfo.Prunable {
+		return c.removePrunable(branch, opts, result)
+	}
+
+	// Normal worktree removal
+	if strings.HasPrefix(cwd, wtInfo.Path) {
+		return result, fmt.Errorf("cannot remove: current directory is inside worktree %s", wtInfo.Path)
 	}
 
 	if opts.DryRun {
-		result.CleanedDirs = c.predictEmptyParentDirs(wtPath)
+		result.CleanedDirs = c.predictEmptyParentDirs(wtInfo.Path)
 		return result, nil
 	}
 
@@ -169,13 +185,13 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 	if opts.Force > WorktreeForceLevelNone {
 		wtOpts = append(wtOpts, WithForceRemove(opts.Force))
 	}
-	wtOut, err := c.Git.WorktreeRemove(wtPath, wtOpts...)
+	wtOut, err := c.Git.WorktreeRemove(wtInfo.Path, wtOpts...)
 	if err != nil {
 		return result, err
 	}
 	gitOutput = append(gitOutput, wtOut...)
 
-	result.CleanedDirs = c.cleanupEmptyParentDirs(wtPath)
+	result.CleanedDirs = c.cleanupEmptyParentDirs(wtInfo.Path)
 
 	var branchOpts []BranchDeleteOption
 	if opts.Force > WorktreeForceLevelNone {
@@ -188,6 +204,33 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 	gitOutput = append(gitOutput, brOut...)
 
 	result.GitOutput = gitOutput
+	return result, nil
+}
+
+// removePrunable handles removal of a prunable worktree (directory already deleted).
+// It prunes the stale worktree record and deletes the branch.
+func (c *RemoveCommand) removePrunable(branch string, opts RemoveOptions, result RemovedWorktree) (RemovedWorktree, error) {
+	if opts.DryRun {
+		return result, nil
+	}
+
+	// Prune stale worktree records
+	if _, err := c.Git.WorktreePrune(); err != nil {
+		return result, fmt.Errorf("failed to prune worktrees: %w", err)
+	}
+
+	// Delete the branch
+	var branchOpts []BranchDeleteOption
+	if opts.Force > WorktreeForceLevelNone {
+		branchOpts = append(branchOpts, WithForceDelete())
+	}
+	brOut, err := c.Git.BranchDelete(branch, branchOpts...)
+	if err != nil {
+		result.Err = err
+		return result, err
+	}
+	result.GitOutput = brOut
+
 	return result, nil
 }
 

@@ -209,15 +209,8 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 		return result, nil
 	}
 
-	// Prune stale worktree references first.
-	// This is required before deleting prunable branches, because git
-	// considers them "checked out" until the worktree reference is removed.
-	if _, err := c.Git.WorktreePrune(); err != nil {
-		return result, fmt.Errorf("failed to prune worktrees: %w", err)
-	}
-	result.Pruned = true
-
 	// Execute removal for cleanable candidates
+	// RemoveCommand handles both normal and prunable worktrees
 	removeCmd := &RemoveCommand{
 		FS:     c.FS,
 		Git:    c.Git,
@@ -234,24 +227,19 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 			continue
 		}
 
-		if candidate.Prunable {
-			// Prunable branch: only delete the branch (worktree already gone)
-			_, err := c.Git.BranchDelete(candidate.Branch, WithForceDelete())
-			result.Removed = append(result.Removed, RemovedWorktree{
-				Branch: candidate.Branch,
-				Err:    err,
-			})
-		} else {
-			// Normal worktree: remove worktree and branch
-			wt, err := removeCmd.Run(candidate.Branch, cwd, RemoveOptions{
-				Force:  removeForce,
-				DryRun: false,
-			})
-			if err != nil {
-				wt.Branch = candidate.Branch
-				wt.Err = err
-			}
-			result.Removed = append(result.Removed, wt)
+		wt, err := removeCmd.Run(candidate.Branch, cwd, RemoveOptions{
+			Force:  removeForce,
+			DryRun: false,
+		})
+		if err != nil {
+			wt.Branch = candidate.Branch
+			wt.Err = err
+		}
+		result.Removed = append(result.Removed, wt)
+
+		// Track if any prunable branches were processed
+		if wt.Pruned {
+			result.Pruned = true
 		}
 	}
 

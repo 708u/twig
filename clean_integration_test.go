@@ -294,9 +294,10 @@ func TestCleanCommand_Integration(t *testing.T) {
 			t.Errorf("expected 1 removed, got %d", len(result.Removed))
 		}
 
-		// Prune should be called
-		if !result.Pruned {
-			t.Error("prune should have been called")
+		// For normal (non-prunable) worktrees, Pruned should be false
+		// Prune is only called for prunable worktrees via RemoveCommand
+		if result.Pruned {
+			t.Error("pruned should be false for normal worktree removal")
 		}
 	})
 
@@ -436,6 +437,11 @@ func TestCleanCommand_Integration(t *testing.T) {
 		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/clean-prunable")
 		if strings.TrimSpace(out) != "" {
 			t.Errorf("prunable branch should be deleted, got: %s", out)
+		}
+
+		// Pruned should be true when prunable branches were processed
+		if !result.Pruned {
+			t.Error("pruned should be true when prunable branches are cleaned")
 		}
 	})
 

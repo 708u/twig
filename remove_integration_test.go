@@ -555,4 +555,165 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			t.Errorf("dry-run output should include cleanup info, got: %s", formatted.Stdout)
 		}
 	})
+
+	t.Run("RemovePrunableWorktree", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a worktree
+		wtPath := filepath.Join(repoDir, "feature", "prunable-test")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/prunable-test", wtPath)
+
+		// Verify worktree exists
+		out := testutil.RunGit(t, mainDir, "worktree", "list")
+		if !strings.Contains(out, "feature/prunable-test") {
+			t.Fatalf("worktree was not created: %s", out)
+		}
+
+		// Delete worktree directory externally (simulate rm -rf)
+		if err := os.RemoveAll(wtPath); err != nil {
+			t.Fatalf("failed to remove worktree directory: %v", err)
+		}
+
+		// Verify directory is deleted
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Fatalf("worktree directory should be deleted")
+		}
+
+		// Verify worktree is now prunable
+		out = testutil.RunGit(t, mainDir, "worktree", "list", "--porcelain")
+		if !strings.Contains(out, "prunable") {
+			t.Fatalf("worktree should be prunable: %s", out)
+		}
+
+		// Load config and run remove command
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		removeResult, err := cmd.Run("feature/prunable-test", mainDir, RemoveOptions{})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify result indicates prunable
+		if !removeResult.Pruned {
+			t.Error("result.Prunable should be true")
+		}
+
+		// Verify branch is deleted
+		out = testutil.RunGit(t, mainDir, "branch", "--list", "feature/prunable-test")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+
+		// Verify worktree record is pruned
+		out = testutil.RunGit(t, mainDir, "worktree", "list", "--porcelain")
+		if strings.Contains(out, "feature/prunable-test") {
+			t.Errorf("worktree record should be pruned: %s", out)
+		}
+	})
+
+	t.Run("RemovePrunableWorktreeDryRun", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create and externally delete a worktree
+		wtPath := filepath.Join(repoDir, "feature", "prunable-dry-run")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/prunable-dry-run", wtPath)
+		if err := os.RemoveAll(wtPath); err != nil {
+			t.Fatalf("failed to remove worktree directory: %v", err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		removeResult, err := cmd.Run("feature/prunable-dry-run", mainDir, RemoveOptions{DryRun: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify result
+		if !removeResult.Pruned {
+			t.Error("result.Prunable should be true")
+		}
+		if !removeResult.DryRun {
+			t.Error("result.DryRun should be true")
+		}
+
+		// Branch should still exist (dry-run)
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/prunable-dry-run")
+		if strings.TrimSpace(out) == "" {
+			t.Error("branch should still exist in dry-run mode")
+		}
+
+		// Format should show appropriate dry-run message
+		formatted := removeResult.Format(FormatOptions{})
+		if !strings.Contains(formatted.Stdout, "Would prune stale worktree record") {
+			t.Errorf("dry-run output should show prune message, got: %s", formatted.Stdout)
+		}
+		if !strings.Contains(formatted.Stdout, "Would delete branch") {
+			t.Errorf("dry-run output should show branch deletion, got: %s", formatted.Stdout)
+		}
+	})
+
+	t.Run("RemovePrunableWorktreeWithForce", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create and externally delete a worktree
+		wtPath := filepath.Join(repoDir, "feature", "prunable-force")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/prunable-force", wtPath)
+		if err := os.RemoveAll(wtPath); err != nil {
+			t.Fatalf("failed to remove worktree directory: %v", err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Remove with force option
+		removeResult, err := cmd.Run("feature/prunable-force", mainDir, RemoveOptions{
+			Force: WorktreeForceLevelUnclean,
+		})
+		if err != nil {
+			t.Fatalf("Run with force failed: %v", err)
+		}
+
+		// Verify result
+		if !removeResult.Pruned {
+			t.Error("result.Prunable should be true")
+		}
+
+		// Branch should be deleted
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/prunable-force")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+	})
 }
