@@ -188,6 +188,7 @@ func newRootCmd(opts ...Option) *cobra.Command {
 			return nil
 		},
 	}
+	rootCmd.SetVersionTemplate("{{.Version}}\n")
 
 	addCmd := &cobra.Command{
 		Use:   "add <name>",

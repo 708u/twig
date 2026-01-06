@@ -27,7 +27,7 @@ date:    2025-01-06T12:00:00Z
 
 # Short output (flag)
 twig --version
-twig version v1.0.0
+v1.0.0
 
 # Local development build
 twig version
