@@ -116,7 +116,7 @@ func TestListCommand_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("WorktreeInfoHasHEAD", func(t *testing.T) {
+	t.Run("WorktreeHasHEAD", func(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)

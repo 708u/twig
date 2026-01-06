@@ -669,7 +669,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		wt         WorktreeInfo
+		wt         Worktree
 		cwd        string
 		target     string
 		force      WorktreeForceLevel
@@ -679,7 +679,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		// Basic cases (no force)
 		{
 			name:   "no_skip_for_valid_candidate",
-			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			wt:     Worktree{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:    "/other/dir",
 			target: "main",
 			force:  WorktreeForceLevelNone,
@@ -694,7 +694,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		},
 		{
 			name:       "skip_detached",
-			wt:         WorktreeInfo{Path: "/repo/feat/a", Detached: true},
+			wt:         Worktree{Path: "/repo/feat/a", Detached: true},
 			cwd:        "/other/dir",
 			target:     "main",
 			force:      WorktreeForceLevelNone,
@@ -703,7 +703,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		},
 		{
 			name:       "skip_locked",
-			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+			wt:         Worktree{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
 			cwd:        "/other/dir",
 			target:     "main",
 			force:      WorktreeForceLevelNone,
@@ -712,7 +712,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		},
 		{
 			name:       "skip_current_dir",
-			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			wt:         Worktree{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:        "/repo/feat/a/subdir",
 			target:     "main",
 			force:      WorktreeForceLevelNone,
@@ -721,7 +721,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		},
 		{
 			name:   "skip_has_changes",
-			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			wt:     Worktree{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:    "/other/dir",
 			target: "main",
 			force:  WorktreeForceLevelNone,
@@ -734,7 +734,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		},
 		{
 			name:   "skip_not_merged",
-			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			wt:     Worktree{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:    "/other/dir",
 			target: "main",
 			force:  WorktreeForceLevelNone,
@@ -750,7 +750,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		// Force level: Unclean (-f)
 		{
 			name:   "force_unclean_bypasses_has_changes",
-			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			wt:     Worktree{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:    "/other/dir",
 			target: "main",
 			force:  WorktreeForceLevelUnclean,
@@ -763,7 +763,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		},
 		{
 			name:   "force_unclean_bypasses_not_merged",
-			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			wt:     Worktree{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:    "/other/dir",
 			target: "main",
 			force:  WorktreeForceLevelUnclean,
@@ -778,7 +778,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		},
 		{
 			name:       "force_unclean_does_not_bypass_locked",
-			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+			wt:         Worktree{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
 			cwd:        "/other/dir",
 			target:     "main",
 			force:      WorktreeForceLevelUnclean,
@@ -788,7 +788,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		// Force level: Locked (-ff)
 		{
 			name:       "force_locked_bypasses_locked",
-			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+			wt:         Worktree{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
 			cwd:        "/other/dir",
 			target:     "main",
 			force:      WorktreeForceLevelLocked,
@@ -797,7 +797,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		},
 		{
 			name:   "force_locked_bypasses_has_changes",
-			wt:     WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			wt:     Worktree{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:    "/other/dir",
 			target: "main",
 			force:  WorktreeForceLevelLocked,
@@ -811,7 +811,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		// Never bypassed (even with -ff)
 		{
 			name:       "force_locked_does_not_bypass_detached",
-			wt:         WorktreeInfo{Path: "/repo/feat/a", Detached: true},
+			wt:         Worktree{Path: "/repo/feat/a", Detached: true},
 			cwd:        "/other/dir",
 			target:     "main",
 			force:      WorktreeForceLevelLocked,
@@ -820,7 +820,7 @@ func TestCleanCommand_CheckSkipReason(t *testing.T) {
 		},
 		{
 			name:       "force_locked_does_not_bypass_current_dir",
-			wt:         WorktreeInfo{Path: "/repo/feat/a", Branch: "feat/a"},
+			wt:         Worktree{Path: "/repo/feat/a", Branch: "feat/a"},
 			cwd:        "/repo/feat/a/subdir",
 			target:     "main",
 			force:      WorktreeForceLevelLocked,

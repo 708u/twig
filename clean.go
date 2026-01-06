@@ -270,7 +270,7 @@ func (c *CleanCommand) resolveTarget(target string) (string, error) {
 
 // checkSkipReason checks if worktree should be skipped and returns the reason.
 // force level controls which conditions can be bypassed (matches git worktree behavior).
-func (c *CleanCommand) checkSkipReason(wt WorktreeInfo, cwd, target string, force WorktreeForceLevel) SkipReason {
+func (c *CleanCommand) checkSkipReason(wt Worktree, cwd, target string, force WorktreeForceLevel) SkipReason {
 	// Check detached HEAD (never bypassed)
 	if wt.Detached {
 		return SkipDetached
