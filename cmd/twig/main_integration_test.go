@@ -46,13 +46,13 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		// Now simulate --source main from feat/a worktree
 		// The PreRunE logic: resolve main branch to its worktree path, then reload config
 		git := twig.NewGitRunner(featAPath)
-		mainPath, err := git.WorktreeFindByBranch("main")
+		mainWT, err := git.WorktreeFindByBranch("main")
 		if err != nil {
 			t.Fatalf("failed to find main worktree: %v", err)
 		}
 
 		// Load config from main (as --source would do)
-		result, err = twig.LoadConfig(mainPath)
+		result, err = twig.LoadConfig(mainWT.Path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -104,13 +104,13 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		// Simulate -C pointing to mainDir and --source pointing to main
 		// This should work: -C sets working directory, --source sets source branch
 		git := twig.NewGitRunner(mainDir)
-		sourcePath, err := git.WorktreeFindByBranch("main")
+		sourceWT, err := git.WorktreeFindByBranch("main")
 		if err != nil {
 			t.Fatalf("failed to find main worktree: %v", err)
 		}
 
 		// Load config from source (as --source would do after -C sets cwd)
-		result, err := twig.LoadConfig(sourcePath)
+		result, err := twig.LoadConfig(sourceWT.Path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -221,13 +221,13 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 		// When default_source is applied, config should be reloaded from main
 		// Simulate the PreRunE logic
 		git := twig.NewGitRunner(featAPath)
-		mainPath, err := git.WorktreeFindByBranch(resultFeatA.Config.DefaultSource)
+		mainWT, err := git.WorktreeFindByBranch(resultFeatA.Config.DefaultSource)
 		if err != nil {
 			t.Fatalf("failed to find worktree for default_source: %v", err)
 		}
 
 		// Load config from main (as default_source would do)
-		resultMain, err := twig.LoadConfig(mainPath)
+		resultMain, err := twig.LoadConfig(mainWT.Path)
 		if err != nil {
 			t.Fatal(err)
 		}

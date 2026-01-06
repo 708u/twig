@@ -307,34 +307,21 @@ func (g *GitRunner) WorktreeListBranches() ([]string, error) {
 	return branches, nil
 }
 
-// WorktreeFindByBranch returns the worktree path for the given branch.
+// WorktreeFindByBranch returns the WorktreeInfo for the given branch.
 // Returns an error if the branch is not checked out in any worktree.
-func (g *GitRunner) WorktreeFindByBranch(branch string) (string, error) {
-	out, err := g.worktreeListPorcelain()
+func (g *GitRunner) WorktreeFindByBranch(branch string) (*WorktreeInfo, error) {
+	worktrees, err := g.WorktreeList()
 	if err != nil {
-		return "", fmt.Errorf("failed to list worktrees: %w", err)
+		return nil, err
 	}
 
-	// porcelain format:
-	// worktree /path/to/worktree
-	// HEAD abc123
-	// branch refs/heads/branch-name
-	// (blank line)
-
-	lines := strings.Split(string(out), "\n")
-	var currentPath string
-	for _, line := range lines {
-		if path, ok := strings.CutPrefix(line, PorcelainWorktreePrefix); ok {
-			currentPath = path
-		}
-		if branchName, ok := strings.CutPrefix(line, PorcelainBranchPrefix); ok {
-			if branchName == branch {
-				return currentPath, nil
-			}
+	for i := range worktrees {
+		if worktrees[i].Branch == branch {
+			return &worktrees[i], nil
 		}
 	}
 
-	return "", fmt.Errorf("branch %q is not checked out in any worktree", branch)
+	return nil, fmt.Errorf("branch %q is not checked out in any worktree", branch)
 }
 
 // WorktreeForceLevel represents the force level for worktree removal.

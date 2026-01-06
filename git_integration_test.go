@@ -28,8 +28,8 @@ func TestGitRunner_WorktreeFindByBranch_Integration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got != wtPath {
-			t.Errorf("got %q, want %q", got, wtPath)
+		if got.Path != wtPath {
+			t.Errorf("got %q, want %q", got.Path, wtPath)
 		}
 	})
 

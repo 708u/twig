@@ -3,6 +3,18 @@
 A CLI tool that creates, deletes, and manages git worktrees and branches in a single command.
 Focused on simplifying git operations, keeping features minimal.
 
+## Design Philosophy
+
+twig treats branches and worktrees as a single unified concept.
+Users don't need to think about whether they're managing a "branch" or a "worktree" -
+they simply work with named development contexts.
+
+- `twig add feat/x` creates both the branch and worktree together
+- `twig remove feat/x` deletes both together
+- Even if a worktree directory is deleted externally, `twig remove` still works
+
+This 1:1 mapping simplifies the mental model: one name, one workspace, one command.
+
 ## Motivation
 
 twig is designed to be friendly for both humans and agentic coding tools,

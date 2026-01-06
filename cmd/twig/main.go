@@ -94,11 +94,11 @@ func resolveCarryFrom(carryValue, originalCwd string, git *twig.GitRunner) (stri
 	case "":
 		return "", fmt.Errorf("carry value cannot be empty")
 	default:
-		path, err := git.WorktreeFindByBranch(carryValue)
+		wt, err := git.WorktreeFindByBranch(carryValue)
 		if err != nil {
 			return "", fmt.Errorf("failed to find worktree for branch %q: %w", carryValue, err)
 		}
-		return path, nil
+		return wt.Path, nil
 	}
 }
 
@@ -233,13 +233,13 @@ With --carry, use --file to carry only matching files:
 
 			// Resolve branch to worktree path
 			git := twig.NewGitRunner(cwd)
-			sourcePath, err := git.WorktreeFindByBranch(source)
+			sourceWT, err := git.WorktreeFindByBranch(source)
 			if err != nil {
 				return fmt.Errorf("failed to find worktree for branch %q: %w", source, err)
 			}
 
 			// Load config from source worktree
-			cwd = sourcePath
+			cwd = sourceWT.Path
 			result, err := twig.LoadConfig(cwd)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -519,8 +519,8 @@ stop processing of remaining branches.`,
 		// If --source is specified, resolve to that worktree
 		if source, _ := cmd.Flags().GetString("source"); source != "" {
 			git := twig.NewGitRunner(dir)
-			if sourcePath, err := git.WorktreeFindByBranch(source); err == nil {
-				dir = sourcePath
+			if sourceWT, err := git.WorktreeFindByBranch(source); err == nil {
+				dir = sourceWT.Path
 			}
 		}
 

@@ -127,6 +127,33 @@ func TestRemoveResult_Format(t *testing.T) {
 			wantStdout: "Would remove worktree: /repo/feature/a\nWould delete branch: feature/a\n",
 			wantStderr: "",
 		},
+		{
+			name: "prunable_success",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{{Branch: "feature/deleted", WorktreePath: "/repo/feature/deleted", Pruned: true}},
+			},
+			opts:       FormatOptions{},
+			wantStdout: "twig remove: feature/deleted\n",
+			wantStderr: "",
+		},
+		{
+			name: "prunable_dry_run",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{{Branch: "feature/deleted", WorktreePath: "/repo/feature/deleted", Pruned: true, DryRun: true}},
+			},
+			opts:       FormatOptions{},
+			wantStdout: "Would prune stale worktree record\nWould delete branch: feature/deleted\n",
+			wantStderr: "",
+		},
+		{
+			name: "prunable_verbose",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{{Branch: "feature/deleted", WorktreePath: "/repo/feature/deleted", Pruned: true}},
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "Pruned stale worktree and deleted branch: feature/deleted\ntwig remove: feature/deleted\n",
+			wantStderr: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -303,6 +330,104 @@ func TestRemoveCommand_Run(t *testing.T) {
 				t.Helper()
 				return &testutil.MockGitExecutor{
 					Worktrees:       []testutil.MockWorktree{{Path: "/repo/feature/test", Branch: "feature/test"}},
+					BranchDeleteErr: errors.New("branch not fully merged"),
+				}
+			},
+			wantErr:     true,
+			errContains: "failed to delete branch",
+		},
+		{
+			name:   "prunable_worktree_success",
+			branch: "feature/deleted",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{{
+						Path:     "/repo/feature/deleted",
+						Branch:   "feature/deleted",
+						Prunable: true,
+					}},
+					CapturedArgs: captured,
+				}
+			},
+			wantErr: false,
+		},
+		{
+			name:   "prunable_worktree_dry_run",
+			branch: "feature/deleted",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{DryRun: true},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{{
+						Path:     "/repo/feature/deleted",
+						Branch:   "feature/deleted",
+						Prunable: true,
+					}},
+					CapturedArgs: captured,
+				}
+			},
+			wantErr:    false,
+			wantDryRun: true,
+		},
+		{
+			name:   "prunable_worktree_with_force",
+			branch: "feature/deleted",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{Force: WorktreeForceLevelUnclean},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{{
+						Path:     "/repo/feature/deleted",
+						Branch:   "feature/deleted",
+						Prunable: true,
+					}},
+					CapturedArgs: captured,
+				}
+			},
+			wantErr: false,
+		},
+		{
+			name:   "prunable_worktree_prune_fails",
+			branch: "feature/deleted",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{{
+						Path:     "/repo/feature/deleted",
+						Branch:   "feature/deleted",
+						Prunable: true,
+					}},
+					WorktreePruneErr: errors.New("prune failed"),
+				}
+			},
+			wantErr:     true,
+			errContains: "failed to prune worktrees",
+		},
+		{
+			name:   "prunable_worktree_branch_delete_fails",
+			branch: "feature/deleted",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{{
+						Path:     "/repo/feature/deleted",
+						Branch:   "feature/deleted",
+						Prunable: true,
+					}},
 					BranchDeleteErr: errors.New("branch not fully merged"),
 				}
 			},
