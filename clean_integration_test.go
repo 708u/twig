@@ -71,17 +71,28 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create an unmerged branch
+		// Create an unmerged worktree
 		wtPath := filepath.Join(repoDir, "feature", "unmerged")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/unmerged", wtPath)
-
-		// Make a commit that is NOT merged to main
 		testFile := filepath.Join(wtPath, "test.txt")
 		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
 			t.Fatal(err)
 		}
 		testutil.RunGit(t, wtPath, "add", "test.txt")
 		testutil.RunGit(t, wtPath, "commit", "-m", "unmerged commit")
+
+		// Create a prunable unmerged branch (worktree deleted externally)
+		wtPath2 := filepath.Join(repoDir, "feature", "prunable-unmerged")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/prunable-unmerged", wtPath2)
+		testFile2 := filepath.Join(wtPath2, "test2.txt")
+		if err := os.WriteFile(testFile2, []byte("test2"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath2, "add", "test2.txt")
+		testutil.RunGit(t, wtPath2, "commit", "-m", "unmerged commit 2")
+		if err := os.RemoveAll(wtPath2); err != nil {
+			t.Fatal(err)
+		}
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -94,21 +105,23 @@ func TestCleanCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		result, err := cmd.Run(mainDir, CleanOptions{Verbose: true})
+		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
 
-		if len(result.Candidates) != 1 {
-			t.Errorf("expected 1 candidate, got %d", len(result.Candidates))
+		if len(result.Candidates) != 2 {
+			t.Fatalf("expected 2 candidates, got %d", len(result.Candidates))
 		}
 
-		if !result.Candidates[0].Skipped {
-			t.Error("unmerged branch should be skipped")
-		}
-
-		if result.Candidates[0].SkipReason != SkipNotMerged {
-			t.Errorf("skip reason should be %s, got %s", SkipNotMerged, result.Candidates[0].SkipReason)
+		// Both should be skipped with same reason
+		for _, c := range result.Candidates {
+			if !c.Skipped {
+				t.Errorf("branch %s should be skipped", c.Branch)
+			}
+			if c.SkipReason != SkipNotMerged {
+				t.Errorf("branch %s skip reason should be %s, got %s", c.Branch, SkipNotMerged, c.SkipReason)
+			}
 		}
 	})
 
@@ -376,12 +389,19 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create multiple merged branches
-		branches := []string{"feature/clean-a", "feature/clean-b", "feature/clean-c"}
+		// Create multiple merged worktrees
+		branches := []string{"feature/clean-a", "feature/clean-b"}
 		wtPaths := make([]string, len(branches))
 		for i, branch := range branches {
 			wtPaths[i] = filepath.Join(repoDir, "feature", fmt.Sprintf("clean-%c", 'a'+i))
 			testutil.RunGit(t, mainDir, "worktree", "add", "-b", branch, wtPaths[i])
+		}
+
+		// Create a prunable branch (worktree deleted externally)
+		prunableWtPath := filepath.Join(repoDir, "feature", "clean-prunable")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/clean-prunable", prunableWtPath)
+		if err := os.RemoveAll(prunableWtPath); err != nil {
+			t.Fatal(err)
 		}
 
 		cfgResult, err := LoadConfig(mainDir)
@@ -401,7 +421,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			t.Fatalf("Run failed: %v", err)
 		}
 
-		// All worktrees should be removed
+		// All worktrees and prunable branches should be removed
 		if len(result.Removed) != 3 {
 			t.Errorf("expected 3 removed, got %d", len(result.Removed))
 		}
@@ -410,6 +430,12 @@ func TestCleanCommand_Integration(t *testing.T) {
 			if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
 				t.Errorf("worktree should be removed: %s", wtPath)
 			}
+		}
+
+		// Prunable branch should be deleted
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/clean-prunable")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("prunable branch should be deleted, got: %s", out)
 		}
 	})
 
@@ -514,17 +540,28 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create an unmerged branch
+		// Create an unmerged worktree
 		wtPath := filepath.Join(repoDir, "feature", "force-unmerged")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/force-unmerged", wtPath)
-
-		// Make a commit that is NOT merged to main
 		testFile := filepath.Join(wtPath, "test.txt")
 		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
 			t.Fatal(err)
 		}
 		testutil.RunGit(t, wtPath, "add", "test.txt")
 		testutil.RunGit(t, wtPath, "commit", "-m", "unmerged commit")
+
+		// Create a prunable unmerged branch
+		wtPath2 := filepath.Join(repoDir, "feature", "prunable-force")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/prunable-force", wtPath2)
+		testFile2 := filepath.Join(wtPath2, "test2.txt")
+		if err := os.WriteFile(testFile2, []byte("test2"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath2, "add", "test2.txt")
+		testutil.RunGit(t, wtPath2, "commit", "-m", "unmerged commit 2")
+		if err := os.RemoveAll(wtPath2); err != nil {
+			t.Fatal(err)
+		}
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -537,22 +574,26 @@ func TestCleanCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		// Without force, should skip
+		// Without force, both should be skipped
 		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
-		if !result.Candidates[0].Skipped || result.Candidates[0].SkipReason != SkipNotMerged {
-			t.Error("without force, unmerged branch should be skipped")
+		for _, c := range result.Candidates {
+			if !c.Skipped || c.SkipReason != SkipNotMerged {
+				t.Errorf("without force, branch %s should be skipped", c.Branch)
+			}
 		}
 
-		// With -f, should not skip
+		// With -f, both should not be skipped
 		result, err = cmd.Run(mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelUnclean})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
-		if result.Candidates[0].Skipped {
-			t.Error("with -f, unmerged branch should not be skipped")
+		for _, c := range result.Candidates {
+			if c.Skipped {
+				t.Errorf("with -f, branch %s should not be skipped", c.Branch)
+			}
 		}
 
 		// Execute with -f
@@ -564,6 +605,12 @@ func TestCleanCommand_Integration(t *testing.T) {
 		// Worktree should be removed
 		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
 			t.Errorf("worktree should be removed with -f: %s", wtPath)
+		}
+
+		// Prunable branch should be deleted
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/prunable-force")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("prunable branch should be deleted with -f, got: %s", out)
 		}
 	})
 
@@ -828,4 +875,54 @@ func TestCleanCommand_Integration(t *testing.T) {
 				result.Candidates[0].SkipReason)
 		}
 	})
+
+	t.Run("DetectsPrunableBranches", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a worktree
+		wtPath := filepath.Join(repoDir, "feature", "prunable")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/prunable", wtPath)
+
+		// Manually delete the worktree directory (simulating rm -rf)
+		if err := os.RemoveAll(wtPath); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Check mode should detect prunable branch
+		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+
+		candidate := result.Candidates[0]
+		if candidate.Branch != "feature/prunable" {
+			t.Errorf("expected branch feature/prunable, got %s", candidate.Branch)
+		}
+
+		if !candidate.Prunable {
+			t.Error("candidate should be marked as prunable")
+		}
+
+		if candidate.Skipped {
+			t.Errorf("prunable merged branch should not be skipped, but was: %s", candidate.SkipReason)
+		}
+	})
+
 }

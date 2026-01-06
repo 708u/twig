@@ -1,6 +1,6 @@
 # clean subcommand
 
-Remove merged worktrees that are no longer needed.
+Remove merged worktrees and prunable branches that are no longer needed.
 
 ## Usage
 
@@ -35,8 +35,8 @@ and prompts for confirmation:
 
 ```txt
 clean:
-  feat/old-branch
-  fix/completed
+  feat/old-branch (merged)
+  fix/completed (upstream gone)
 
 Proceed? [y/N]:
 ```
@@ -55,6 +55,26 @@ All conditions must pass for a worktree to be cleaned:
 | Not locked         | Worktree is not locked                           |
 | Not current        | Not the current directory                        |
 | Not main           | Not the main worktree                            |
+
+### Prunable Branches
+
+When a worktree directory is deleted externally (via `rm -rf` or other means),
+the branch remains but becomes prunable. The clean command detects these
+prunable branches and includes them as cleanup candidates.
+
+Prunable branches are identified by git's prunable status (from
+`git worktree list --porcelain`). Only branches that were previously
+associated with a worktree are detected - regular branches created with
+`git branch` are not affected.
+
+Safety checks for prunable branches:
+
+| Condition | Description                                     |
+|-----------|-------------------------------------------------|
+| Merged    | Branch is merged to target or upstream is gone  |
+
+Other checks (locked, changes, current directory) don't apply since
+the worktree no longer exists.
 
 ### Force Option
 
@@ -93,22 +113,32 @@ to worktrees that no longer exist.
 
 ## Output Format
 
-Output is grouped by status with indentation:
+Output is grouped by status with indentation. Each candidate shows the
+reason why it is cleanable:
 
 ```txt
 clean:
-  feat/old-branch
-  fix/completed
+  feat/old-branch (merged)
+  fix/completed (upstream gone)
+  feat/stale-branch (prunable, merged)
 
 skip:
   feat/wip (not merged)
   feat/active (has uncommitted changes)
 ```
 
-- `clean:` shows worktrees that will be removed
+- `clean:` shows worktrees and prunable branches that will be removed
 - `skip:` shows skipped worktrees (verbose mode only)
 - Each item is indented with 2 spaces
 - A blank line separates groups
+
+Clean reasons:
+
+| Reason           | Description                                     |
+|------------------|-------------------------------------------------|
+| `merged`         | Branch is merged to target branch               |
+| `upstream gone`  | Remote tracking branch was deleted              |
+| `prunable, ...`  | Worktree directory was deleted externally       |
 
 ## Examples
 
@@ -116,8 +146,8 @@ skip:
 # Show candidates with confirmation prompt (default)
 twig clean
 clean:
-  feature/old-branch
-  fix/completed
+  feature/old-branch (merged)
+  fix/completed (upstream gone)
 
 Proceed? [y/N]: y
 twig clean: feature/old-branch
@@ -126,7 +156,7 @@ twig clean: fix/completed
 # Show with skip reasons
 twig clean -v
 clean:
-  feature/old-branch
+  feature/old-branch (merged)
 
 skip:
   feature/active (has uncommitted changes)
@@ -142,11 +172,17 @@ twig clean: fix/completed
 # Only check candidates (no prompt, no removal)
 twig clean --check
 clean:
-  feature/old-branch
-  fix/completed
+  feature/old-branch (merged)
+  fix/completed (upstream gone)
 
 # Check against specific branch
 twig clean --target develop
+
+# Clean with prunable branches
+twig clean --check
+clean:
+  feature/old-branch (merged)
+  feature/deleted-worktree (prunable, merged)
 ```
 
 ## Exit Code
