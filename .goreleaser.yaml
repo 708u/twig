@@ -68,14 +68,35 @@ archives:
 
 changelog:
   sort: asc
+  groups:
+    - title: "Breaking Changes"
+      regexp: '^.*!:.+$'
+      order: 0
+    - title: "New Features"
+      regexp: '^feat(\(.+\))?:.+$'
+      order: 1
+    - title: "Bug Fixes"
+      regexp: '^fix(\(.+\))?:.+$'
+      order: 2
+    - title: "Performance"
+      regexp: '^perf(\(.+\))?:.+$'
+      order: 3
+    - title: "Other Changes"
+      order: 999
   filters:
     exclude:
       - "^docs:"
       - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - "^style:"
+      - "^refactor:"
+      - "^Merge pull request"
+      - "^Merge branch"
 
 release:
-  footer: >-
-
+  name_template: "v{{.Version}}"
+  footer: |
     ---
 
-    Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
+    **Full Changelog**: https://github.com/708u/twig/compare/{{.PreviousTag}}...{{.Tag}}
