@@ -316,7 +316,7 @@ func TestListCmd(t *testing.T) {
 			name: "default output",
 			args: []string{"list"},
 			result: twig.ListResult{
-				Worktrees: []twig.WorktreeInfo{
+				Worktrees: []twig.Worktree{
 					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
 					{Path: "/repo/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
 				},
@@ -327,7 +327,7 @@ func TestListCmd(t *testing.T) {
 			name: "quiet flag outputs paths only",
 			args: []string{"list", "--quiet"},
 			result: twig.ListResult{
-				Worktrees: []twig.WorktreeInfo{
+				Worktrees: []twig.Worktree{
 					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
 					{Path: "/repo/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
 				},
@@ -338,7 +338,7 @@ func TestListCmd(t *testing.T) {
 			name: "short flag -q",
 			args: []string{"list", "-q"},
 			result: twig.ListResult{
-				Worktrees: []twig.WorktreeInfo{
+				Worktrees: []twig.Worktree{
 					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
 				},
 			},
@@ -348,7 +348,7 @@ func TestListCmd(t *testing.T) {
 			name: "empty list",
 			args: []string{"list"},
 			result: twig.ListResult{
-				Worktrees: []twig.WorktreeInfo{},
+				Worktrees: []twig.Worktree{},
 			},
 			wantStdout: "",
 		},

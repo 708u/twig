@@ -26,7 +26,7 @@ func NewDefaultListCommand(dir string) *ListCommand {
 
 // ListResult holds the result of a list operation.
 type ListResult struct {
-	Worktrees []WorktreeInfo
+	Worktrees []Worktree
 }
 
 // ListFormatOptions configures list output formatting.
@@ -66,7 +66,7 @@ func (r ListResult) formatDefault() FormatResult {
 }
 
 // formatStatus returns the status portion of the worktree line (branch, locked, prunable).
-func (w WorktreeInfo) formatStatus() string {
+func (w Worktree) formatStatus() string {
 	var sb strings.Builder
 
 	if w.Bare {

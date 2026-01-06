@@ -102,13 +102,13 @@ func TestListResult_Format(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		worktrees  []WorktreeInfo
+		worktrees  []Worktree
 		opts       ListFormatOptions
 		wantStdout string
 	}{
 		{
 			name: "git worktree list compatible format",
-			worktrees: []WorktreeInfo{
+			worktrees: []Worktree{
 				{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
 				{Path: "/repo/worktree/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
 			},
@@ -116,40 +116,40 @@ func TestListResult_Format(t *testing.T) {
 		},
 		{
 			name: "detached HEAD",
-			worktrees: []WorktreeInfo{
+			worktrees: []Worktree{
 				{Path: "/repo/worktree/detached", HEAD: "abc1234567890", Detached: true},
 			},
 			wantStdout: "/repo/worktree/detached  abc1234 (detached HEAD)\n",
 		},
 		{
 			name: "locked worktree",
-			worktrees: []WorktreeInfo{
+			worktrees: []Worktree{
 				{Path: "/repo/worktree/locked", Branch: "locked-branch", HEAD: "abc1234567890", Locked: true},
 			},
 			wantStdout: "/repo/worktree/locked  abc1234 [locked-branch] locked\n",
 		},
 		{
 			name: "prunable worktree",
-			worktrees: []WorktreeInfo{
+			worktrees: []Worktree{
 				{Path: "/repo/worktree/prunable", HEAD: "abc1234567890", Detached: true, Prunable: true},
 			},
 			wantStdout: "/repo/worktree/prunable  abc1234 (detached HEAD) prunable\n",
 		},
 		{
 			name: "bare repository",
-			worktrees: []WorktreeInfo{
+			worktrees: []Worktree{
 				{Path: "/repo/bare", HEAD: "abc1234567890", Bare: true},
 			},
 			wantStdout: "/repo/bare  abc1234 (bare)\n",
 		},
 		{
 			name:       "empty list",
-			worktrees:  []WorktreeInfo{},
+			worktrees:  []Worktree{},
 			wantStdout: "",
 		},
 		{
 			name: "quiet format outputs paths only",
-			worktrees: []WorktreeInfo{
+			worktrees: []Worktree{
 				{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
 				{Path: "/repo/worktree/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
 			},
@@ -158,7 +158,7 @@ func TestListResult_Format(t *testing.T) {
 		},
 		{
 			name:       "quiet format with empty list",
-			worktrees:  []WorktreeInfo{},
+			worktrees:  []Worktree{},
 			opts:       ListFormatOptions{Quiet: true},
 			wantStdout: "",
 		},
@@ -178,7 +178,7 @@ func TestListResult_Format(t *testing.T) {
 	}
 }
 
-func TestWorktreeInfo_ShortHEAD(t *testing.T) {
+func TestWorktree_ShortHEAD(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -207,7 +207,7 @@ func TestWorktreeInfo_ShortHEAD(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			wt := WorktreeInfo{HEAD: tt.head}
+			wt := Worktree{HEAD: tt.head}
 			if got := wt.ShortHEAD(); got != tt.want {
 				t.Errorf("ShortHEAD() = %q, want %q", got, tt.want)
 			}

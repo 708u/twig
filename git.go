@@ -221,8 +221,8 @@ func (g *GitRunner) BranchList() ([]string, error) {
 	return branches, nil
 }
 
-// WorktreeInfo holds worktree path and branch information.
-type WorktreeInfo struct {
+// Worktree holds worktree path and branch information.
+type Worktree struct {
 	Path           string
 	Branch         string
 	HEAD           string
@@ -235,7 +235,7 @@ type WorktreeInfo struct {
 }
 
 // ShortHEAD returns the first 7 characters of the HEAD commit hash.
-func (w WorktreeInfo) ShortHEAD() string {
+func (w Worktree) ShortHEAD() string {
 	if len(w.HEAD) >= 7 {
 		return w.HEAD[:7]
 	}
@@ -243,7 +243,7 @@ func (w WorktreeInfo) ShortHEAD() string {
 }
 
 // WorktreeList returns all worktrees with their paths and branches.
-func (g *GitRunner) WorktreeList() ([]WorktreeInfo, error) {
+func (g *GitRunner) WorktreeList() ([]Worktree, error) {
 	out, err := g.worktreeListPorcelain()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
@@ -259,12 +259,12 @@ func (g *GitRunner) WorktreeList() ([]WorktreeInfo, error) {
 	// prunable [reason] (optional)
 	// (blank line)
 
-	var worktrees []WorktreeInfo
-	var current WorktreeInfo
+	var worktrees []Worktree
+	var current Worktree
 	for _, line := range strings.Split(string(out), "\n") {
 		switch {
 		case strings.HasPrefix(line, PorcelainWorktreePrefix):
-			current = WorktreeInfo{Path: strings.TrimPrefix(line, PorcelainWorktreePrefix)}
+			current = Worktree{Path: strings.TrimPrefix(line, PorcelainWorktreePrefix)}
 		case strings.HasPrefix(line, PorcelainHEADPrefix):
 			current.HEAD = strings.TrimPrefix(line, PorcelainHEADPrefix)
 		case strings.HasPrefix(line, PorcelainBranchPrefix):
@@ -285,7 +285,7 @@ func (g *GitRunner) WorktreeList() ([]WorktreeInfo, error) {
 			}
 		case line == "" && current.Path != "":
 			worktrees = append(worktrees, current)
-			current = WorktreeInfo{}
+			current = Worktree{}
 		}
 	}
 	return worktrees, nil
@@ -307,9 +307,9 @@ func (g *GitRunner) WorktreeListBranches() ([]string, error) {
 	return branches, nil
 }
 
-// WorktreeFindByBranch returns the WorktreeInfo for the given branch.
+// WorktreeFindByBranch returns the Worktree for the given branch.
 // Returns an error if the branch is not checked out in any worktree.
-func (g *GitRunner) WorktreeFindByBranch(branch string) (*WorktreeInfo, error) {
+func (g *GitRunner) WorktreeFindByBranch(branch string) (*Worktree, error) {
 	worktrees, err := g.WorktreeList()
 	if err != nil {
 		return nil, err
