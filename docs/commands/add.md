@@ -28,11 +28,53 @@ twig add <name> [flags]
 ## Behavior
 
 - Creates worktree at `WorktreeDestBaseDir/<name>`
-- If the branch already exists, uses that branch
-- If the branch doesn't exist, creates a new branch with `-b` flag
+- Branch lookup follows this order:
+  1. If the branch exists locally, uses that branch
+  2. If the branch exists on a remote, fetches and creates tracking branch
+  3. Otherwise, creates a new local branch
 - Creates symlinks from source worktree to new worktree
   based on `symlinks` patterns (see [Configuration](../configuration.md))
 - Warns when symlink patterns don't match any files
+
+### Remote Branch Support
+
+When the specified branch doesn't exist locally, twig automatically checks
+configured remotes:
+
+```bash
+# If origin/feat/api exists but local feat/api doesn't:
+twig add feat/api
+# Fetches from origin and creates worktree with tracking branch
+```
+
+This behavior is similar to `git checkout <branch>` which auto-tracks
+remote branches.
+
+#### Multiple Remotes
+
+When multiple remotes are configured:
+
+| Scenario                              | Behavior                            |
+|---------------------------------------|-------------------------------------|
+| Branch exists on one remote only      | Fetches from that remote            |
+| Branch exists on multiple remotes     | Error (ambiguous)                   |
+| Branch exists on no remote            | Creates new local branch            |
+
+```bash
+# Branch exists on both origin and upstream
+twig add feat/shared
+# Error: branch "feat/shared" exists on multiple remotes: [origin upstream]
+```
+
+#### Fetch Errors
+
+If fetching fails (network error, authentication, etc.), the error is
+displayed with context:
+
+```bash
+twig add feat/api
+# Error: failed to fetch feat/api from origin: <git error message>
+```
 
 ### Sync Option
 

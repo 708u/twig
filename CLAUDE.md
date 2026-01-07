@@ -43,7 +43,7 @@ Each subcommand is a struct with injected dependencies (e.g., `AddCommand`):
 Two-level design for testability:
 
 - `GitExecutor` interface: minimal `Run(args...) ([]byte, error)`
-- `GitRunner`: high-level operations (WorktreeAdd, BranchExists, etc.)
+- `GitRunner`: high-level operations (WorktreeAdd, LocalBranchExists, etc.)
 - Directory injected to executor for CWD-independent execution
 
 ### FileSystem Abstraction

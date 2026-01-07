@@ -1257,4 +1257,274 @@ worktree_destination_base_dir = %q
 			t.Error("other.txt should still exist in source")
 		}
 	})
+
+	t.Run("RemoteBranchFetchAndCreateWorktree", func(t *testing.T) {
+		t.Parallel()
+
+		// Create a bare "origin" repository
+		tmpDir := t.TempDir()
+		tmpDir, _ = filepath.EvalSymlinks(tmpDir)
+		originDir := filepath.Join(tmpDir, "origin.git")
+		if err := os.MkdirAll(originDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, originDir, "init", "--bare")
+
+		// Create main repo and push to origin
+		mainDir := filepath.Join(tmpDir, "repo", "main")
+		if err := os.MkdirAll(mainDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "init", "-b", "main")
+		testutil.RunGit(t, mainDir, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, mainDir, "config", "user.name", "Test User")
+		testutil.RunGit(t, mainDir, "commit", "--allow-empty", "-m", "initial")
+		testutil.RunGit(t, mainDir, "remote", "add", "origin", originDir)
+		testutil.RunGit(t, mainDir, "push", "-u", "origin", "main")
+
+		// Create a branch on origin that doesn't exist locally
+		// Clone origin to a temp location, create branch, push
+		cloneDir := filepath.Join(tmpDir, "clone")
+		testutil.RunGit(t, tmpDir, "clone", originDir, "clone")
+		testutil.RunGit(t, cloneDir, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, cloneDir, "config", "user.name", "Test User")
+		testutil.RunGit(t, cloneDir, "checkout", "-b", "feature/remote-only")
+		if err := os.WriteFile(filepath.Join(cloneDir, "remote-file.txt"), []byte("from remote"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, cloneDir, "add", ".")
+		testutil.RunGit(t, cloneDir, "commit", "-m", "remote commit")
+		testutil.RunGit(t, cloneDir, "push", "-u", "origin", "feature/remote-only")
+
+		// Setup twig config
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		repoDir := filepath.Join(tmpDir, "repo")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify the branch doesn't exist locally
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/remote-only")
+		if strings.TrimSpace(out) != "" {
+			t.Fatal("feature/remote-only should not exist locally before test")
+		}
+
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: result.Config,
+		}
+
+		_, err = cmd.Run("feature/remote-only")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree was created
+		wtPath := filepath.Join(repoDir, "feature", "remote-only")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+
+		// Verify the remote file exists (proving we fetched from remote)
+		remoteFile := filepath.Join(wtPath, "remote-file.txt")
+		content, err := os.ReadFile(remoteFile)
+		if err != nil {
+			t.Fatalf("failed to read remote file: %v", err)
+		}
+		if string(content) != "from remote" {
+			t.Errorf("remote file content = %q, want %q", string(content), "from remote")
+		}
+
+		// Verify worktree is listed
+		listOut := testutil.RunGit(t, mainDir, "worktree", "list")
+		if !strings.Contains(listOut, "feature/remote-only") {
+			t.Errorf("worktree list should contain feature/remote-only: %s", listOut)
+		}
+	})
+
+	t.Run("LocalBranchTakesPrecedenceOverRemote", func(t *testing.T) {
+		t.Parallel()
+
+		// Create a bare "origin" repository
+		tmpDir := t.TempDir()
+		tmpDir, _ = filepath.EvalSymlinks(tmpDir)
+		originDir := filepath.Join(tmpDir, "origin.git")
+		if err := os.MkdirAll(originDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, originDir, "init", "--bare")
+
+		// Create main repo and push to origin
+		mainDir := filepath.Join(tmpDir, "repo", "main")
+		if err := os.MkdirAll(mainDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "init", "-b", "main")
+		testutil.RunGit(t, mainDir, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, mainDir, "config", "user.name", "Test User")
+		testutil.RunGit(t, mainDir, "commit", "--allow-empty", "-m", "initial")
+		testutil.RunGit(t, mainDir, "remote", "add", "origin", originDir)
+		testutil.RunGit(t, mainDir, "push", "-u", "origin", "main")
+
+		// Create local branch with local-only content
+		testutil.RunGit(t, mainDir, "branch", "feature/both-local-remote")
+		testutil.RunGit(t, mainDir, "checkout", "feature/both-local-remote")
+		if err := os.WriteFile(filepath.Join(mainDir, "local-file.txt"), []byte("from local"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "local commit")
+		testutil.RunGit(t, mainDir, "checkout", "main")
+
+		// Push different content to origin under same branch name
+		cloneDir := filepath.Join(tmpDir, "clone")
+		testutil.RunGit(t, tmpDir, "clone", originDir, "clone")
+		testutil.RunGit(t, cloneDir, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, cloneDir, "config", "user.name", "Test User")
+		testutil.RunGit(t, cloneDir, "checkout", "-b", "feature/both-local-remote")
+		if err := os.WriteFile(filepath.Join(cloneDir, "remote-file.txt"), []byte("from remote"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, cloneDir, "add", ".")
+		testutil.RunGit(t, cloneDir, "commit", "-m", "remote commit")
+		testutil.RunGit(t, cloneDir, "push", "-u", "origin", "feature/both-local-remote")
+
+		// Setup twig config
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		repoDir := filepath.Join(tmpDir, "repo")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: result.Config,
+		}
+
+		_, err = cmd.Run("feature/both-local-remote")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree was created
+		wtPath := filepath.Join(repoDir, "feature", "both-local-remote")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+
+		// Verify local file exists (proving we used local branch)
+		localFile := filepath.Join(wtPath, "local-file.txt")
+		content, err := os.ReadFile(localFile)
+		if err != nil {
+			t.Fatalf("failed to read local file: %v", err)
+		}
+		if string(content) != "from local" {
+			t.Errorf("local file content = %q, want %q", string(content), "from local")
+		}
+
+		// Verify remote file does NOT exist (we didn't fetch from remote)
+		remoteFile := filepath.Join(wtPath, "remote-file.txt")
+		if _, err := os.Stat(remoteFile); !os.IsNotExist(err) {
+			t.Errorf("remote-file.txt should not exist (local branch takes precedence)")
+		}
+	})
+
+	t.Run("NoBranchAnywhere_CreatesNewBranch", func(t *testing.T) {
+		t.Parallel()
+
+		// Create a bare "origin" repository
+		tmpDir := t.TempDir()
+		tmpDir, _ = filepath.EvalSymlinks(tmpDir)
+		originDir := filepath.Join(tmpDir, "origin.git")
+		if err := os.MkdirAll(originDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, originDir, "init", "--bare")
+
+		// Create main repo and push to origin
+		mainDir := filepath.Join(tmpDir, "repo", "main")
+		if err := os.MkdirAll(mainDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "init", "-b", "main")
+		testutil.RunGit(t, mainDir, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, mainDir, "config", "user.name", "Test User")
+		testutil.RunGit(t, mainDir, "commit", "--allow-empty", "-m", "initial")
+		testutil.RunGit(t, mainDir, "remote", "add", "origin", originDir)
+		testutil.RunGit(t, mainDir, "push", "-u", "origin", "main")
+
+		// Setup twig config
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		repoDir := filepath.Join(tmpDir, "repo")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify the branch doesn't exist locally or on origin
+		localOut := testutil.RunGit(t, mainDir, "branch", "--list", "feature/brand-new")
+		if strings.TrimSpace(localOut) != "" {
+			t.Fatal("feature/brand-new should not exist locally before test")
+		}
+
+		cmd := &AddCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: result.Config,
+		}
+
+		_, err = cmd.Run("feature/brand-new")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree was created
+		wtPath := filepath.Join(repoDir, "feature", "brand-new")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+
+		// Verify the branch was created (new local branch)
+		branchOut := testutil.RunGit(t, mainDir, "branch", "--list", "feature/brand-new")
+		if strings.TrimSpace(branchOut) == "" {
+			t.Error("feature/brand-new should have been created as a new branch")
+		}
+
+		// Verify worktree is listed
+		listOut := testutil.RunGit(t, mainDir, "worktree", "list")
+		if !strings.Contains(listOut, "feature/brand-new") {
+			t.Errorf("worktree list should contain feature/brand-new: %s", listOut)
+		}
+	})
 }

@@ -30,12 +30,16 @@ const (
 
 // Git command names.
 const (
-	GitCmdWorktree = "worktree"
-	GitCmdBranch   = "branch"
-	GitCmdStash    = "stash"
-	GitCmdStatus   = "status"
-	GitCmdRevParse = "rev-parse"
-	GitCmdDiff     = "diff"
+	GitCmdWorktree  = "worktree"
+	GitCmdBranch    = "branch"
+	GitCmdStash     = "stash"
+	GitCmdStatus    = "status"
+	GitCmdRevParse  = "rev-parse"
+	GitCmdDiff      = "diff"
+	GitCmdRemote    = "remote"
+	GitCmdFetch     = "fetch"
+	GitCmdLsRemote  = "ls-remote"
+	GitCmdForEachRef = "for-each-ref"
 )
 
 // Git worktree subcommands.
@@ -200,8 +204,8 @@ func (g *GitRunner) WorktreeAdd(path, branch string, opts ...WorktreeAddOption) 
 	return g.worktreeAdd(path, branch, o)
 }
 
-// BranchExists checks if a branch exists in the local repository.
-func (g *GitRunner) BranchExists(branch string) bool {
+// LocalBranchExists checks if a branch exists in the local repository.
+func (g *GitRunner) LocalBranchExists(branch string) bool {
 	_, err := g.Run(GitCmdRevParse, "--verify", RefsHeadsPrefix+branch)
 	return err == nil
 }
@@ -219,6 +223,55 @@ func (g *GitRunner) BranchList() ([]string, error) {
 		}
 	}
 	return branches, nil
+}
+
+// FindRemotesForBranch returns all remotes that have the specified branch.
+// Remotes that are unreachable are skipped.
+func (g *GitRunner) FindRemotesForBranch(branch string) []string {
+	remotes, err := g.Run(GitCmdRemote)
+	if err != nil {
+		return nil
+	}
+
+	var found []string
+	for _, remote := range strings.Split(strings.TrimSpace(string(remotes)), "\n") {
+		if remote == "" {
+			continue
+		}
+		out, err := g.Run(GitCmdLsRemote, "--heads", remote, RefsHeadsPrefix+branch)
+		if err != nil {
+			continue
+		}
+		if len(strings.TrimSpace(string(out))) > 0 {
+			found = append(found, remote)
+		}
+	}
+	return found
+}
+
+// FindRemoteForBranch finds the remote that has the specified branch.
+// Returns the remote name if exactly one remote has the branch.
+// Returns empty string if no remote has the branch.
+// Returns error if multiple remotes have the branch (ambiguous).
+func (g *GitRunner) FindRemoteForBranch(branch string) (string, error) {
+	remotes := g.FindRemotesForBranch(branch)
+
+	switch len(remotes) {
+	case 0:
+		return "", nil
+	case 1:
+		return remotes[0], nil
+	default:
+		return "", fmt.Errorf("branch %q exists on multiple remotes: %v", branch, remotes)
+	}
+}
+
+// Fetch fetches the specified refspec from the remote.
+func (g *GitRunner) Fetch(remote string, refspec ...string) error {
+	args := []string{GitCmdFetch, remote}
+	args = append(args, refspec...)
+	_, err := g.Run(args...)
+	return err
 }
 
 // Worktree holds worktree path and branch information.

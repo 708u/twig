@@ -69,6 +69,19 @@ type MockGitExecutor struct {
 
 	// WorktreePruneErr is returned when worktree prune is called.
 	WorktreePruneErr error
+
+	// Remotes is a list of configured remote names.
+	Remotes []string
+
+	// RemoteBranches maps remote name to list of branches on that remote.
+	// Used by ls-remote to check if a branch exists on a remote.
+	RemoteBranches map[string][]string
+
+	// FetchErr is returned when fetch is called.
+	FetchErr error
+
+	// LsRemoteErr is returned when ls-remote fails (e.g., network error).
+	LsRemoteErr error
 }
 
 func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
@@ -112,6 +125,12 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 		return m.handleStash(args)
 	case "for-each-ref":
 		return m.handleForEachRef(args)
+	case "remote":
+		return m.handleRemote(args)
+	case "ls-remote":
+		return m.handleLsRemote(args)
+	case "fetch":
+		return m.handleFetch(args)
 	}
 	return nil, nil
 }
@@ -282,4 +301,48 @@ func (m *MockGitExecutor) handleForEachRef(args []string) ([]byte, error) {
 		return []byte("[gone]\n"), nil
 	}
 	return []byte("\n"), nil
+}
+
+func (m *MockGitExecutor) handleRemote(args []string) ([]byte, error) {
+	// args: ["remote"]
+	if len(m.Remotes) == 0 {
+		return []byte{}, nil
+	}
+	return []byte(strings.Join(m.Remotes, "\n") + "\n"), nil
+}
+
+func (m *MockGitExecutor) handleLsRemote(args []string) ([]byte, error) {
+	// args: ["ls-remote", "--heads", "remote", "refs/heads/<branch>"]
+	if m.LsRemoteErr != nil {
+		return nil, m.LsRemoteErr
+	}
+	if len(args) < 4 {
+		return nil, nil
+	}
+
+	remote := args[2]
+	ref := args[3]
+	branch, ok := strings.CutPrefix(ref, "refs/heads/")
+	if !ok {
+		return nil, nil
+	}
+
+	branches, exists := m.RemoteBranches[remote]
+	if !exists {
+		return []byte{}, nil
+	}
+
+	if slices.Contains(branches, branch) {
+		// Return fake hash and ref like real ls-remote output
+		return []byte("abc123def456\trefs/heads/" + branch + "\n"), nil
+	}
+	return []byte{}, nil
+}
+
+func (m *MockGitExecutor) handleFetch(args []string) ([]byte, error) {
+	// args: ["fetch", "remote", "branch"]
+	if m.CapturedArgs != nil {
+		*m.CapturedArgs = append(*m.CapturedArgs, args...)
+	}
+	return nil, m.FetchErr
 }

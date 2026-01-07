@@ -300,6 +300,110 @@ func TestAddCommand_Run(t *testing.T) {
 			wantErr:     true,
 			errContains: "failed to apply changes",
 		},
+		{
+			name:   "remote_branch_single_remote",
+			branch: "feature/remote-only",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", Symlinks: []string{".envrc"}},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					CapturedArgs: captured,
+					Remotes:      []string{"origin"},
+					RemoteBranches: map[string][]string{
+						"origin": {"feature/remote-only"},
+					},
+				}
+			},
+			wantErr:   false,
+			wantBFlag: false, // Should not use -b flag since it fetches from remote
+		},
+		{
+			name:   "remote_branch_multiple_remotes_one_has_it",
+			branch: "feature/on-upstream",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", Symlinks: []string{".envrc"}},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					CapturedArgs: captured,
+					Remotes:      []string{"origin", "upstream"},
+					RemoteBranches: map[string][]string{
+						"origin":   {},
+						"upstream": {"feature/on-upstream"},
+					},
+				}
+			},
+			wantErr:   false,
+			wantBFlag: false,
+		},
+		{
+			name:   "remote_branch_ambiguous",
+			branch: "feature/ambiguous",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Remotes: []string{"origin", "upstream"},
+					RemoteBranches: map[string][]string{
+						"origin":   {"feature/ambiguous"},
+						"upstream": {"feature/ambiguous"},
+					},
+				}
+			},
+			wantErr:     true,
+			errContains: "exists on multiple remotes",
+		},
+		{
+			name:   "remote_branch_fetch_error",
+			branch: "feature/fetch-fail",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Remotes: []string{"origin"},
+					RemoteBranches: map[string][]string{
+						"origin": {"feature/fetch-fail"},
+					},
+					FetchErr: errors.New("network error"),
+				}
+			},
+			wantErr:     true,
+			errContains: "failed to fetch",
+		},
+		{
+			name:   "no_remote_no_local_creates_new_branch",
+			branch: "feature/brand-new",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", Symlinks: []string{".envrc"}},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					CapturedArgs:   captured,
+					Remotes:        []string{"origin"},
+					RemoteBranches: map[string][]string{},
+				}
+			},
+			wantErr:   false,
+			wantBFlag: true, // Should use -b flag since branch doesn't exist anywhere
+		},
 	}
 
 	for _, tt := range tests {
