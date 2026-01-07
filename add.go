@@ -91,7 +91,7 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 	var createdCount int
 	for _, s := range r.Symlinks {
 		if s.Skipped {
-			stderr.WriteString(fmt.Sprintf("warning: %s\n", s.Reason))
+			fmt.Fprintf(&stderr, "warning: %s\n", s.Reason)
 		} else {
 			createdCount++
 		}
@@ -101,10 +101,10 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 		if len(r.GitOutput) > 0 {
 			stdout.Write(r.GitOutput)
 		}
-		stdout.WriteString(fmt.Sprintf("Created worktree at %s\n", r.WorktreePath))
+		fmt.Fprintf(&stdout, "Created worktree at %s\n", r.WorktreePath)
 		for _, s := range r.Symlinks {
 			if !s.Skipped {
-				stdout.WriteString(fmt.Sprintf("Created symlink: %s -> %s\n", s.Dst, s.Src))
+				fmt.Fprintf(&stdout, "Created symlink: %s -> %s\n", s.Dst, s.Src)
 			}
 		}
 		if r.ChangesSynced {
@@ -121,7 +121,7 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 	} else if r.ChangesCarried {
 		syncInfo = ", carried"
 	}
-	stdout.WriteString(fmt.Sprintf("twig add: %s (%d symlinks%s)\n", r.Branch, createdCount, syncInfo))
+	fmt.Fprintf(&stdout, "twig add: %s (%d symlinks%s)\n", r.Branch, createdCount, syncInfo)
 
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 }
@@ -204,7 +204,8 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 
 	// Apply stashed changes to new worktree
 	if stashHash != "" {
-		if _, err := c.Git.InDir(wtPath).StashApplyByHash(stashHash); err != nil {
+		_, err = c.Git.InDir(wtPath).StashApplyByHash(stashHash)
+		if err != nil {
 			_, _ = c.Git.WorktreeRemove(wtPath, WithForceRemove(WorktreeForceLevelUnclean))
 			_, _ = stashSourceGit.StashPopByHash(stashHash)
 			return result, fmt.Errorf("failed to apply changes to new worktree: %w", err)
@@ -215,7 +216,8 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 			result.ChangesCarried = true
 		} else {
 			// Sync: restore stash in source (both have changes)
-			if _, err := stashSourceGit.StashPopByHash(stashHash); err != nil {
+			_, err = stashSourceGit.StashPopByHash(stashHash)
+			if err != nil {
 				return result, fmt.Errorf("failed to restore changes in source: %w", err)
 			}
 			result.ChangesSynced = true
