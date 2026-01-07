@@ -112,6 +112,9 @@ twig init
 # Create a new worktree and branch
 twig add feat/new-feature
 
+# Copy uncommitted changes to a new worktree
+twig add feat/wip --sync
+
 # Move uncommitted changes to a new worktree
 twig add feat/wip --carry
 
