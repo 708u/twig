@@ -18,7 +18,7 @@ twig add <name> [flags]
 |-----------------------|-------|----------------------------------------------------|
 | `--sync`              | `-s`  | Sync uncommitted changes to new worktree           |
 | `--carry [<branch>]`  | `-c`  | Carry uncommitted changes (optionally from branch) |
-| `--file <pattern>`    | `-F`  | File patterns to carry (requires `--carry`)        |
+| `--file <pattern>`    | `-F`  | File patterns to sync/carry (requires `--sync` or `--carry`) |
 | `--quiet`             | `-q`  | Output only the worktree path                      |
 | `--verbose`           | `-v`  | Enable verbose output                              |
 | `--source <branch>`   |       | Use specified branch's worktree as source          |
@@ -88,6 +88,29 @@ With `--sync`, uncommitted changes are copied to the new worktree:
 If worktree creation or stash apply fails, changes are restored
 to the source worktree automatically.
 
+#### Syncing Specific Files
+
+Use `--file` to sync only matching files:
+
+```bash
+# Sync only Go files in root
+twig add feat/new --sync --file "*.go"
+
+# Sync all Go files recursively (globstar)
+twig add feat/new --sync --file "**/*.go"
+
+# Sync multiple patterns
+twig add feat/new --sync --file "*.go" --file "cmd/**"
+```
+
+When `--file` is specified with `--sync`:
+
+- Only matching files are stashed and synced to the new worktree
+- Non-matching files remain only in the source worktree (not synced)
+- Both worktrees have the matching files after operation
+
+Without `--file`, all uncommitted changes are synced (default behavior).
+
 ### Carry Option
 
 With `--carry`, uncommitted changes are moved to the new worktree:
@@ -152,8 +175,7 @@ to the source worktree automatically.
 
 Constraints:
 
-- Cannot be used together with `--sync`
-- `--file` requires the `--carry` flag
+- `--carry` cannot be used together with `--sync`
 
 ### Quiet Option
 

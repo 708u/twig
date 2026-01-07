@@ -18,6 +18,7 @@ func TestAddCommand_Run(t *testing.T) {
 		config      *Config
 		sync        bool
 		carryFrom   string
+		carryFiles  []string
 		setupFS     func(t *testing.T) *testutil.MockFS
 		setupGit    func(t *testing.T, captured *[]string) *testutil.MockGitExecutor
 		wantErr     bool
@@ -182,6 +183,31 @@ func TestAddCommand_Run(t *testing.T) {
 			wantErr:    false,
 			wantBFlag:  true,
 			wantSynced: false,
+		},
+		{
+			name:       "sync_with_file_pattern",
+			branch:     "feature/sync-file",
+			config:     &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", Symlinks: []string{".envrc"}},
+			sync:       true,
+			carryFiles: []string{"*.go"},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{
+					GlobResults: map[string][]string{
+						"*.go": {"main.go", "util.go"},
+					},
+				}
+			},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					CapturedArgs: captured,
+					HasChanges:   true,
+				}
+			},
+			wantErr:    false,
+			wantBFlag:  true,
+			wantSynced: true,
 		},
 		{
 			name:   "sync_stash_push_error",
@@ -416,11 +442,12 @@ func TestAddCommand_Run(t *testing.T) {
 			mockGit := tt.setupGit(t, &captured)
 
 			cmd := &AddCommand{
-				FS:        mockFS,
-				Git:       &GitRunner{Executor: mockGit},
-				Config:    tt.config,
-				Sync:      tt.sync,
-				CarryFrom: tt.carryFrom,
+				FS:         mockFS,
+				Git:        &GitRunner{Executor: mockGit},
+				Config:     tt.config,
+				Sync:       tt.sync,
+				CarryFrom:  tt.carryFrom,
+				CarryFiles: tt.carryFiles,
 			}
 
 			result, err := cmd.Run(tt.branch)

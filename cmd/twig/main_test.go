@@ -893,7 +893,7 @@ func TestAddCmd(t *testing.T) {
 		}
 	})
 
-	t.Run("file_requires_carry", func(t *testing.T) {
+	t.Run("file_requires_carry_or_sync", func(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
@@ -908,8 +908,8 @@ func TestAddCmd(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
-		if !strings.Contains(err.Error(), "--file requires --carry flag") {
-			t.Errorf("error = %q, want to contain %q", err.Error(), "--file requires --carry flag")
+		if !strings.Contains(err.Error(), "--file requires --carry or --sync flag") {
+			t.Errorf("error = %q, want to contain %q", err.Error(), "--file requires --carry or --sync flag")
 		}
 	})
 

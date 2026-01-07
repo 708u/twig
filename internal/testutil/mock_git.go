@@ -267,6 +267,9 @@ func (m *MockGitExecutor) handleStash(args []string) ([]byte, error) {
 		// stash store adds to reflog, no output
 		return nil, nil
 	case "push":
+		if m.CapturedArgs != nil {
+			*m.CapturedArgs = append(*m.CapturedArgs, args...)
+		}
 		return nil, m.StashPushErr
 	case "apply":
 		return nil, m.StashApplyErr

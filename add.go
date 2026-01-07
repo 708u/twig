@@ -167,13 +167,16 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 			return result, fmt.Errorf("failed to check for changes: %w", err)
 		}
 		if hasChanges {
-			// CarryFiles only applies to carry mode, not sync
 			var pathspecs []string
-			if isCarry && len(c.CarryFiles) > 0 {
+			if len(c.CarryFiles) > 0 {
 				// Expand glob patterns to actual file paths using doublestar
+				globDir := c.Config.WorktreeSourceDir
+				if isCarry {
+					globDir = c.CarryFrom
+				}
 				seen := make(map[string]bool)
 				for _, pattern := range c.CarryFiles {
-					matches, err := c.FS.Glob(c.CarryFrom, pattern)
+					matches, err := c.FS.Glob(globDir, pattern)
 					if err != nil {
 						return result, fmt.Errorf("invalid glob pattern %q: %w", pattern, err)
 					}

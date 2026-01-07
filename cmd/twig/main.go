@@ -270,9 +270,9 @@ With --carry, use --file to carry only matching files:
 			// Get file patterns from --file flag
 			carryFiles, _ := cmd.Flags().GetStringArray("file")
 
-			// --file requires --carry
-			if len(carryFiles) > 0 && !carryEnabled {
-				return fmt.Errorf("--file requires --carry flag")
+			// --file requires --carry or --sync
+			if len(carryFiles) > 0 && !carryEnabled && !sync {
+				return fmt.Errorf("--file requires --carry or --sync flag")
 			}
 
 			// --reason requires --lock
