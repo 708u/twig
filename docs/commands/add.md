@@ -38,25 +38,32 @@ twig add <name> [flags]
 
 ### Remote Branch Support
 
-When the specified branch doesn't exist locally, twig automatically checks
-configured remotes:
+When the specified branch doesn't exist locally, twig checks local
+remote-tracking branches (e.g., `refs/remotes/origin/<branch>`):
 
 ```bash
-# If origin/feat/api exists but local feat/api doesn't:
+# If origin/feat/api exists locally (already fetched):
 twig add feat/api
-# Fetches from origin and creates worktree with tracking branch
+# Creates worktree with tracking branch
 ```
 
 This behavior is similar to `git checkout <branch>` which auto-tracks
-remote branches.
+remote branches without network access.
+
+To get the latest remote branches, run `git fetch` first:
+
+```bash
+git fetch origin
+twig add feat/api
+```
 
 #### Multiple Remotes
 
-When multiple remotes are configured:
+When multiple remotes have the branch:
 
 | Scenario                              | Behavior                            |
 |---------------------------------------|-------------------------------------|
-| Branch exists on one remote only      | Fetches from that remote            |
+| Branch exists on one remote only      | Uses that remote                    |
 | Branch exists on multiple remotes     | Error (ambiguous)                   |
 | Branch exists on no remote            | Creates new local branch            |
 
@@ -64,16 +71,6 @@ When multiple remotes are configured:
 # Branch exists on both origin and upstream
 twig add feat/shared
 # Error: branch "feat/shared" exists on multiple remotes: [origin upstream]
-```
-
-#### Fetch Errors
-
-If fetching fails (network error, authentication, etc.), the error is
-displayed with context:
-
-```bash
-twig add feat/api
-# Error: failed to fetch feat/api from origin: <git error message>
 ```
 
 ### Sync Option
