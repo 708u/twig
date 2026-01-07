@@ -1481,6 +1481,10 @@ worktree_destination_base_dir = %q
 			t.Fatal("feature/remote-only should not exist locally before test")
 		}
 
+		// Fetch from origin to get remote-tracking branches
+		// (like git checkout, twig checks local remote-tracking refs)
+		testutil.RunGit(t, mainDir, "fetch", "origin")
+
 		cmd := &AddCommand{
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),

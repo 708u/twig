@@ -35,10 +35,8 @@ const (
 	GitCmdStash     = "stash"
 	GitCmdStatus    = "status"
 	GitCmdRevParse  = "rev-parse"
-	GitCmdDiff      = "diff"
-	GitCmdRemote    = "remote"
-	GitCmdFetch     = "fetch"
-	GitCmdLsRemote  = "ls-remote"
+	GitCmdDiff       = "diff"
+	GitCmdFetch      = "fetch"
 	GitCmdForEachRef = "for-each-ref"
 )
 
@@ -225,28 +223,27 @@ func (g *GitRunner) BranchList() ([]string, error) {
 	return branches, nil
 }
 
-// FindRemotesForBranch returns all remotes that have the specified branch.
-// Remotes that are unreachable are skipped.
+// FindRemotesForBranch returns all remotes that have the specified branch
+// in local remote-tracking branches.
+// This checks refs/remotes/*/<branch> locally without network access.
 func (g *GitRunner) FindRemotesForBranch(branch string) []string {
-	remotes, err := g.Run(GitCmdRemote)
+	out, err := g.Run(GitCmdForEachRef, "--format=%(refname:short)",
+		fmt.Sprintf("refs/remotes/*/%s", branch))
 	if err != nil {
 		return nil
 	}
 
-	var found []string
-	for _, remote := range strings.Split(strings.TrimSpace(string(remotes)), "\n") {
-		if remote == "" {
+	var remotes []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
 			continue
 		}
-		out, err := g.Run(GitCmdLsRemote, "--heads", remote, RefsHeadsPrefix+branch)
-		if err != nil {
-			continue
-		}
-		if len(strings.TrimSpace(string(out))) > 0 {
-			found = append(found, remote)
+		// Extract "origin" from "origin/branch"
+		if idx := strings.Index(line, "/"); idx > 0 {
+			remotes = append(remotes, line[:idx])
 		}
 	}
-	return found
+	return remotes
 }
 
 // FindRemoteForBranch finds the remote that has the specified branch.
