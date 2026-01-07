@@ -251,7 +251,6 @@ func (c *AddCommand) createWorktree(branch, path string) ([]byte, error) {
 		// Local branch doesn't exist, check remote
 		remote, err := c.Git.FindRemoteForBranch(branch)
 		if err != nil {
-			// Ambiguous: branch exists on multiple remotes
 			return nil, err
 		}
 
