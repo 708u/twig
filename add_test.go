@@ -18,7 +18,7 @@ func TestAddCommand_Run(t *testing.T) {
 		config      *Config
 		sync        bool
 		carryFrom   string
-		carryFiles  []string
+		filePatterns  []string
 		setupFS     func(t *testing.T) *testutil.MockFS
 		setupGit    func(t *testing.T, captured *[]string) *testutil.MockGitExecutor
 		wantErr     bool
@@ -189,7 +189,7 @@ func TestAddCommand_Run(t *testing.T) {
 			branch:     "feature/sync-file",
 			config:     &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", Symlinks: []string{".envrc"}},
 			sync:       true,
-			carryFiles: []string{"*.go"},
+			filePatterns: []string{"*.go"},
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
 				return &testutil.MockFS{
@@ -447,7 +447,7 @@ func TestAddCommand_Run(t *testing.T) {
 				Config:     tt.config,
 				Sync:       tt.sync,
 				CarryFrom:  tt.carryFrom,
-				CarryFiles: tt.carryFiles,
+				FilePatterns: tt.filePatterns,
 			}
 
 			result, err := cmd.Run(tt.branch)

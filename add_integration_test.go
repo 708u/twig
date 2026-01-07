@@ -952,7 +952,7 @@ worktree_destination_base_dir = %q
 			Git:        NewGitRunner(mainDir),
 			Config:     result.Config,
 			Sync:       true,
-			CarryFiles: []string{"*.go"},
+			FilePatterns: []string{"*.go"},
 		}
 
 		addResult, err := cmd.Run("feature/sync-go-only")
@@ -1046,7 +1046,7 @@ worktree_destination_base_dir = %q
 			Git:        NewGitRunner(mainDir),
 			Config:     result.Config,
 			Sync:       true,
-			CarryFiles: []string{"*.go", "cmd/**"},
+			FilePatterns: []string{"*.go", "cmd/**"},
 		}
 
 		addResult, err := cmd.Run("feature/sync-multi-pattern")
@@ -1213,7 +1213,7 @@ worktree_destination_base_dir = %q
 			Git:        NewGitRunner(mainDir),
 			Config:     result.Config,
 			CarryFrom:  mainDir,
-			CarryFiles: []string{"*.go"},
+			FilePatterns: []string{"*.go"},
 		}
 
 		addResult, err := cmd.Run("feature/carry-go-only")
@@ -1310,7 +1310,7 @@ worktree_destination_base_dir = %q
 			Git:        NewGitRunner(mainDir),
 			Config:     result.Config,
 			CarryFrom:  mainDir,
-			CarryFiles: []string{"*.go", "cmd/**"},
+			FilePatterns: []string{"*.go", "cmd/**"},
 		}
 
 		_, err = cmd.Run("feature/carry-multiple")
@@ -1384,7 +1384,7 @@ worktree_destination_base_dir = %q
 			Git:        NewGitRunner(mainDir),
 			Config:     result.Config,
 			CarryFrom:  mainDir,
-			CarryFiles: []string{"**/*.go"},
+			FilePatterns: []string{"**/*.go"},
 		}
 
 		_, err = cmd.Run("feature/globstar")

@@ -268,10 +268,10 @@ With --carry, use --file to carry only matching files:
 			carryEnabled := cmd.Flags().Changed("carry")
 
 			// Get file patterns from --file flag
-			carryFiles, _ := cmd.Flags().GetStringArray("file")
+			filePatterns, _ := cmd.Flags().GetStringArray("file")
 
 			// --file requires --carry or --sync
-			if len(carryFiles) > 0 && !carryEnabled && !sync {
+			if len(filePatterns) > 0 && !carryEnabled && !sync {
 				return fmt.Errorf("--file requires --carry or --sync flag")
 			}
 
@@ -297,11 +297,11 @@ With --carry, use --file to carry only matching files:
 				addCmd = o.addCommander
 			} else {
 				addCmd = twig.NewDefaultAddCommand(cfg, twig.AddOptions{
-					Sync:       sync,
-					CarryFrom:  carryFrom,
-					CarryFiles: carryFiles,
-					Lock:       lock,
-					LockReason: lockReason,
+					Sync:         sync,
+					CarryFrom:    carryFrom,
+					FilePatterns: filePatterns,
+					Lock:         lock,
+					LockReason:   lockReason,
 				})
 			}
 			result, err := addCmd.Run(args[0])
