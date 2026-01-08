@@ -1,0 +1,19 @@
+{
+  "name": "twig-plugins",
+  "owner": {
+    "name": "708u"
+  },
+  "metadata": {
+    "description": "twig CLI plugins"
+  },
+  "plugins": [
+    {
+      "name": "twig-guide",
+      "description": "Guide for using twig CLI - simplifies git worktree workflows",
+      "version": "0.1.0",
+      "category": "productivity",
+      "keywords": ["git", "worktree", "branch", "cli", "guide"],
+      "source": "./external/claude-code/plugins/twig-guide"
+    }
+  ]
+}

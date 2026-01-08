@@ -1,1 +1,0 @@
-../../../docs/commands/add.md

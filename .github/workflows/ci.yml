@@ -10,8 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       go: ${{ steps.filter.outputs.go }}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -20,13 +21,16 @@ jobs:
               - '**.go'
               - 'go.mod'
               - 'go.sum'
+            docs:
+              - 'docs/reference/**'
+              - 'scripts/sync-plugin-docs.sh'
 
   lint:
     needs: check-changes
     if: needs.check-changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -47,7 +51,7 @@ jobs:
     if: needs.check-changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -63,7 +67,7 @@ jobs:
     if: needs.check-changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -82,8 +86,26 @@ jobs:
           ./out/twig completion powershell > completion/twig.ps1
           git diff --exit-code completion/
 
+  plugin-docs-check:
+    needs: check-changes
+    if: needs.check-changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Sync plugin docs
+        run: ./scripts/sync-plugin-docs.sh
+
+      - name: Check plugin docs are up to date
+        run: |
+          git diff external/claude-code/plugins/
+          if ! git diff --quiet external/claude-code/plugins/; then
+            echo "::error::Plugin docs are out of sync. Run 'make sync-plugin-docs' and commit."
+            exit 1
+          fi
+
   required-checks:
-    needs: [lint, integration-test, completion-check]
+    needs: [lint, integration-test, completion-check, plugin-docs-check]
     if: always()
     runs-on: ubuntu-latest
     steps:

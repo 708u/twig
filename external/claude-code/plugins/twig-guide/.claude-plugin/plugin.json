@@ -1,0 +1,10 @@
+{
+  "name": "twig-guide",
+  "version": "0.1.0",
+  "description": "Guide for using twig CLI - simplifies git worktree workflows",
+  "author": {
+    "name": "708u"
+  },
+  "license": "MIT",
+  "keywords": ["git", "worktree", "branch", "cli", "guide"]
+}

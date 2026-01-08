@@ -1,1 +1,0 @@
-../../docs/integration-testing.md

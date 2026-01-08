@@ -21,7 +21,7 @@ Before modifying code, @agent-Explore the codebase to understand the context:
 
 When modifying a subcommand, pay special attention to its behavior:
 
-- Review the command's documented behavior in `docs/commands/`
+- Review the command's documented behavior in @docs/reference/commands/
 - Verify flag handling and argument parsing
 - Check error handling and exit codes
 - Understand the command's output format
@@ -57,9 +57,19 @@ Follow the Red-Green-Refactor cycle:
 
 If the changes affect subcommand behavior, update the documentation:
 
-- Update the corresponding file in @docs/commands/
+- Update the corresponding file in @docs/reference/commands/
 - Document new flags, arguments, or behavior changes
 - Update examples if needed
+
+### 4. Sync Plugin Docs
+
+If you modified files in `docs/reference/`, run:
+
+```bash
+make sync-plugin-docs
+```
+
+See @docs/development/plugin-docs-sync.md for details.
 
 ### 5. Verify All Tests Pass
 

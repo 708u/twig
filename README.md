@@ -140,17 +140,17 @@ Personal settings can be overridden in `.twig/settings.local.toml` (.gitignore r
 
 - `extra_symlinks`: Add personal patterns while preserving team settings
 
-Details: [docs/configuration.md](docs/configuration.md)
+Details: [docs/reference/configuration.md](docs/reference/configuration.md)
 
 ## Command Specs
 
-| Command                              | Description                                      |
-| ------------------------------------ | ------------------------------------------------ |
-| [init](docs/commands/init.md)        | Initialize settings                              |
-| [add](docs/commands/add.md)          | Create worktree and branch                       |
-| [list](docs/commands/list.md)        | List worktrees                                   |
-| [remove](docs/commands/remove.md)    | Delete worktree and branch (multiple supported)  |
-| [clean](docs/commands/clean.md)      | Clean up worktrees no longer needed              |
+| Command                                            | Description                                      |
+| -------------------------------------------------- | ------------------------------------------------ |
+| [init](docs/reference/commands/init.md)            | Initialize settings                              |
+| [add](docs/reference/commands/add.md)              | Create worktree and branch                       |
+| [list](docs/reference/commands/list.md)            | List worktrees                                   |
+| [remove](docs/reference/commands/remove.md)        | Delete worktree and branch (multiple supported)  |
+| [clean](docs/reference/commands/clean.md)          | Bulk delete merged worktrees                     |
 
 See the documentation above for detailed flags and specifications.
 
