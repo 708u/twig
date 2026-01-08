@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 DOCS_DIR="$REPO_ROOT/docs/reference"
-REFERENCES_DIR="$REPO_ROOT/external/claude-code/plugins/twig-guide/skills/twig-guide/references"
+REFERENCES_DIR="$REPO_ROOT/external/claude-code/plugins/twig/skills/twig-guide/references"
 
 # Clean target directory
 rm -rf "$REFERENCES_DIR"
