@@ -69,11 +69,12 @@ func (r ListResult) formatDefault() FormatResult {
 func (w Worktree) formatStatus() string {
 	var sb strings.Builder
 
-	if w.Bare {
+	switch {
+	case w.Bare:
 		sb.WriteString("(bare)")
-	} else if w.Detached {
+	case w.Detached:
 		sb.WriteString("(detached HEAD)")
-	} else {
+	default:
 		sb.WriteString("[")
 		sb.WriteString(w.Branch)
 		sb.WriteString("]")

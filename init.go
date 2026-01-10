@@ -34,11 +34,11 @@ type InitOptions struct {
 
 // InitResult holds the result of the init command.
 type InitResult struct {
-	ConfigDir   string
+	ConfigDir    string
 	SettingsPath string
-	Created     bool
-	Skipped     bool
-	Overwritten bool
+	Created      bool
+	Skipped      bool
+	Overwritten  bool
 }
 
 // InitFormatOptions holds formatting options for InitResult.
@@ -101,11 +101,12 @@ func (r InitResult) Format(opts InitFormatOptions) FormatResult {
 
 	relPath := filepath.Join(configDir, configFileName)
 
-	if r.Skipped {
+	switch {
+	case r.Skipped:
 		stdout = fmt.Sprintf("Skipped %s (already exists)\n", relPath)
-	} else if r.Overwritten {
+	case r.Overwritten:
 		stdout = fmt.Sprintf("Created %s (overwritten)\n", relPath)
-	} else if r.Created {
+	case r.Created:
 		stdout = fmt.Sprintf("Created %s\n", relPath)
 	}
 

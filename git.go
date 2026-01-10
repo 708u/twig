@@ -30,11 +30,11 @@ const (
 
 // Git command names.
 const (
-	GitCmdWorktree  = "worktree"
-	GitCmdBranch    = "branch"
-	GitCmdStash     = "stash"
-	GitCmdStatus    = "status"
-	GitCmdRevParse  = "rev-parse"
+	GitCmdWorktree   = "worktree"
+	GitCmdBranch     = "branch"
+	GitCmdStash      = "stash"
+	GitCmdStatus     = "status"
+	GitCmdRevParse   = "rev-parse"
 	GitCmdDiff       = "diff"
 	GitCmdFetch      = "fetch"
 	GitCmdForEachRef = "for-each-ref"

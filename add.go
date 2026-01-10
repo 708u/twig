@@ -9,36 +9,36 @@ import (
 
 // AddCommand creates git worktrees with symlinks.
 type AddCommand struct {
-	FS         FileSystem
-	Git        *GitRunner
-	Config     *Config
-	Sync       bool
-	CarryFrom  string
+	FS           FileSystem
+	Git          *GitRunner
+	Config       *Config
+	Sync         bool
+	CarryFrom    string
 	FilePatterns []string
-	Lock       bool
-	LockReason string
+	Lock         bool
+	LockReason   string
 }
 
 // AddOptions holds options for the add command.
 type AddOptions struct {
-	Sync       bool
-	CarryFrom  string   // empty: no carry, non-empty: resolved path to carry from
+	Sync         bool
+	CarryFrom    string   // empty: no carry, non-empty: resolved path to carry from
 	FilePatterns []string // file patterns to carry (empty means all files)
-	Lock       bool
-	LockReason string
+	Lock         bool
+	LockReason   string
 }
 
 // NewAddCommand creates an AddCommand with explicit dependencies (for testing).
 func NewAddCommand(fs FileSystem, git *GitRunner, cfg *Config, opts AddOptions) *AddCommand {
 	return &AddCommand{
-		FS:         fs,
-		Git:        git,
-		Config:     cfg,
-		Sync:       opts.Sync,
-		CarryFrom:  opts.CarryFrom,
+		FS:           fs,
+		Git:          git,
+		Config:       cfg,
+		Sync:         opts.Sync,
+		CarryFrom:    opts.CarryFrom,
 		FilePatterns: opts.FilePatterns,
-		Lock:       opts.Lock,
-		LockReason: opts.LockReason,
+		Lock:         opts.Lock,
+		LockReason:   opts.LockReason,
 	}
 }
 

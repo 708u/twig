@@ -407,9 +407,9 @@ Safety checks (all must pass):
 			if !yes {
 				fmt.Fprint(cmd.OutOrStdout(), "\nProceed? [y/N]: ")
 				reader := bufio.NewReader(cmd.InOrStdin())
-				input, err := reader.ReadString('\n')
-				if err != nil {
-					return err
+				input, readErr := reader.ReadString('\n')
+				if readErr != nil {
+					return readErr
 				}
 				input = strings.TrimSpace(strings.ToLower(input))
 				if input != "y" && input != "yes" {
@@ -528,7 +528,7 @@ stop processing of remaining branches.`,
 		// If --source is specified, resolve to that worktree
 		if source, _ := cmd.Flags().GetString("source"); source != "" {
 			git := twig.NewGitRunner(dir)
-			if sourceWT, err := git.WorktreeFindByBranch(source); err == nil {
+			if sourceWT, findErr := git.WorktreeFindByBranch(source); findErr == nil {
 				dir = sourceWT.Path
 			}
 		}

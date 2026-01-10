@@ -167,13 +167,13 @@ func (m *MockGitExecutor) handleWorktreeList() ([]byte, error) {
 		if head == "" {
 			head = "abc1234567890"
 		}
-		lines = append(lines, "worktree "+wt.Path)
-		lines = append(lines, "HEAD "+head)
-		if wt.Bare {
+		lines = append(lines, "worktree "+wt.Path, "HEAD "+head)
+		switch {
+		case wt.Bare:
 			lines = append(lines, "bare")
-		} else if wt.Detached {
+		case wt.Detached:
 			lines = append(lines, "detached")
-		} else {
+		default:
 			lines = append(lines, "branch refs/heads/"+wt.Branch)
 		}
 		if wt.Locked {

@@ -1,4 +1,4 @@
-.PHONY: build install sync-plugin-docs
+.PHONY: build install lint sync-plugin-docs
 
 VERSION ?= dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -10,6 +10,9 @@ install:
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o out/twig ./cmd/twig
+
+lint:
+	golangci-lint run ./...
 
 sync-plugin-docs:
 	./scripts/sync-plugin-docs.sh

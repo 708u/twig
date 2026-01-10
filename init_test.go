@@ -12,14 +12,14 @@ func TestInitCommand_Run(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		opts        InitOptions
-		setupFS     func() *testutil.MockFS
-		wantCreated bool
-		wantSkipped bool
+		name            string
+		opts            InitOptions
+		setupFS         func() *testutil.MockFS
+		wantCreated     bool
+		wantSkipped     bool
 		wantOverwritten bool
-		wantErr     bool
-		errContains string
+		wantErr         bool
+		errContains     string
 	}{
 		{
 			name: "creates settings file in new directory",

@@ -394,6 +394,7 @@ func TestListCmd(t *testing.T) {
 		})
 	}
 }
+
 // mockRemoveCommander implements RemoveCommander for testing.
 type mockRemoveCommander struct {
 	calls   []removeCall

@@ -13,20 +13,20 @@ func TestAddCommand_Run(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		branch      string
-		config      *Config
-		sync        bool
-		carryFrom   string
-		filePatterns  []string
-		setupFS     func(t *testing.T) *testutil.MockFS
-		setupGit    func(t *testing.T, captured *[]string) *testutil.MockGitExecutor
-		wantErr     bool
-		errContains string
-		wantBFlag   bool
-		checkPath   string
-		wantSynced  bool
-		wantCarried bool
+		name         string
+		branch       string
+		config       *Config
+		sync         bool
+		carryFrom    string
+		filePatterns []string
+		setupFS      func(t *testing.T) *testutil.MockFS
+		setupGit     func(t *testing.T, captured *[]string) *testutil.MockGitExecutor
+		wantErr      bool
+		errContains  string
+		wantBFlag    bool
+		checkPath    string
+		wantSynced   bool
+		wantCarried  bool
 	}{
 		{
 			name:   "new_branch",
@@ -185,10 +185,10 @@ func TestAddCommand_Run(t *testing.T) {
 			wantSynced: false,
 		},
 		{
-			name:       "sync_with_file_pattern",
-			branch:     "feature/sync-file",
-			config:     &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", Symlinks: []string{".envrc"}},
-			sync:       true,
+			name:         "sync_with_file_pattern",
+			branch:       "feature/sync-file",
+			config:       &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", Symlinks: []string{".envrc"}},
+			sync:         true,
 			filePatterns: []string{"*.go"},
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
@@ -442,11 +442,11 @@ func TestAddCommand_Run(t *testing.T) {
 			mockGit := tt.setupGit(t, &captured)
 
 			cmd := &AddCommand{
-				FS:         mockFS,
-				Git:        &GitRunner{Executor: mockGit},
-				Config:     tt.config,
-				Sync:       tt.sync,
-				CarryFrom:  tt.carryFrom,
+				FS:           mockFS,
+				Git:          &GitRunner{Executor: mockGit},
+				Config:       tt.config,
+				Sync:         tt.sync,
+				CarryFrom:    tt.carryFrom,
 				FilePatterns: tt.filePatterns,
 			}
 

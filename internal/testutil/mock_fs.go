@@ -10,14 +10,14 @@ import (
 // MockFS is a mock implementation of twig.FileSystem for testing.
 type MockFS struct {
 	// Override functions (takes precedence if set)
-	StatFunc      func(name string) (fs.FileInfo, error)
-	SymlinkFunc   func(oldname, newname string) error
+	StatFunc       func(name string) (fs.FileInfo, error)
+	SymlinkFunc    func(oldname, newname string) error
 	IsNotExistFunc func(err error) bool
-	GlobFunc      func(dir, pattern string) ([]string, error)
-	MkdirAllFunc  func(path string, perm fs.FileMode) error
-	ReadDirFunc   func(name string) ([]os.DirEntry, error)
-	RemoveFunc    func(name string) error
-	WriteFileFunc func(name string, data []byte, perm fs.FileMode) error
+	GlobFunc       func(dir, pattern string) ([]string, error)
+	MkdirAllFunc   func(path string, perm fs.FileMode) error
+	ReadDirFunc    func(name string) ([]os.DirEntry, error)
+	RemoveFunc     func(name string) error
+	WriteFileFunc  func(name string, data []byte, perm fs.FileMode) error
 
 	// ExistingPaths is a list of paths that exist (Stat returns nil, nil).
 	ExistingPaths []string
