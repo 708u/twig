@@ -84,6 +84,19 @@ go test -tags=integration ./...   # Run integration tests
 - Use Conventional Commits format
 - Example: `feat: add new feature`, `fix: resolve bug`, `docs: update README`
 
+## Claude Code Plugin Maintenance
+
+When updating files under `external/claude-code/plugins/twig/`:
+
+- Update the `version` field in `.claude-plugin/plugin.json`
+- Analyze the change to determine the appropriate version bump:
+  - Even document changes may introduce new agent behaviors or operations
+  - If the change adds new capabilities (new commands, new response patterns),
+    treat as minor
+  - If the change removes or fundamentally alters existing behavior, treat as
+    major
+  - Only pure fixes (typos, clarifications without behavior change) are patch
+
 ## User Instructions
 
 @.claude/user_instructions/index.md
