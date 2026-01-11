@@ -165,6 +165,16 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 		return result, fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
+	// Batch fetch merged branches to avoid N git calls
+	mergedBranches, err := c.Git.MergedBranches(target)
+	if err != nil {
+		return result, fmt.Errorf("failed to list merged branches: %w", err)
+	}
+	mergedSet := make(map[string]bool)
+	for _, b := range mergedBranches {
+		mergedSet[b] = true
+	}
+
 	// Analyze each worktree
 	for i, wt := range worktrees {
 		// Skip main worktree (first non-bare worktree)
@@ -180,7 +190,7 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 				Branch:   wt.Branch,
 				Prunable: true,
 			}
-			if reason := c.checkPrunableSkipReason(wt.Branch, target, opts.Force); reason != "" {
+			if reason := c.checkPrunableSkipReason(wt.Branch, mergedSet, opts.Force); reason != "" {
 				candidate.Skipped = true
 				candidate.SkipReason = reason
 			}
@@ -190,7 +200,7 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 				Branch:       wt.Branch,
 				WorktreePath: wt.Path,
 			}
-			if reason := c.checkSkipReason(wt, cwd, target, opts.Force); reason != "" {
+			if reason := c.checkSkipReason(wt, cwd, mergedSet, opts.Force); reason != "" {
 				candidate.Skipped = true
 				candidate.SkipReason = reason
 			}
@@ -198,7 +208,7 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 
 		// Set clean reason for non-skipped candidates
 		if !candidate.Skipped {
-			candidate.CleanReason = c.getCleanReason(wt.Branch, target)
+			candidate.CleanReason = c.getCleanReason(wt.Branch, mergedSet)
 		}
 
 		result.Candidates = append(result.Candidates, candidate)
@@ -270,7 +280,8 @@ func (c *CleanCommand) resolveTarget(target string) (string, error) {
 
 // checkSkipReason checks if worktree should be skipped and returns the reason.
 // force level controls which conditions can be bypassed (matches git worktree behavior).
-func (c *CleanCommand) checkSkipReason(wt Worktree, cwd, target string, force WorktreeForceLevel) SkipReason {
+// mergedSet contains branches that are merged (pre-computed for efficiency).
+func (c *CleanCommand) checkSkipReason(wt Worktree, cwd string, mergedSet map[string]bool, force WorktreeForceLevel) SkipReason {
 	// Check detached HEAD (never bypassed)
 	if wt.Detached {
 		return SkipDetached
@@ -294,11 +305,14 @@ func (c *CleanCommand) checkSkipReason(wt Worktree, cwd, target string, force Wo
 		}
 	}
 
-	// Check merged
+	// Check merged (using pre-computed mergedSet, fallback to upstream gone check)
 	if force < WorktreeForceLevelUnclean {
-		merged, err := c.Git.IsBranchMerged(wt.Branch, target)
-		if err != nil || !merged {
-			return SkipNotMerged
+		if !mergedSet[wt.Branch] {
+			// Fallback: check if upstream is gone (squash/rebase merges)
+			gone, err := c.Git.IsBranchUpstreamGone(wt.Branch)
+			if err != nil || !gone {
+				return SkipNotMerged
+			}
 		}
 	}
 
@@ -307,26 +321,26 @@ func (c *CleanCommand) checkSkipReason(wt Worktree, cwd, target string, force Wo
 
 // checkPrunableSkipReason checks if a prunable branch should be skipped.
 // Only checks merged status since worktree-specific conditions don't apply.
-func (c *CleanCommand) checkPrunableSkipReason(branch, target string, force WorktreeForceLevel) SkipReason {
+// mergedSet contains branches that are merged (pre-computed for efficiency).
+func (c *CleanCommand) checkPrunableSkipReason(branch string, mergedSet map[string]bool, force WorktreeForceLevel) SkipReason {
 	if force < WorktreeForceLevelUnclean {
-		merged, err := c.Git.IsBranchMerged(branch, target)
-		if err != nil || !merged {
-			return SkipNotMerged
+		if !mergedSet[branch] {
+			// Fallback: check if upstream is gone (squash/rebase merges)
+			gone, err := c.Git.IsBranchUpstreamGone(branch)
+			if err != nil || !gone {
+				return SkipNotMerged
+			}
 		}
 	}
 	return ""
 }
 
 // getCleanReason determines why a branch is cleanable.
-func (c *CleanCommand) getCleanReason(branch, target string) CleanReason {
-	// Check if branch is merged via traditional merge
-	out, err := c.Git.Run(GitCmdBranch, "--merged", target, "--format=%(refname:short)")
-	if err == nil {
-		for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-			if line == branch {
-				return CleanMerged
-			}
-		}
+// mergedSet contains branches that are merged (pre-computed for efficiency).
+func (c *CleanCommand) getCleanReason(branch string, mergedSet map[string]bool) CleanReason {
+	// Check if branch is merged via traditional merge (using pre-computed mergedSet)
+	if mergedSet[branch] {
+		return CleanMerged
 	}
 
 	// Check if upstream is gone (squash/rebase merge)

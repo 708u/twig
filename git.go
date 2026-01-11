@@ -575,6 +575,22 @@ func (g *GitRunner) branchDelete(branch string, force bool) ([]byte, error) {
 	return g.Run(GitCmdBranch, flag, branch)
 }
 
+// MergedBranches returns all branches that are merged into target.
+// Uses a single git command to batch check merged status.
+func (g *GitRunner) MergedBranches(target string) ([]string, error) {
+	out, err := g.Run(GitCmdBranch, "--merged", target, "--format=%(refname:short)")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list merged branches: %w", err)
+	}
+	var branches []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			branches = append(branches, line)
+		}
+	}
+	return branches, nil
+}
+
 // IsBranchMerged checks if branch is merged into target.
 // First checks using git branch --merged (detects traditional merges).
 // If not found, falls back to checking if upstream is gone (squash/rebase merges).
