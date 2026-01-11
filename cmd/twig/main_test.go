@@ -423,6 +423,19 @@ func (m *mockRemoveCommander) Run(branch, cwd string, opts twig.RemoveOptions) (
 	return twig.RemovedWorktree{Branch: branch, WorktreePath: "/test/" + branch}, nil
 }
 
+func (m *mockRemoveCommander) RunMultiple(branches []string, cwd string, opts twig.RemoveOptions) twig.RemoveResult {
+	var result twig.RemoveResult
+	for _, branch := range branches {
+		wt, err := m.Run(branch, cwd, opts)
+		if err != nil {
+			wt.Branch = branch
+			wt.Err = err
+		}
+		result.Removed = append(result.Removed, wt)
+	}
+	return result
+}
+
 // mockInitCommander implements InitCommander for testing.
 type mockInitCommander struct {
 	result     twig.InitResult
