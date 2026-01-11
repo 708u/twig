@@ -1,4 +1,4 @@
-.PHONY: build install lint sync-plugin-docs
+.PHONY: build install lint fmt sync-plugin-docs
 
 VERSION ?= dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -13,6 +13,9 @@ build:
 
 lint:
 	golangci-lint run ./...
+
+fmt:
+	golangci-lint fmt ./...
 
 sync-plugin-docs:
 	./scripts/sync-plugin-docs.sh
