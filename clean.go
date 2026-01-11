@@ -152,18 +152,12 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 	var result CleanResult
 	result.Check = opts.Check
 
-	// Resolve target branch
-	target, err := c.resolveTarget(opts.Target)
+	// Resolve target branch and get all worktrees in one call
+	target, worktrees, err := c.resolveTargetWithWorktrees(opts.Target)
 	if err != nil {
 		return result, err
 	}
 	result.TargetBranch = target
-
-	// Get all worktrees
-	worktrees, err := c.Git.WorktreeList()
-	if err != nil {
-		return result, fmt.Errorf("failed to list worktrees: %w", err)
-	}
 
 	// Analyze each worktree
 	for i, wt := range worktrees {
@@ -246,26 +240,27 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 	return result, nil
 }
 
-// resolveTarget resolves the target branch for merge checking.
+// resolveTargetWithWorktrees resolves the target branch for merge checking
+// and returns the worktree list. This avoids calling WorktreeList twice.
 // If target is specified, use it. Otherwise, auto-detect from first non-bare worktree.
-func (c *CleanCommand) resolveTarget(target string) (string, error) {
+func (c *CleanCommand) resolveTargetWithWorktrees(target string) (string, []Worktree, error) {
+	worktrees, err := c.Git.WorktreeList()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
 	if target != "" {
-		return target, nil
+		return target, worktrees, nil
 	}
 
 	// Find first non-bare worktree (usually main)
-	worktrees, err := c.Git.WorktreeList()
-	if err != nil {
-		return "", fmt.Errorf("failed to list worktrees: %w", err)
-	}
-
 	for _, wt := range worktrees {
 		if !wt.Bare && wt.Branch != "" {
-			return wt.Branch, nil
+			return wt.Branch, worktrees, nil
 		}
 	}
 
-	return "", fmt.Errorf("no target branch found")
+	return "", nil, fmt.Errorf("no target branch found")
 }
 
 // checkSkipReason checks if worktree should be skipped and returns the reason.

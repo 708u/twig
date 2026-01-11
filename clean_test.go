@@ -509,22 +509,25 @@ func TestCleanCommand_Run(t *testing.T) {
 	}
 }
 
-func TestCleanCommand_ResolveTarget(t *testing.T) {
+func TestCleanCommand_ResolveTargetWithWorktrees(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		target     string
-		config     *Config
-		worktrees  []testutil.MockWorktree
-		wantTarget string
-		wantErr    bool
+		name          string
+		target        string
+		config        *Config
+		worktrees     []testutil.MockWorktree
+		wantTarget    string
+		wantWorktrees int
+		wantErr       bool
 	}{
 		{
-			name:       "uses_provided_target",
-			target:     "develop",
-			config:     &Config{},
-			wantTarget: "develop",
+			name:          "uses_provided_target",
+			target:        "develop",
+			config:        &Config{},
+			worktrees:     []testutil.MockWorktree{{Path: "/repo/main", Branch: "main"}},
+			wantTarget:    "develop",
+			wantWorktrees: 1,
 		},
 		{
 			name:   "auto_detects_from_worktrees",
@@ -533,7 +536,8 @@ func TestCleanCommand_ResolveTarget(t *testing.T) {
 			worktrees: []testutil.MockWorktree{
 				{Path: "/repo/main", Branch: "main"},
 			},
-			wantTarget: "main",
+			wantTarget:    "main",
+			wantWorktrees: 1,
 		},
 		{
 			name:      "error_when_no_target_found",
@@ -557,7 +561,7 @@ func TestCleanCommand_ResolveTarget(t *testing.T) {
 				Config: tt.config,
 			}
 
-			got, err := cmd.resolveTarget(tt.target)
+			gotTarget, gotWorktrees, err := cmd.resolveTargetWithWorktrees(tt.target)
 
 			if tt.wantErr {
 				if err == nil {
@@ -570,8 +574,12 @@ func TestCleanCommand_ResolveTarget(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if got != tt.wantTarget {
-				t.Errorf("got %q, want %q", got, tt.wantTarget)
+			if gotTarget != tt.wantTarget {
+				t.Errorf("target: got %q, want %q", gotTarget, tt.wantTarget)
+			}
+
+			if len(gotWorktrees) != tt.wantWorktrees {
+				t.Errorf("worktrees: got %d, want %d", len(gotWorktrees), tt.wantWorktrees)
 			}
 		})
 	}
