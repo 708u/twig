@@ -147,6 +147,64 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 // Run removes the worktree and branch for the given branch name.
 // cwd is used to prevent removal when inside the target worktree.
 func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (RemovedWorktree, error) {
+	if branch == "" {
+		return RemovedWorktree{Branch: branch, DryRun: opts.DryRun}, fmt.Errorf("branch name is required")
+	}
+	if c.Config.WorktreeSourceDir == "" {
+		return RemovedWorktree{Branch: branch, DryRun: opts.DryRun}, fmt.Errorf("worktree source directory is not configured")
+	}
+
+	worktrees, err := c.Git.WorktreeList()
+	if err != nil {
+		return RemovedWorktree{Branch: branch, DryRun: opts.DryRun}, err
+	}
+
+	return c.runWithWorktrees(branch, cwd, opts, worktrees)
+}
+
+// RunMultiple removes multiple worktrees efficiently by caching the worktree list.
+// This avoids repeated WorktreeList() calls when processing multiple branches.
+func (c *RemoveCommand) RunMultiple(branches []string, cwd string, opts RemoveOptions) RemoveResult {
+	var result RemoveResult
+
+	if c.Config.WorktreeSourceDir == "" {
+		err := fmt.Errorf("worktree source directory is not configured")
+		for _, branch := range branches {
+			result.Removed = append(result.Removed, RemovedWorktree{
+				Branch: branch,
+				DryRun: opts.DryRun,
+				Err:    err,
+			})
+		}
+		return result
+	}
+
+	worktrees, err := c.Git.WorktreeList()
+	if err != nil {
+		for _, branch := range branches {
+			result.Removed = append(result.Removed, RemovedWorktree{
+				Branch: branch,
+				DryRun: opts.DryRun,
+				Err:    err,
+			})
+		}
+		return result
+	}
+
+	for _, branch := range branches {
+		wt, err := c.runWithWorktrees(branch, cwd, opts, worktrees)
+		if err != nil {
+			wt.Branch = branch
+			wt.Err = err
+		}
+		result.Removed = append(result.Removed, wt)
+	}
+
+	return result
+}
+
+// runWithWorktrees performs the actual removal using a pre-fetched worktree list.
+func (c *RemoveCommand) runWithWorktrees(branch string, cwd string, opts RemoveOptions, worktrees []Worktree) (RemovedWorktree, error) {
 	var result RemovedWorktree
 	result.Branch = branch
 	result.DryRun = opts.DryRun
@@ -154,11 +212,8 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 	if branch == "" {
 		return result, fmt.Errorf("branch name is required")
 	}
-	if c.Config.WorktreeSourceDir == "" {
-		return result, fmt.Errorf("worktree source directory is not configured")
-	}
 
-	wtInfo, err := c.Git.WorktreeFindByBranch(branch)
+	wtInfo, err := c.Git.WorktreeFindByBranchFromList(branch, worktrees)
 	if err != nil {
 		return result, err
 	}

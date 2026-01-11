@@ -37,6 +37,7 @@ type ListCommander interface {
 // RemoveCommander defines the interface for remove operations.
 type RemoveCommander interface {
 	Run(branch string, cwd string, opts twig.RemoveOptions) (twig.RemovedWorktree, error)
+	RunMultiple(branches []string, cwd string, opts twig.RemoveOptions) twig.RemoveResult
 }
 
 // InitCommander defines the interface for init operations.
@@ -479,19 +480,11 @@ stop processing of remaining branches.`,
 			} else {
 				removeCmd = twig.NewDefaultRemoveCommand(cfg)
 			}
-			var result twig.RemoveResult
 
-			for _, branch := range args {
-				wt, err := removeCmd.Run(branch, cwd, twig.RemoveOptions{
-					Force:  twig.WorktreeForceLevel(forceCount),
-					DryRun: dryRun,
-				})
-				if err != nil {
-					wt.Branch = branch
-					wt.Err = err
-				}
-				result.Removed = append(result.Removed, wt)
-			}
+			result := removeCmd.RunMultiple(args, cwd, twig.RemoveOptions{
+				Force:  twig.WorktreeForceLevel(forceCount),
+				DryRun: dryRun,
+			})
 
 			formatted := result.Format(twig.FormatOptions{Verbose: verbose})
 			if formatted.Stderr != "" {

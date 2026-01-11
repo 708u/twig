@@ -365,6 +365,13 @@ func (g *GitRunner) WorktreeFindByBranch(branch string) (*Worktree, error) {
 		return nil, err
 	}
 
+	return g.WorktreeFindByBranchFromList(branch, worktrees)
+}
+
+// WorktreeFindByBranchFromList returns the Worktree for the given branch from a pre-fetched list.
+// Returns an error if the branch is not checked out in any worktree.
+// This avoids repeated WorktreeList() calls when processing multiple branches.
+func (g *GitRunner) WorktreeFindByBranchFromList(branch string, worktrees []Worktree) (*Worktree, error) {
 	for i := range worktrees {
 		if worktrees[i].Branch == branch {
 			return &worktrees[i], nil
