@@ -3,18 +3,6 @@
 A CLI tool that creates, deletes, and manages git worktrees and branches in a single command.
 Focused on simplifying git operations, keeping features minimal.
 
-## Design Philosophy
-
-twig treats branches and worktrees as a single unified concept.
-Users don't need to think about whether they're managing a "branch" or a "worktree" -
-they simply work with named development contexts.
-
-- `twig add feat/x` creates both the branch and worktree together
-- `twig remove feat/x` deletes both together
-- Even if a worktree directory is deleted externally, `twig remove` still works
-
-This 1:1 mapping simplifies the mental model: one name, one workspace, one command.
-
 ## Motivation
 
 twig is designed to be friendly for both humans and agentic coding tools,
@@ -31,6 +19,18 @@ twig list -q | fzf                  # select a worktree with fzf
 twig list -q | xargs -I {} code {}  # open all worktrees in VSCode
 twig clean -v                       # confirm before deletion, show all skipped items
 ```
+
+## Design Philosophy
+
+twig treats branches and worktrees as a single unified concept.
+Users don't need to think about whether they're managing a "branch" or a "worktree" -
+they simply work with named development contexts.
+
+- `twig add feat/x` creates both the branch and worktree together
+- `twig remove feat/x` deletes both together
+- Even if a worktree directory is deleted externally, `twig remove` still works
+
+This 1:1 mapping simplifies the mental model: one name, one workspace, one command.
 
 ## Features
 
@@ -76,34 +76,6 @@ brew install 708u/tap/twig
 go install github.com/708u/twig/cmd/twig@latest
 ```
 
-## Shell Completion
-
-Shell completion is available for all commands and flags.
-For example, `twig remove <TAB>` completes existing branch names.
-
-Add the following to your shell configuration:
-
-### Bash
-
-```bash
-# Add to ~/.bashrc
-eval "$(twig completion bash)"
-```
-
-### Zsh
-
-```bash
-# Add to ~/.zshrc
-eval "$(twig completion zsh)"
-```
-
-### Fish
-
-```sh
-# Add to ~/.config/fish/config.fish
-twig completion fish | source
-```
-
 ## Quick Start
 
 ```bash
@@ -142,6 +114,37 @@ Personal settings can be overridden in `.twig/settings.local.toml` (.gitignore r
 - `extra_symlinks`: Add personal patterns while preserving team settings
 
 Details: [docs/reference/configuration.md](docs/reference/configuration.md)
+
+## Shell Completion
+
+Shell completion is available for all commands and flags.
+For example, `twig remove <TAB>` completes existing branch names.
+
+Add the following to your shell configuration:
+
+### Bash
+
+Add to `~/.bashrc`:
+
+```bash
+eval "$(twig completion bash)"
+```
+
+### Zsh
+
+Add to `~/.zshrc`:
+
+```bash
+eval "$(twig completion zsh)"
+```
+
+### Fish
+
+Add to `~/.config/fish/config.fish`:
+
+```sh
+twig completion fish | source
+```
 
 ## Command Specs
 
