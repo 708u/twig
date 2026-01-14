@@ -256,24 +256,19 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 			continue
 		}
 
-		// Collect integrity info (only in check mode)
-		if opts.Check {
-			// Detached HEAD worktrees (warning)
-			if wt.Detached {
-				result.DetachedWorktrees = append(result.DetachedWorktrees, DetachedWorktreeInfo{
-					Path: wt.Path,
-					HEAD: wt.ShortHEAD(),
-				})
-			}
-
-			// Locked worktrees (info)
-			if wt.Locked {
-				result.LockedWorktrees = append(result.LockedWorktrees, LockedWorktreeInfo{
-					Branch:     wt.Branch,
-					Path:       wt.Path,
-					LockReason: wt.LockReason,
-				})
-			}
+		// Collect integrity info
+		if wt.Detached {
+			result.DetachedWorktrees = append(result.DetachedWorktrees, DetachedWorktreeInfo{
+				Path: wt.Path,
+				HEAD: wt.ShortHEAD(),
+			})
+		}
+		if wt.Locked {
+			result.LockedWorktrees = append(result.LockedWorktrees, LockedWorktreeInfo{
+				Branch:     wt.Branch,
+				Path:       wt.Path,
+				LockReason: wt.LockReason,
+			})
 		}
 
 		var candidate CleanCandidate
@@ -308,10 +303,8 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 		result.Candidates = append(result.Candidates, candidate)
 	}
 
-	// Collect orphan branches (only in check mode)
-	if opts.Check {
-		result.OrphanBranches = c.findOrphanBranches(worktreeBranches)
-	}
+	// Collect orphan branches
+	result.OrphanBranches = c.findOrphanBranches(worktreeBranches)
 
 	// If check mode, just return candidates (no execution)
 	if result.Check {

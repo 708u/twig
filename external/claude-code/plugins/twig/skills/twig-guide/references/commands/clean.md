@@ -108,8 +108,7 @@ non-bare worktree (usually main).
 
 ### Worktree Integrity Checks
 
-In `--check` mode with `--verbose`, the command also reports worktree
-integrity information:
+With `--verbose`, the command also reports worktree integrity information:
 
 | Type              | Description                           |
 |-------------------|---------------------------------------|

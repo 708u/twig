@@ -974,7 +974,7 @@ func TestCleanCommand_IntegrityInfo(t *testing.T) {
 		}
 	})
 
-	t.Run("integrity_info_only_in_check_mode", func(t *testing.T) {
+	t.Run("integrity_info_collected_regardless_of_check_mode", func(t *testing.T) {
 		t.Parallel()
 
 		mockGit := &testutil.MockGitExecutor{
@@ -994,17 +994,17 @@ func TestCleanCommand_IntegrityInfo(t *testing.T) {
 			Config: &Config{WorktreeSourceDir: "/repo/main"},
 		}
 
-		// Without Check mode - should not collect integrity info
+		// Without Check mode - integrity info should still be collected
 		result, err := cmd.Run("/other/dir", CleanOptions{Check: false})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if len(result.OrphanBranches) != 0 {
-			t.Errorf("expected no orphan branches in non-check mode, got %d", len(result.OrphanBranches))
+		if len(result.OrphanBranches) != 1 {
+			t.Errorf("expected 1 orphan branch, got %d", len(result.OrphanBranches))
 		}
-		if len(result.LockedWorktrees) != 0 {
-			t.Errorf("expected no locked worktrees in non-check mode, got %d", len(result.LockedWorktrees))
+		if len(result.LockedWorktrees) != 1 {
+			t.Errorf("expected 1 locked worktree, got %d", len(result.LockedWorktrees))
 		}
 	})
 }
