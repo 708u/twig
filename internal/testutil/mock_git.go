@@ -79,6 +79,12 @@ type MockGitExecutor struct {
 
 	// FetchErr is returned when fetch is called.
 	FetchErr error
+
+	// IgnoredPaths is a list of paths that are gitignored.
+	IgnoredPaths []string
+
+	// CheckIgnoreErr is returned when check-ignore is called.
+	CheckIgnoreErr error
 }
 
 func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
@@ -124,6 +130,8 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 		return m.handleForEachRef(args)
 	case "fetch":
 		return m.handleFetch(args)
+	case "check-ignore":
+		return m.handleCheckIgnore(args)
 	}
 	return nil, nil
 }
@@ -320,4 +328,33 @@ func (m *MockGitExecutor) handleFetch(args []string) ([]byte, error) {
 		*m.CapturedArgs = append(*m.CapturedArgs, args...)
 	}
 	return nil, m.FetchErr
+}
+
+func (m *MockGitExecutor) handleCheckIgnore(args []string) ([]byte, error) {
+	// args: ["check-ignore", "-q", "path"]
+	if m.CheckIgnoreErr != nil {
+		return nil, m.CheckIgnoreErr
+	}
+	if len(args) < 3 {
+		return nil, nil
+	}
+	path := args[2]
+	if slices.Contains(m.IgnoredPaths, path) {
+		return nil, nil // exit 0 = ignored
+	}
+	// exit 1 = not ignored
+	return nil, &exitError{code: 1}
+}
+
+// exitError implements error with ExitCode for testing.
+type exitError struct {
+	code int
+}
+
+func (e *exitError) Error() string {
+	return "exit status " + string(rune(e.code+'0'))
+}
+
+func (e *exitError) ExitCode() int {
+	return e.code
 }
