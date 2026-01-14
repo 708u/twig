@@ -177,10 +177,15 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 
 // formatIntegrityInfo appends integrity info sections to the output.
 // Returns true if any info was written.
+// All integrity info requires verbose mode.
 func (r CleanResult) formatIntegrityInfo(stdout *strings.Builder, opts FormatOptions) bool {
+	if !opts.Verbose {
+		return false
+	}
+
 	wrote := false
 
-	// Detached HEAD worktrees (always shown - warning)
+	// Detached HEAD worktrees
 	if len(r.DetachedWorktrees) > 0 {
 		fmt.Fprintln(stdout)
 		fmt.Fprintln(stdout, "detached:")
@@ -190,8 +195,8 @@ func (r CleanResult) formatIntegrityInfo(stdout *strings.Builder, opts FormatOpt
 		wrote = true
 	}
 
-	// Locked worktrees (verbose only - info)
-	if opts.Verbose && len(r.LockedWorktrees) > 0 {
+	// Locked worktrees
+	if len(r.LockedWorktrees) > 0 {
 		fmt.Fprintln(stdout)
 		fmt.Fprintln(stdout, "locked:")
 		for _, l := range r.LockedWorktrees {
@@ -204,8 +209,8 @@ func (r CleanResult) formatIntegrityInfo(stdout *strings.Builder, opts FormatOpt
 		wrote = true
 	}
 
-	// Orphan branches (verbose only - info)
-	if opts.Verbose && len(r.OrphanBranches) > 0 {
+	// Orphan branches
+	if len(r.OrphanBranches) > 0 {
 		fmt.Fprintln(stdout)
 		fmt.Fprintln(stdout, "orphan branches:")
 		for _, o := range r.OrphanBranches {

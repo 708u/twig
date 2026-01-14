@@ -108,16 +108,17 @@ non-bare worktree (usually main).
 
 ### Worktree Integrity Checks
 
-In `--check` mode, the command also reports worktree integrity information:
+In `--check` mode with `--verbose`, the command also reports worktree
+integrity information:
 
-| Type              | Description                           | Display        |
-|-------------------|---------------------------------------|----------------|
-| Detached HEAD     | Worktrees in detached HEAD state      | Always shown   |
-| Locked worktrees  | Worktrees with lock status and reason | Verbose only   |
-| Orphan branches   | Local branches without worktrees      | Verbose only   |
+| Type              | Description                           |
+|-------------------|---------------------------------------|
+| Detached HEAD     | Worktrees in detached HEAD state      |
+| Locked worktrees  | Worktrees with lock status and reason |
+| Orphan branches   | Local branches without worktrees      |
 
-Detached HEAD worktrees are shown as warnings since they cannot be cleaned
-(RemoveCommand requires a branch name).
+Detached HEAD worktrees cannot be cleaned (RemoveCommand requires a branch
+name).
 
 Locked worktrees display their lock reason if available.
 
@@ -147,7 +148,7 @@ skip:
 
 - `clean:` shows worktrees and prunable branches that will be removed
 - `skip:` shows skipped worktrees (verbose mode only)
-- `detached:` shows worktrees in detached HEAD state (always shown)
+- `detached:` shows worktrees in detached HEAD state (verbose mode only)
 - `locked:` shows locked worktrees with reasons (verbose mode only)
 - `orphan branches:` shows local branches without worktrees (verbose mode only)
 - Each item is indented with 2 spaces
@@ -205,14 +206,7 @@ clean:
   feature/old-branch (merged)
   feature/deleted-worktree (prunable, merged)
 
-# Check with detached HEAD warning
-twig clean --check
-detached:
-  /path/to/repo-worktree/temp (HEAD at abc1234)
-
-No worktrees to clean
-
-# Verbose check showing all integrity info
+# Verbose check showing integrity info
 twig clean --check -v
 clean:
   feature/old-branch (merged)

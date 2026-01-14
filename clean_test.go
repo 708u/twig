@@ -1019,7 +1019,7 @@ func TestCleanResult_Format_IntegrityInfo(t *testing.T) {
 		wantStdout string
 	}{
 		{
-			name: "shows_detached_worktrees_by_default",
+			name: "hides_detached_worktrees_by_default",
 			result: CleanResult{
 				Check: true,
 				DetachedWorktrees: []DetachedWorktreeInfo{
@@ -1027,6 +1027,17 @@ func TestCleanResult_Format_IntegrityInfo(t *testing.T) {
 				},
 			},
 			opts:       FormatOptions{},
+			wantStdout: "No worktrees to clean\n",
+		},
+		{
+			name: "shows_detached_worktrees_in_verbose",
+			result: CleanResult{
+				Check: true,
+				DetachedWorktrees: []DetachedWorktreeInfo{
+					{Path: "/repo/detached", HEAD: "abc1234"},
+				},
+			},
+			opts:       FormatOptions{Verbose: true},
 			wantStdout: "\ndetached:\n  /repo/detached (HEAD at abc1234)\n\nNo worktrees to clean\n",
 		},
 		{
@@ -1076,7 +1087,7 @@ func TestCleanResult_Format_IntegrityInfo(t *testing.T) {
 			wantStdout: "No worktrees to clean\n",
 		},
 		{
-			name: "combined_with_cleanable_candidates",
+			name: "combined_with_cleanable_candidates_no_verbose",
 			result: CleanResult{
 				Candidates: []CleanCandidate{
 					{Branch: "feat/a", CleanReason: CleanMerged},
@@ -1087,6 +1098,20 @@ func TestCleanResult_Format_IntegrityInfo(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{},
+			wantStdout: "clean:\n  feat/a (merged)\n",
+		},
+		{
+			name: "combined_with_cleanable_candidates_verbose",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", CleanReason: CleanMerged},
+				},
+				DetachedWorktrees: []DetachedWorktreeInfo{
+					{Path: "/repo/detached", HEAD: "abc1234"},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{Verbose: true},
 			wantStdout: "clean:\n  feat/a (merged)\n\ndetached:\n  /repo/detached (HEAD at abc1234)\n",
 		},
 		{
