@@ -16,7 +16,7 @@ twig clean [flags]
 | `--check`         |       | Show candidates without prompting               |
 | `--target`        |       | Target branch for merge check                   |
 | `--force`         | `-f`  | Force clean (can be specified twice, see below) |
-| `--verbose`       | `-v`  | Show skip reasons for skipped worktrees         |
+| `--verbose`       | `-v`  | Show skip reasons and detailed integrity info   |
 
 ## Behavior
 
@@ -106,6 +106,24 @@ twig clean -ff --yes
 If `--target` is not specified, auto-detects from the first
 non-bare worktree (usually main).
 
+### Worktree Integrity Checks
+
+With `--verbose`, the command also reports worktree integrity information:
+
+| Type              | Description                           |
+|-------------------|---------------------------------------|
+| Detached HEAD     | Worktrees in detached HEAD state      |
+| Locked worktrees  | Worktrees with lock status and reason |
+| Orphan branches   | Local branches without worktrees      |
+
+Detached HEAD worktrees cannot be cleaned (RemoveCommand requires a branch
+name).
+
+Locked worktrees display their lock reason if available.
+
+Orphan branches are local branches that exist but are not checked out in any
+worktree. These are informational only and not cleaned by this command.
+
 ### Additional Actions
 
 The command also runs `git worktree prune` to clean up references
@@ -129,6 +147,9 @@ skip:
 
 - `clean:` shows worktrees and prunable branches that will be removed
 - `skip:` shows skipped worktrees (verbose mode only)
+- `detached:` shows worktrees in detached HEAD state (verbose mode only)
+- `locked:` shows locked worktrees with reasons (verbose mode only)
+- `orphan branches:` shows local branches without worktrees (verbose mode only)
 - Each item is indented with 2 spaces
 - A blank line separates groups
 
@@ -183,6 +204,21 @@ twig clean --check
 clean:
   feature/old-branch (merged)
   feature/deleted-worktree (prunable, merged)
+
+# Verbose check showing integrity info
+twig clean --check -v
+clean:
+  feature/old-branch (merged)
+
+detached:
+  /path/to/repo-worktree/temp (HEAD at abc1234)
+
+locked:
+  feat/usb-work (reason: USB drive work)
+
+orphan branches:
+  feat/old-experiment (no worktree)
+  fix/abandoned (no worktree)
 ```
 
 ## Exit Code
