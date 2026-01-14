@@ -25,7 +25,12 @@ type MockGitExecutor struct {
 	RunFunc func(args ...string) ([]byte, error)
 
 	// ExistingBranches is a list of branches that exist locally.
+	// Used by LocalBranchExists and BranchList.
 	ExistingBranches []string
+
+	// AllLocalBranches is a complete list of all local branches.
+	// Used by BranchList. If nil, falls back to ExistingBranches + worktree branches.
+	AllLocalBranches []string
 
 	// Worktrees is a list of worktrees with their paths and branches.
 	Worktrees []MockWorktree
@@ -227,7 +232,35 @@ func (m *MockGitExecutor) handleBranch(args []string) ([]byte, error) {
 		branches := m.MergedBranches[target]
 		return []byte(strings.Join(branches, "\n")), nil
 	}
+	// args: ["branch", "--format=%(refname:short)"] - BranchList
+	if len(args) >= 2 && args[1] == "--format=%(refname:short)" {
+		return m.handleBranchList()
+	}
 	return nil, nil
+}
+
+func (m *MockGitExecutor) handleBranchList() ([]byte, error) {
+	// Use AllLocalBranches if set
+	if len(m.AllLocalBranches) > 0 {
+		return []byte(strings.Join(m.AllLocalBranches, "\n")), nil
+	}
+
+	// Otherwise, combine ExistingBranches and worktree branches
+	branches := make(map[string]bool)
+	for _, b := range m.ExistingBranches {
+		branches[b] = true
+	}
+	for _, wt := range m.Worktrees {
+		if wt.Branch != "" {
+			branches[wt.Branch] = true
+		}
+	}
+
+	var result []string
+	for b := range branches {
+		result = append(result, b)
+	}
+	return []byte(strings.Join(result, "\n")), nil
 }
 
 func (m *MockGitExecutor) handleStatus(args []string) ([]byte, error) {

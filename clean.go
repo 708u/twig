@@ -65,6 +65,24 @@ type CleanCandidate struct {
 	CleanReason  CleanReason
 }
 
+// OrphanBranch represents a local branch without an associated worktree.
+type OrphanBranch struct {
+	Name string
+}
+
+// LockedWorktreeInfo represents a locked worktree with its lock reason.
+type LockedWorktreeInfo struct {
+	Branch     string
+	Path       string
+	LockReason string
+}
+
+// DetachedWorktreeInfo represents a worktree in detached HEAD state.
+type DetachedWorktreeInfo struct {
+	Path string
+	HEAD string
+}
+
 // CleanResult aggregates results from clean operations.
 type CleanResult struct {
 	Candidates   []CleanCandidate
@@ -72,6 +90,11 @@ type CleanResult struct {
 	TargetBranch string
 	Pruned       bool
 	Check        bool // --check mode (show candidates only, no prompt)
+
+	// Integrity info (populated in --check mode)
+	OrphanBranches    []OrphanBranch
+	LockedWorktrees   []LockedWorktreeInfo
+	DetachedWorktrees []DetachedWorktreeInfo
 }
 
 // CleanableCount returns the number of worktrees that can be cleaned.
@@ -120,6 +143,9 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 			}
 			fmt.Fprintln(&stdout)
 		}
+		if r.formatIntegrityInfo(&stdout, opts) {
+			fmt.Fprintln(&stdout)
+		}
 		fmt.Fprintln(&stdout, "No worktrees to clean")
 		return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	}
@@ -143,7 +169,52 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 		}
 	}
 
+	// Output integrity info
+	r.formatIntegrityInfo(&stdout, opts)
+
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
+}
+
+// formatIntegrityInfo appends integrity info sections to the output.
+// Returns true if any info was written.
+func (r CleanResult) formatIntegrityInfo(stdout *strings.Builder, opts FormatOptions) bool {
+	wrote := false
+
+	// Detached HEAD worktrees (always shown - warning)
+	if len(r.DetachedWorktrees) > 0 {
+		fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout, "detached:")
+		for _, d := range r.DetachedWorktrees {
+			fmt.Fprintf(stdout, "  %s (HEAD at %s)\n", d.Path, d.HEAD)
+		}
+		wrote = true
+	}
+
+	// Locked worktrees (verbose only - info)
+	if opts.Verbose && len(r.LockedWorktrees) > 0 {
+		fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout, "locked:")
+		for _, l := range r.LockedWorktrees {
+			if l.LockReason != "" {
+				fmt.Fprintf(stdout, "  %s (reason: %s)\n", l.Branch, l.LockReason)
+			} else {
+				fmt.Fprintf(stdout, "  %s (no reason)\n", l.Branch)
+			}
+		}
+		wrote = true
+	}
+
+	// Orphan branches (verbose only - info)
+	if opts.Verbose && len(r.OrphanBranches) > 0 {
+		fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout, "orphan branches:")
+		for _, o := range r.OrphanBranches {
+			fmt.Fprintf(stdout, "  %s (no worktree)\n", o.Name)
+		}
+		wrote = true
+	}
+
+	return wrote
 }
 
 // Run analyzes worktrees and optionally removes them.
@@ -165,11 +236,39 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 		return result, fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
+	// Track worktree branches for orphan detection
+	worktreeBranches := make(map[string]bool)
+
 	// Analyze each worktree
 	for i, wt := range worktrees {
+		// Track branch for orphan detection
+		if wt.Branch != "" {
+			worktreeBranches[wt.Branch] = true
+		}
+
 		// Skip main worktree (first non-bare worktree)
 		if i == 0 || wt.Bare {
 			continue
+		}
+
+		// Collect integrity info (only in check mode)
+		if opts.Check {
+			// Detached HEAD worktrees (warning)
+			if wt.Detached {
+				result.DetachedWorktrees = append(result.DetachedWorktrees, DetachedWorktreeInfo{
+					Path: wt.Path,
+					HEAD: wt.ShortHEAD(),
+				})
+			}
+
+			// Locked worktrees (info)
+			if wt.Locked {
+				result.LockedWorktrees = append(result.LockedWorktrees, LockedWorktreeInfo{
+					Branch:     wt.Branch,
+					Path:       wt.Path,
+					LockReason: wt.LockReason,
+				})
+			}
 		}
 
 		var candidate CleanCandidate
@@ -202,6 +301,11 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 		}
 
 		result.Candidates = append(result.Candidates, candidate)
+	}
+
+	// Collect orphan branches (only in check mode)
+	if opts.Check {
+		result.OrphanBranches = c.findOrphanBranches(worktreeBranches)
 	}
 
 	// If check mode, just return candidates (no execution)
@@ -336,4 +440,20 @@ func (c *CleanCommand) getCleanReason(branch, target string) CleanReason {
 	}
 
 	return ""
+}
+
+// findOrphanBranches finds local branches that don't have associated worktrees.
+func (c *CleanCommand) findOrphanBranches(worktreeBranches map[string]bool) []OrphanBranch {
+	branches, err := c.Git.BranchList()
+	if err != nil {
+		return nil
+	}
+
+	var orphans []OrphanBranch
+	for _, branch := range branches {
+		if !worktreeBranches[branch] {
+			orphans = append(orphans, OrphanBranch{Name: branch})
+		}
+	}
+	return orphans
 }
