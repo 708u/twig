@@ -180,10 +180,33 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 		return result, nil
 	}
 
+	// Check submodule status to determine effective force level
+	effectiveForce := opts.Force
+	smStatus, smErr := c.Git.InDir(wtInfo.Path).CheckSubmoduleCleanStatus()
+	if smErr == nil {
+		switch smStatus {
+		case SubmoduleCleanStatusClean:
+			// Clean submodules: auto-force to avoid requiring user -f
+			// This is safe because the submodules have no uncommitted changes
+			if effectiveForce < WorktreeForceLevelUnclean {
+				effectiveForce = WorktreeForceLevelUnclean
+			}
+		case SubmoduleCleanStatusDirty:
+			// Dirty submodules: require user -f for data safety
+			if opts.Force < WorktreeForceLevelUnclean {
+				return result, &GitError{
+					Op:         OpWorktreeRemove,
+					Err:        fmt.Errorf("submodule has uncommitted changes"),
+					customHint: "use 'twig remove --force' to force removal",
+				}
+			}
+		}
+	}
+
 	var gitOutput []byte
 	var wtOpts []WorktreeRemoveOption
-	if opts.Force > WorktreeForceLevelNone {
-		wtOpts = append(wtOpts, WithForceRemove(opts.Force))
+	if effectiveForce > WorktreeForceLevelNone {
+		wtOpts = append(wtOpts, WithForceRemove(effectiveForce))
 	}
 	wtOut, err := c.Git.WorktreeRemove(wtInfo.Path, wtOpts...)
 	if err != nil {

@@ -19,6 +19,13 @@ type MockWorktree struct {
 	Bare           bool
 }
 
+// MockSubmodule represents a submodule entry for testing.
+type MockSubmodule struct {
+	Path  string
+	SHA   string
+	State string // "-", " ", "+", "U"
+}
+
 // MockGitExecutor is a mock implementation of twig.GitExecutor for testing.
 type MockGitExecutor struct {
 	// RunFunc overrides the default behavior if set.
@@ -79,6 +86,16 @@ type MockGitExecutor struct {
 
 	// FetchErr is returned when fetch is called.
 	FetchErr error
+
+	// Submodules is a list of submodules for git submodule status.
+	Submodules []MockSubmodule
+
+	// SubmoduleStatusErr is returned when submodule status is called.
+	SubmoduleStatusErr error
+
+	// SubmoduleHasChanges maps submodule path to whether it has uncommitted changes.
+	// Used when checking status --porcelain within submodule directories.
+	SubmoduleHasChanges map[string]bool
 }
 
 func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
@@ -89,8 +106,10 @@ func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
 }
 
 func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
-	// Skip -C <dir> option (directory specification, not a command)
+	// Extract directory from -C option if present
+	var dir string
 	for len(args) >= 2 && args[0] == "-C" {
+		dir = args[1]
 		args = args[2:]
 	}
 
@@ -117,13 +136,15 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 	case "branch":
 		return m.handleBranch(args)
 	case "status":
-		return m.handleStatus(args)
+		return m.handleStatus(args, dir)
 	case "stash":
 		return m.handleStash(args)
 	case "for-each-ref":
 		return m.handleForEachRef(args)
 	case "fetch":
 		return m.handleFetch(args)
+	case "submodule":
+		return m.handleSubmodule(args)
 	}
 	return nil, nil
 }
@@ -230,9 +251,17 @@ func (m *MockGitExecutor) handleBranch(args []string) ([]byte, error) {
 	return nil, nil
 }
 
-func (m *MockGitExecutor) handleStatus(args []string) ([]byte, error) {
+func (m *MockGitExecutor) handleStatus(args []string, dir string) ([]byte, error) {
 	// args: ["status", "--porcelain"]
 	if len(args) >= 2 && args[1] == "--porcelain" {
+		// Check if this is a submodule directory with changes
+		if dir != "" && m.SubmoduleHasChanges != nil {
+			if hasChanges, ok := m.SubmoduleHasChanges[dir]; ok && hasChanges {
+				return []byte("M  modified.go\n"), nil
+			}
+			return []byte{}, nil
+		}
+
 		if m.HasChanges {
 			return []byte("M  modified.go\n"), nil
 		}
@@ -320,4 +349,29 @@ func (m *MockGitExecutor) handleFetch(args []string) ([]byte, error) {
 		*m.CapturedArgs = append(*m.CapturedArgs, args...)
 	}
 	return nil, m.FetchErr
+}
+
+func (m *MockGitExecutor) handleSubmodule(args []string) ([]byte, error) {
+	// args: ["submodule", "status", "--recursive"]
+	if len(args) >= 2 && args[1] == "status" {
+		if m.SubmoduleStatusErr != nil {
+			return nil, m.SubmoduleStatusErr
+		}
+
+		var lines []string
+		for _, sm := range m.Submodules {
+			state := sm.State
+			if state == "" {
+				state = " " // default to clean
+			}
+			sha := sm.SHA
+			if sha == "" {
+				sha = "abc1234567890"
+			}
+			// Format: "{state}SHA path (desc)"
+			lines = append(lines, state+sha+" "+sm.Path)
+		}
+		return []byte(strings.Join(lines, "\n")), nil
+	}
+	return nil, nil
 }

@@ -434,6 +434,124 @@ func TestRemoveCommand_Run(t *testing.T) {
 			wantErr:     true,
 			errContains: "failed to delete branch",
 		},
+		{
+			name:   "clean_submodule_auto_force",
+			branch: "feature/with-submodule",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{{
+						Path:   "/repo/feature/with-submodule",
+						Branch: "feature/with-submodule",
+					}},
+					Submodules: []testutil.MockSubmodule{{
+						Path:  "vendor/lib",
+						State: " ", // clean
+					}},
+					CapturedArgs: captured,
+				}
+			},
+			wantErr:        false,
+			wantForceLevel: WorktreeForceLevelUnclean, // auto-forced due to clean submodule
+		},
+		{
+			name:   "dirty_submodule_requires_force",
+			branch: "feature/dirty-submodule",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{{
+						Path:   "/repo/feature/dirty-submodule",
+						Branch: "feature/dirty-submodule",
+					}},
+					Submodules: []testutil.MockSubmodule{{
+						Path:  "vendor/lib",
+						State: "+", // modified commit
+					}},
+					CapturedArgs: captured,
+				}
+			},
+			wantErr:     true,
+			errContains: "submodule has uncommitted changes",
+		},
+		{
+			name:   "dirty_submodule_with_force_succeeds",
+			branch: "feature/dirty-submodule",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{Force: WorktreeForceLevelUnclean},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{{
+						Path:   "/repo/feature/dirty-submodule",
+						Branch: "feature/dirty-submodule",
+					}},
+					Submodules: []testutil.MockSubmodule{{
+						Path:  "vendor/lib",
+						State: "+", // modified commit
+					}},
+					CapturedArgs: captured,
+				}
+			},
+			wantErr:        false,
+			wantForceLevel: WorktreeForceLevelUnclean,
+		},
+		{
+			name:   "submodule_with_uncommitted_changes_requires_force",
+			branch: "feature/submodule-changes",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{{
+						Path:   "/repo/feature/submodule-changes",
+						Branch: "feature/submodule-changes",
+					}},
+					Submodules: []testutil.MockSubmodule{{
+						Path:  "vendor/lib",
+						State: " ", // clean commit state
+					}},
+					SubmoduleHasChanges: map[string]bool{
+						// Key is the absolute path (worktree path + submodule relative path)
+						"/repo/feature/submodule-changes/vendor/lib": true, // has uncommitted changes inside
+					},
+					CapturedArgs: captured,
+				}
+			},
+			wantErr:     true,
+			errContains: "submodule has uncommitted changes",
+		},
+		{
+			name:   "uninitialized_submodule_no_force_needed",
+			branch: "feature/uninit-submodule",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{{
+						Path:   "/repo/feature/uninit-submodule",
+						Branch: "feature/uninit-submodule",
+					}},
+					Submodules: []testutil.MockSubmodule{{
+						Path:  "vendor/lib",
+						State: "-", // uninitialized
+					}},
+					CapturedArgs: captured,
+				}
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -484,8 +602,9 @@ func TestRemoveCommand_Run(t *testing.T) {
 				if WorktreeForceLevel(fCount) != tt.wantForceLevel {
 					t.Errorf("expected -f %d time(s) for worktree removal, got %d in: %v", tt.wantForceLevel, fCount, captured)
 				}
-				// Also check -D for branch deletion
-				if !slices.Contains(captured, "-D") {
+				// Check -D for branch deletion only when user explicitly requested force
+				// (submodule auto-force only affects worktree removal, not branch deletion)
+				if tt.opts.Force > WorktreeForceLevelNone && !slices.Contains(captured, "-D") {
 					t.Errorf("expected -D for force branch deletion, got: %v", captured)
 				}
 			}
@@ -750,6 +869,15 @@ func TestGitError_Hint(t *testing.T) {
 				Stderr: "",
 			},
 			want: "",
+		},
+		{
+			name: "custom_hint_takes_precedence",
+			gitErr: &GitError{
+				Op:         OpWorktreeRemove,
+				Stderr:     "fatal: '/path' contains modified or untracked files",
+				customHint: "custom hint message",
+			},
+			want: "custom hint message",
 		},
 	}
 

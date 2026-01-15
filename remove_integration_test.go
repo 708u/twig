@@ -13,7 +13,6 @@ import (
 	"github.com/708u/twig/internal/testutil"
 )
 
-
 func TestRemoveCommand_Integration(t *testing.T) {
 	t.Parallel()
 
@@ -712,6 +711,207 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		// Branch should be deleted
 		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/prunable-force")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+	})
+
+	t.Run("RemoveWorktreeWithCleanSubmodule", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule in the main repo
+		submoduleDir := t.TempDir()
+		testutil.RunGit(t, submoduleDir, "init")
+		testutil.RunGit(t, submoduleDir, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleDir, "config", "user.name", "Test User")
+		if err := os.WriteFile(filepath.Join(submoduleDir, "README.md"), []byte("# Submodule"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleDir, "add", ".")
+		testutil.RunGit(t, submoduleDir, "commit", "-m", "initial")
+
+		// Add submodule to main repo (use -c to allow file protocol)
+		testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always", "submodule", "add", submoduleDir, "vendor/lib")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+
+		// Create a worktree
+		wtPath := filepath.Join(repoDir, "feature", "with-submodule")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/with-submodule", wtPath)
+
+		// Initialize submodule in the new worktree (use -c to allow file protocol)
+		testutil.RunGit(t, wtPath, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive")
+
+		// Verify submodule is initialized
+		out := testutil.RunGit(t, wtPath, "submodule", "status")
+		if !strings.Contains(out, "vendor/lib") {
+			t.Fatalf("submodule should be initialized: %s", out)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Remove without --force should succeed (clean submodule auto-forces)
+		_, err = cmd.Run("feature/with-submodule", mainDir, RemoveOptions{})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree is removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+
+		// Verify branch is deleted
+		out = testutil.RunGit(t, mainDir, "branch", "--list", "feature/with-submodule")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+	})
+
+	t.Run("RemoveWorktreeWithDirtySubmodule", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule in the main repo
+		submoduleDir := t.TempDir()
+		testutil.RunGit(t, submoduleDir, "init")
+		testutil.RunGit(t, submoduleDir, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleDir, "config", "user.name", "Test User")
+		if err := os.WriteFile(filepath.Join(submoduleDir, "README.md"), []byte("# Submodule"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleDir, "add", ".")
+		testutil.RunGit(t, submoduleDir, "commit", "-m", "initial")
+
+		// Add submodule to main repo (use -c to allow file protocol)
+		testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always", "submodule", "add", submoduleDir, "vendor/lib")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+
+		// Create a worktree
+		wtPath := filepath.Join(repoDir, "feature", "dirty-submodule")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/dirty-submodule", wtPath)
+
+		// Initialize submodule in the new worktree (use -c to allow file protocol)
+		testutil.RunGit(t, wtPath, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive")
+
+		// Make uncommitted changes in the submodule
+		submoduleInWt := filepath.Join(wtPath, "vendor", "lib")
+		if err := os.WriteFile(filepath.Join(submoduleInWt, "dirty.txt"), []byte("uncommitted"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Remove without --force should fail with hint
+		_, err = cmd.Run("feature/dirty-submodule", mainDir, RemoveOptions{})
+		if err == nil {
+			t.Fatal("expected error for dirty submodule without --force")
+		}
+
+		var gitErr *GitError
+		if !errors.As(err, &gitErr) {
+			t.Fatalf("expected GitError, got %T: %v", err, err)
+		}
+
+		hint := gitErr.Hint()
+		if !strings.Contains(hint, "force") {
+			t.Errorf("hint should mention force, got: %s", hint)
+		}
+
+		// Verify worktree still exists
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Error("worktree should still exist")
+		}
+
+		// Now remove with --force should succeed
+		_, err = cmd.Run("feature/dirty-submodule", mainDir, RemoveOptions{
+			Force: WorktreeForceLevelUnclean,
+		})
+		if err != nil {
+			t.Fatalf("Run with force failed: %v", err)
+		}
+
+		// Verify worktree is removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+	})
+
+	t.Run("RemoveWorktreeWithUninitializedSubmodule", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule in the main repo
+		submoduleDir := t.TempDir()
+		testutil.RunGit(t, submoduleDir, "init")
+		testutil.RunGit(t, submoduleDir, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleDir, "config", "user.name", "Test User")
+		if err := os.WriteFile(filepath.Join(submoduleDir, "README.md"), []byte("# Submodule"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleDir, "add", ".")
+		testutil.RunGit(t, submoduleDir, "commit", "-m", "initial")
+
+		// Add submodule to main repo (use -c to allow file protocol)
+		testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always", "submodule", "add", submoduleDir, "vendor/lib")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+
+		// Create a worktree WITHOUT initializing the submodule
+		wtPath := filepath.Join(repoDir, "feature", "uninit-submodule")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/uninit-submodule", wtPath)
+
+		// Don't initialize the submodule - leave it uninitialized
+		// Verify submodule is NOT initialized (shows with - prefix)
+		out := testutil.RunGit(t, wtPath, "submodule", "status")
+		if !strings.HasPrefix(strings.TrimSpace(out), "-") {
+			t.Fatalf("submodule should be uninitialized (prefix -): %s", out)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Remove without --force should succeed (uninitialized submodule doesn't require force)
+		_, err = cmd.Run("feature/uninit-submodule", mainDir, RemoveOptions{})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree is removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+
+		// Verify branch is deleted
+		out = testutil.RunGit(t, mainDir, "branch", "--list", "feature/uninit-submodule")
 		if strings.TrimSpace(out) != "" {
 			t.Errorf("branch should be deleted, got: %s", out)
 		}

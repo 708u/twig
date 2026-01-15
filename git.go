@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -38,6 +39,7 @@ const (
 	GitCmdDiff       = "diff"
 	GitCmdFetch      = "fetch"
 	GitCmdForEachRef = "for-each-ref"
+	GitCmdSubmodule  = "submodule"
 )
 
 // Git worktree subcommands.
@@ -83,9 +85,10 @@ func (op GitOp) String() string {
 
 // GitError represents an error from a git operation with structured information.
 type GitError struct {
-	Op     GitOp
-	Stderr string
-	Err    error
+	Op         GitOp
+	Stderr     string
+	Err        error
+	customHint string // optional custom hint, takes precedence over auto-detected hints
 }
 
 func (e *GitError) Error() string {
@@ -101,6 +104,10 @@ func (e *GitError) Unwrap() error {
 
 // Hint returns a helpful hint message based on the error content.
 func (e *GitError) Hint() string {
+	// Check for custom hint first
+	if e.customHint != "" {
+		return e.customHint
+	}
 	switch {
 	case strings.Contains(e.Stderr, "modified or untracked files"):
 		return "use 'twig remove --force' to force removal"
@@ -612,4 +619,128 @@ func (g *GitRunner) WorktreePrune() ([]byte, error) {
 		return nil, fmt.Errorf("failed to prune worktrees: %w", err)
 	}
 	return out, nil
+}
+
+// SubmoduleState represents the status prefix from git submodule status.
+type SubmoduleState int
+
+const (
+	// SubmoduleStateUninitialized: prefix '-' (submodule not initialized).
+	SubmoduleStateUninitialized SubmoduleState = iota
+	// SubmoduleStateClean: prefix ' ' (submodule checked out at recorded commit).
+	SubmoduleStateClean
+	// SubmoduleStateModified: prefix '+' (submodule at different commit than recorded).
+	SubmoduleStateModified
+	// SubmoduleStateConflict: prefix 'U' (submodule has merge conflicts).
+	SubmoduleStateConflict
+)
+
+// SubmoduleInfo holds information about a submodule from git submodule status.
+type SubmoduleInfo struct {
+	Path  string
+	SHA   string
+	State SubmoduleState
+}
+
+// SubmoduleCleanStatus indicates whether it's safe to remove a worktree with submodules.
+type SubmoduleCleanStatus int
+
+const (
+	// SubmoduleCleanStatusNone: no initialized submodules exist.
+	SubmoduleCleanStatusNone SubmoduleCleanStatus = iota
+	// SubmoduleCleanStatusClean: submodules exist but all are clean.
+	SubmoduleCleanStatusClean
+	// SubmoduleCleanStatusDirty: submodules have uncommitted changes or are at different commits.
+	SubmoduleCleanStatusDirty
+)
+
+// SubmoduleStatus runs `git submodule status --recursive` and parses the output.
+// Returns a list of SubmoduleInfo for all submodules.
+func (g *GitRunner) SubmoduleStatus() ([]SubmoduleInfo, error) {
+	out, err := g.Run(GitCmdSubmodule, "status", "--recursive")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get submodule status: %w", err)
+	}
+
+	var submodules []SubmoduleInfo
+	for _, line := range strings.Split(string(out), "\n") {
+		if len(line) == 0 {
+			continue
+		}
+
+		// Format: " SHA path (desc)" or "+SHA path (desc)" or "-SHA path (desc)" or "USHA path (desc)"
+		// The first character is the state prefix
+		var state SubmoduleState
+		switch line[0] {
+		case '-':
+			state = SubmoduleStateUninitialized
+		case ' ':
+			state = SubmoduleStateClean
+		case '+':
+			state = SubmoduleStateModified
+		case 'U':
+			state = SubmoduleStateConflict
+		default:
+			// Unknown prefix, skip
+			continue
+		}
+
+		// Parse SHA and path
+		rest := strings.TrimSpace(line[1:])
+		fields := strings.Fields(rest)
+		if len(fields) < 2 {
+			continue
+		}
+
+		submodules = append(submodules, SubmoduleInfo{
+			SHA:   fields[0],
+			Path:  fields[1],
+			State: state,
+		})
+	}
+
+	return submodules, nil
+}
+
+// CheckSubmoduleCleanStatus determines if it's safe to remove a worktree with submodules.
+// Returns:
+//   - SubmoduleCleanStatusNone: no initialized submodules
+//   - SubmoduleCleanStatusClean: submodules exist but are clean (safe to auto-force)
+//   - SubmoduleCleanStatusDirty: submodules have changes (requires user --force)
+func (g *GitRunner) CheckSubmoduleCleanStatus() (SubmoduleCleanStatus, error) {
+	submodules, err := g.SubmoduleStatus()
+	if err != nil {
+		return SubmoduleCleanStatusNone, err
+	}
+
+	hasInitialized := false
+	for _, sm := range submodules {
+		if sm.State == SubmoduleStateUninitialized {
+			continue
+		}
+		hasInitialized = true
+
+		// Check for modified commit (+ prefix) or conflict (U prefix)
+		if sm.State == SubmoduleStateModified || sm.State == SubmoduleStateConflict {
+			return SubmoduleCleanStatusDirty, nil
+		}
+
+		// Check for uncommitted changes within the submodule
+		// sm.Path is relative to the worktree, so we need to join it with g.Dir
+		smAbsPath := filepath.Join(g.Dir, sm.Path)
+		smRunner := g.InDir(smAbsPath)
+		hasChanges, err := smRunner.HasChanges()
+		if err != nil {
+			// If we can't check, assume dirty for safety
+			return SubmoduleCleanStatusDirty, nil
+		}
+		if hasChanges {
+			return SubmoduleCleanStatusDirty, nil
+		}
+	}
+
+	if !hasInitialized {
+		return SubmoduleCleanStatusNone, nil
+	}
+	return SubmoduleCleanStatusClean, nil
 }

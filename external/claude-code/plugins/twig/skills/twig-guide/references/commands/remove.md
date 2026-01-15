@@ -78,6 +78,47 @@ The cleanup is safe:
 - Preserves directories containing other worktrees or files
 - Cleanup errors are non-fatal (main operation succeeds)
 
+### Submodule Handling
+
+When a worktree contains initialized submodules, `git worktree remove` requires
+`--force` even if the submodules are clean. This is because git treats any
+initialized submodule as potentially containing valuable data.
+
+Twig handles submodules intelligently to avoid requiring `--force` unnecessarily:
+
+| Submodule State | User `--force` | Behavior |
+|-----------------|----------------|----------|
+| No submodules   | Not required   | Normal removal |
+| Uninitialized   | Not required   | Normal removal |
+| Clean           | Not required   | Auto-force internally |
+| Dirty           | Required       | Error with hint |
+
+**Clean submodules**: If all initialized submodules are at their recorded
+commit and have no uncommitted changes, twig automatically applies `--force`
+internally. This allows seamless removal without requiring the user to
+specify `--force`.
+
+**Dirty submodules**: If any initialized submodule has uncommitted changes
+or is at a different commit than recorded, twig returns an error with a
+hint to use `--force`. This protects against accidental data loss.
+
+```bash
+# Remove worktree with clean submodule (no --force needed)
+twig remove feat/with-submodule
+
+# Remove worktree with dirty submodule (--force required)
+twig remove feat/dirty-submodule
+error: feat/dirty-submodule: failed to remove worktree
+hint: use 'twig remove --force' to force removal
+
+# Force removal of worktree with dirty submodule
+twig remove feat/dirty-submodule --force
+```
+
+This behavior ensures that `twig clean` can automatically remove worktrees
+with clean submodules without escalating to `--force`, while still protecting
+worktrees that have actual uncommitted changes.
+
 ## Multiple Branches
 
 When multiple branches are specified, errors on individual branches
