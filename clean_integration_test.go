@@ -174,9 +174,6 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Allow file:// protocol for submodule add (local config)
-		testutil.RunGit(t, mainDir, "config", "protocol.file.allow", "always")
-
 		// Create a submodule repository
 		submoduleRepo := filepath.Join(repoDir, "submodule-repo")
 		if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
@@ -194,8 +191,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		// Create worktree (merged since no new commits)
 		wtPath := filepath.Join(repoDir, "feature", "with-submodule")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/with-submodule", wtPath)
-		testutil.RunGit(t, wtPath, "config", "protocol.file.allow", "always")
-		testutil.RunGit(t, wtPath, "submodule", "add", submoduleRepo, "sub")
+		testutil.RunGit(t, wtPath, "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "sub")
 		testutil.RunGit(t, wtPath, "commit", "-m", "add submodule")
 
 		// Make submodule dirty (uncommitted changes in submodule)
