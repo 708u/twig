@@ -169,6 +169,70 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("SkipsDirtySubmodule", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Allow file:// protocol for submodule add (local config)
+		testutil.RunGit(t, mainDir, "config", "protocol.file.allow", "always")
+
+		// Create a submodule repository
+		submoduleRepo := filepath.Join(repoDir, "submodule-repo")
+		if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "init")
+		testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+		if err := os.WriteFile(filepath.Join(submoduleRepo, "file.txt"), []byte("content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "add", ".")
+		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+
+		// Create worktree (merged since no new commits)
+		wtPath := filepath.Join(repoDir, "feature", "with-submodule")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/with-submodule", wtPath)
+		testutil.RunGit(t, wtPath, "config", "protocol.file.allow", "always")
+		testutil.RunGit(t, wtPath, "submodule", "add", submoduleRepo, "sub")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add submodule")
+
+		// Make submodule dirty (uncommitted changes in submodule)
+		submodulePath := filepath.Join(wtPath, "sub")
+		if err := os.WriteFile(filepath.Join(submodulePath, "dirty.txt"), []byte("dirty"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		result, err := cmd.Run(mainDir, CleanOptions{Verbose: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Errorf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+
+		if !result.Candidates[0].Skipped {
+			t.Error("branch with dirty submodule should be skipped")
+		}
+
+		if result.Candidates[0].SkipReason != SkipDirtySubmodule {
+			t.Errorf("skip reason should be %s, got %s", SkipDirtySubmodule, result.Candidates[0].SkipReason)
+		}
+	})
+
 	t.Run("SkipsLockedWorktrees", func(t *testing.T) {
 		t.Parallel()
 
