@@ -36,25 +36,6 @@ func NewDefaultCleanCommand(cfg *Config) *CleanCommand {
 	return NewCleanCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir), cfg)
 }
 
-// SkipReason describes why a worktree was skipped.
-type SkipReason string
-
-const (
-	SkipNotMerged  SkipReason = "not merged"
-	SkipHasChanges SkipReason = "has uncommitted changes"
-	SkipLocked     SkipReason = "locked"
-	SkipCurrentDir SkipReason = "current directory"
-	SkipDetached   SkipReason = "detached HEAD"
-)
-
-// CleanReason describes why a branch is cleanable.
-type CleanReason string
-
-const (
-	CleanMerged       CleanReason = "merged"
-	CleanUpstreamGone CleanReason = "upstream gone"
-)
-
 // CleanCandidate represents a worktree that can be cleaned.
 type CleanCandidate struct {
 	Branch       string
@@ -165,42 +146,49 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 		return result, fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
-	// Analyze each worktree
+	// RemoveCommand is used for both Check and Run
+	removeCmd := &RemoveCommand{
+		FS:     c.FS,
+		Git:    c.Git,
+		Config: c.Config,
+	}
+
+	// Analyze each worktree using RemoveCommand.Check
 	for i, wt := range worktrees {
 		// Skip main worktree (first non-bare worktree)
 		if i == 0 || wt.Bare {
 			continue
 		}
 
-		var candidate CleanCandidate
-
-		if wt.Prunable {
-			// Prunable branch: worktree directory was deleted
-			candidate = CleanCandidate{
-				Branch:   wt.Branch,
-				Prunable: true,
-			}
-			if reason := c.checkPrunableSkipReason(wt.Branch, target, opts.Force); reason != "" {
-				candidate.Skipped = true
-				candidate.SkipReason = reason
-			}
-		} else {
-			// Normal worktree
-			candidate = CleanCandidate{
+		// Handle detached HEAD worktrees directly (they have no branch name)
+		if wt.Detached || wt.Branch == "" {
+			result.Candidates = append(result.Candidates, CleanCandidate{
 				Branch:       wt.Branch,
 				WorktreePath: wt.Path,
-			}
-			if reason := c.checkSkipReason(wt, cwd, target, opts.Force); reason != "" {
-				candidate.Skipped = true
-				candidate.SkipReason = reason
-			}
+				Skipped:      true,
+				SkipReason:   SkipDetached,
+			})
+			continue
 		}
 
-		// Set clean reason for non-skipped candidates
-		if !candidate.Skipped {
-			candidate.CleanReason = c.getCleanReason(wt.Branch, target)
+		checkResult, err := removeCmd.Check(wt.Branch, CheckOptions{
+			Force:  opts.Force,
+			Target: target,
+			Cwd:    cwd,
+		})
+		if err != nil {
+			// Skip worktrees that fail to check (e.g., not in any worktree)
+			continue
 		}
 
+		candidate := CleanCandidate{
+			Branch:       wt.Branch,
+			WorktreePath: checkResult.WorktreePath,
+			Prunable:     checkResult.Prunable,
+			Skipped:      !checkResult.CanRemove,
+			SkipReason:   checkResult.SkipReason,
+			CleanReason:  checkResult.CleanReason,
+		}
 		result.Candidates = append(result.Candidates, candidate)
 	}
 
@@ -210,26 +198,15 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 	}
 
 	// Execute removal for cleanable candidates
-	// RemoveCommand handles both normal and prunable worktrees
-	removeCmd := &RemoveCommand{
-		FS:     c.FS,
-		Git:    c.Git,
-		Config: c.Config,
-	}
-
-	// Determine force level for RemoveCommand.
-	// At minimum use Unclean since clean already validated conditions.
-	// Use higher level if clean was invoked with -ff to handle locked worktrees.
-	removeForce := max(opts.Force, WorktreeForceLevelUnclean)
-
+	// Pass the same force level since RemoveCommand.Check already validated conditions
 	for _, candidate := range result.Candidates {
 		if candidate.Skipped {
 			continue
 		}
 
 		wt, err := removeCmd.Run(candidate.Branch, cwd, RemoveOptions{
-			Force:  removeForce,
-			DryRun: false,
+			Force: opts.Force,
+			Check: false,
 		})
 		if err != nil {
 			wt.Branch = candidate.Branch
@@ -266,74 +243,4 @@ func (c *CleanCommand) resolveTarget(target string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no target branch found")
-}
-
-// checkSkipReason checks if worktree should be skipped and returns the reason.
-// force level controls which conditions can be bypassed (matches git worktree behavior).
-func (c *CleanCommand) checkSkipReason(wt Worktree, cwd, target string, force WorktreeForceLevel) SkipReason {
-	// Check detached HEAD (never bypassed)
-	if wt.Detached {
-		return SkipDetached
-	}
-
-	// Check current directory (never bypassed)
-	if strings.HasPrefix(cwd, wt.Path) {
-		return SkipCurrentDir
-	}
-
-	// Check locked
-	if wt.Locked && force < WorktreeForceLevelLocked {
-		return SkipLocked
-	}
-
-	// Check uncommitted changes
-	if force < WorktreeForceLevelUnclean {
-		hasChanges, err := c.Git.InDir(wt.Path).HasChanges()
-		if err != nil || hasChanges {
-			return SkipHasChanges
-		}
-	}
-
-	// Check merged
-	if force < WorktreeForceLevelUnclean {
-		merged, err := c.Git.IsBranchMerged(wt.Branch, target)
-		if err != nil || !merged {
-			return SkipNotMerged
-		}
-	}
-
-	return ""
-}
-
-// checkPrunableSkipReason checks if a prunable branch should be skipped.
-// Only checks merged status since worktree-specific conditions don't apply.
-func (c *CleanCommand) checkPrunableSkipReason(branch, target string, force WorktreeForceLevel) SkipReason {
-	if force < WorktreeForceLevelUnclean {
-		merged, err := c.Git.IsBranchMerged(branch, target)
-		if err != nil || !merged {
-			return SkipNotMerged
-		}
-	}
-	return ""
-}
-
-// getCleanReason determines why a branch is cleanable.
-func (c *CleanCommand) getCleanReason(branch, target string) CleanReason {
-	// Check if branch is merged via traditional merge
-	out, err := c.Git.Run(GitCmdBranch, "--merged", target, "--format=%(refname:short)")
-	if err == nil {
-		for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-			if line == branch {
-				return CleanMerged
-			}
-		}
-	}
-
-	// Check if upstream is gone (squash/rebase merge)
-	gone, err := c.Git.IsBranchUpstreamGone(branch)
-	if err == nil && gone {
-		return CleanUpstreamGone
-	}
-
-	return ""
 }

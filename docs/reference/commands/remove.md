@@ -17,7 +17,7 @@ twig remove <branch>... [flags]
 | Flag        | Short | Description                                       |
 |-------------|-------|---------------------------------------------------|
 | `--force`   | `-f`  | Force removal (can be specified twice, see below) |
-| `--dry-run` |       | Show what would be removed                        |
+| `--check`   |       | Show removal eligibility without making changes   |
 | `--verbose` | `-v`  | Enable verbose output                             |
 
 ## Behavior
@@ -25,7 +25,7 @@ twig remove <branch>... [flags]
 - Finds the worktree path by looking up the branch name
 - Prevents removal if current directory is inside the target worktree
 - Cleans up empty parent directories after removal (see below)
-- With `--dry-run`: prints what would be removed without making changes
+- With `--check`: prints what would be removed without making changes
 - Without `--force`: fails if there are uncommitted changes,
   the branch is not merged, or the worktree is locked
 - With `-f` (once): bypasses uncommitted changes and unmerged branch checks
@@ -53,7 +53,7 @@ For prunable worktrees:
 - Stale worktree records are pruned automatically
 - Branch is deleted as usual
 - No cwd check is performed (directory doesn't exist)
-- `--dry-run` shows "Would prune stale worktree record"
+- `--check` shows "Would prune stale worktree record"
 
 ### Empty Directory Cleanup
 

@@ -121,7 +121,7 @@ func TestRemoveResult_Format(t *testing.T) {
 		{
 			name: "dry_run",
 			result: RemoveResult{
-				Removed: []RemovedWorktree{{Branch: "feature/a", WorktreePath: "/repo/feature/a", DryRun: true}},
+				Removed: []RemovedWorktree{{Branch: "feature/a", WorktreePath: "/repo/feature/a", Check: true}},
 			},
 			opts:       FormatOptions{},
 			wantStdout: "Would remove worktree: /repo/feature/a\nWould delete branch: feature/a\n",
@@ -139,7 +139,7 @@ func TestRemoveResult_Format(t *testing.T) {
 		{
 			name: "prunable_dry_run",
 			result: RemoveResult{
-				Removed: []RemovedWorktree{{Branch: "feature/deleted", WorktreePath: "/repo/feature/deleted", Pruned: true, DryRun: true}},
+				Removed: []RemovedWorktree{{Branch: "feature/deleted", WorktreePath: "/repo/feature/deleted", Pruned: true, Check: true}},
 			},
 			opts:       FormatOptions{},
 			wantStdout: "Would prune stale worktree record\nWould delete branch: feature/deleted\n",
@@ -183,7 +183,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 		wantErr        bool
 		errContains    string
 		wantForceLevel WorktreeForceLevel
-		wantDryRun     bool
+		wantCheck      bool
 	}{
 		{
 			name:   "success",
@@ -204,7 +204,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 			name:   "dry_run",
 			branch: "feature/test",
 			cwd:    "/other/dir",
-			opts:   RemoveOptions{DryRun: true},
+			opts:   RemoveOptions{Check: true},
 			config: &Config{WorktreeSourceDir: "/repo/main"},
 			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
 				t.Helper()
@@ -213,8 +213,8 @@ func TestRemoveCommand_Run(t *testing.T) {
 					CapturedArgs: captured,
 				}
 			},
-			wantErr:    false,
-			wantDryRun: true,
+			wantErr:   false,
+			wantCheck: true,
 		},
 		{
 			name:   "force_level_unclean",
@@ -302,7 +302,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 				}
 			},
 			wantErr:     true,
-			errContains: "cannot remove: current directory is inside worktree",
+			errContains: "cannot remove: current directory",
 		},
 		{
 			name:   "worktree_remove_fails",
@@ -359,7 +359,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 			name:   "prunable_worktree_dry_run",
 			branch: "feature/deleted",
 			cwd:    "/other/dir",
-			opts:   RemoveOptions{DryRun: true},
+			opts:   RemoveOptions{Check: true},
 			config: &Config{WorktreeSourceDir: "/repo/main"},
 			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
 				t.Helper()
@@ -372,8 +372,8 @@ func TestRemoveCommand_Run(t *testing.T) {
 					CapturedArgs: captured,
 				}
 			},
-			wantErr:    false,
-			wantDryRun: true,
+			wantErr:   false,
+			wantCheck: true,
 		},
 		{
 			name:   "prunable_worktree_with_force",
@@ -584,9 +584,9 @@ func TestRemoveCommand_Run(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if tt.wantDryRun {
-				if !result.DryRun {
-					t.Error("expected DryRun to be true")
+			if tt.wantCheck {
+				if !result.Check {
+					t.Error("expected Check to be true")
 				}
 				return
 			}
@@ -769,7 +769,7 @@ func TestRemovedWorktree_Format_WithCleanedDirs(t *testing.T) {
 				Branch:       "feat/test",
 				WorktreePath: "/base/feat/test",
 				CleanedDirs:  []string{"/base/feat"},
-				DryRun:       true,
+				Check:        true,
 			},
 			opts: FormatOptions{},
 			wantStdout: "Would remove worktree: /base/feat/test\n" +
@@ -782,7 +782,7 @@ func TestRemovedWorktree_Format_WithCleanedDirs(t *testing.T) {
 				Branch:       "feat/test",
 				WorktreePath: "/base/feat/test",
 				CleanedDirs:  []string{"/base/feat"},
-				DryRun:       false,
+				Check:        false,
 			},
 			opts: FormatOptions{Verbose: true},
 			wantStdout: "Removed worktree and branch: feat/test\n" +
@@ -795,7 +795,7 @@ func TestRemovedWorktree_Format_WithCleanedDirs(t *testing.T) {
 				Branch:       "feat/test",
 				WorktreePath: "/base/feat/test",
 				CleanedDirs:  []string{"/base/feat"},
-				DryRun:       false,
+				Check:        false,
 			},
 			opts:       FormatOptions{Verbose: false},
 			wantStdout: "twig remove: feat/test\n",
@@ -824,76 +824,6 @@ func (m mockDirEntry) Name() string               { return m.name }
 func (m mockDirEntry) IsDir() bool                { return m.isDir }
 func (m mockDirEntry) Type() os.FileMode          { return 0 }
 func (m mockDirEntry) Info() (os.FileInfo, error) { return nil, nil }
-
-func TestGitError_Hint(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		gitErr *GitError
-		want   string
-	}{
-		{
-			name:   "nil_error",
-			gitErr: nil,
-			want:   "",
-		},
-		{
-			name: "modified_or_untracked_files",
-			gitErr: &GitError{
-				Op:     OpWorktreeRemove,
-				Stderr: "fatal: '/path' contains modified or untracked files",
-			},
-			want: "use 'twig remove --force' to force removal",
-		},
-		{
-			name: "locked_worktree",
-			gitErr: &GitError{
-				Op:     OpWorktreeRemove,
-				Stderr: "fatal: cannot remove a locked working tree",
-			},
-			want: "run 'git worktree unlock <path>' first, or use 'twig remove --force'",
-		},
-		{
-			name: "unknown_error",
-			gitErr: &GitError{
-				Op:     OpWorktreeRemove,
-				Stderr: "some other error",
-			},
-			want: "",
-		},
-		{
-			name: "empty_stderr",
-			gitErr: &GitError{
-				Op:     OpWorktreeRemove,
-				Stderr: "",
-			},
-			want: "",
-		},
-		{
-			name: "custom_hint_takes_precedence",
-			gitErr: &GitError{
-				Op:         OpWorktreeRemove,
-				Stderr:     "fatal: '/path' contains modified or untracked files",
-				customHint: "custom hint message",
-			},
-			want: "custom hint message",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			var got string
-			if tt.gitErr != nil {
-				got = tt.gitErr.Hint()
-			}
-			if got != tt.want {
-				t.Errorf("Hint() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
 
 func TestRemoveResult_Format_WithHint(t *testing.T) {
 	t.Parallel()
@@ -958,7 +888,7 @@ func TestRemoveResult_Format_WithHint(t *testing.T) {
 				}},
 			},
 			opts:       FormatOptions{Verbose: false},
-			wantStderr: "error: feature/a: failed to remove worktree\nhint: run 'git worktree unlock <path>' first, or use 'twig remove --force'\n",
+			wantStderr: "error: feature/a: failed to remove worktree\nhint: run 'git worktree unlock <path>' first, or use 'twig remove -f -f'\n",
 		},
 		{
 			name: "non_git_error_fallback",
@@ -979,6 +909,414 @@ func TestRemoveResult_Format_WithHint(t *testing.T) {
 			got := tt.result.Format(tt.opts)
 			if got.Stderr != tt.wantStderr {
 				t.Errorf("Stderr = %q, want %q", got.Stderr, tt.wantStderr)
+			}
+		})
+	}
+}
+
+func TestRemoveCommand_Check(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		branch        string
+		opts          CheckOptions
+		config        *Config
+		setupGit      func() *testutil.MockGitExecutor
+		wantCanRemove bool
+		wantSkip      SkipReason
+		wantClean     CleanReason
+		wantErr       bool
+		errContains   string
+	}{
+		// Basic success cases
+		{
+			name:   "can_remove_merged_branch",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"feat/a"},
+					},
+				}
+			},
+			wantCanRemove: true,
+			wantClean:     CleanMerged,
+		},
+		{
+			name:   "can_remove_upstream_gone_branch",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches:       map[string][]string{"main": {}},
+					UpstreamGoneBranches: []string{"feat/a"},
+				}
+			},
+			wantCanRemove: true,
+			wantClean:     CleanUpstreamGone,
+		},
+		// Skip cases
+		// Note: Detached HEAD worktrees are handled directly in CleanCommand.Run
+		// since they have no branch name and cannot be found by WorktreeFindByBranch.
+		{
+			name:   "skip_current_directory",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/repo/feat/a/subdir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipCurrentDir,
+		},
+		{
+			name:   "skip_locked",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+					},
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipLocked,
+		},
+		{
+			name:   "skip_has_changes",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					HasChanges: true,
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipHasChanges,
+		},
+		{
+			name:   "skip_not_merged",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{"main": {}},
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipNotMerged,
+		},
+		// Force level: Unclean (-f)
+		{
+			name:   "force_unclean_bypasses_has_changes",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelUnclean,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					HasChanges: true,
+				}
+			},
+			wantCanRemove: true,
+		},
+		{
+			name:   "force_unclean_bypasses_not_merged",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelUnclean,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{"main": {}},
+				}
+			},
+			wantCanRemove: true,
+		},
+		{
+			name:   "force_unclean_does_not_bypass_locked",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelUnclean,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+					},
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipLocked,
+		},
+		// Force level: Locked (-ff)
+		{
+			name:   "force_locked_bypasses_locked",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelLocked,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+					},
+				}
+			},
+			wantCanRemove: true,
+		},
+		// Never bypassed (even with -ff)
+		// Note: Detached HEAD worktrees are handled directly in CleanCommand.Run.
+		{
+			name:   "force_locked_does_not_bypass_current_dir",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelLocked,
+				Target: "main",
+				Cwd:    "/repo/feat/a/subdir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipCurrentDir,
+		},
+		// Prunable worktree cases
+		{
+			name:   "prunable_can_remove_merged",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a", Prunable: true},
+					},
+					MergedBranches: map[string][]string{"main": {"feat/a"}},
+				}
+			},
+			wantCanRemove: true,
+			wantClean:     CleanMerged,
+		},
+		{
+			name:   "prunable_skip_not_merged",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a", Prunable: true},
+					},
+					MergedBranches: map[string][]string{"main": {}},
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipNotMerged,
+		},
+		{
+			name:   "prunable_force_bypasses_not_merged",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelUnclean,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a", Prunable: true},
+					},
+					MergedBranches: map[string][]string{"main": {}},
+				}
+			},
+			wantCanRemove: true,
+		},
+		// No target specified (skip merged check)
+		{
+			name:   "no_target_skips_merged_check",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{"main": {}}, // not merged
+				}
+			},
+			wantCanRemove: true,
+			wantClean:     "", // no CleanReason when target is empty
+		},
+		// Error cases
+		{
+			name:   "empty_branch",
+			branch: "",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config:      &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit:    func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
+			wantErr:     true,
+			errContains: "branch name is required",
+		},
+		{
+			name:   "no_source_dir",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config:      &Config{},
+			setupGit:    func() *testutil.MockGitExecutor { return &testutil.MockGitExecutor{} },
+			wantErr:     true,
+			errContains: "worktree source directory is not configured",
+		},
+		{
+			name:   "branch_not_in_worktree",
+			branch: "orphan-branch",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+					},
+				}
+			},
+			wantErr:     true,
+			errContains: "is not checked out in any worktree",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := tt.setupGit()
+
+			cmd := &RemoveCommand{
+				FS:     &testutil.MockFS{},
+				Git:    &GitRunner{Executor: mockGit},
+				Config: tt.config,
+			}
+
+			result, err := cmd.Check(tt.branch, tt.opts)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result.CanRemove != tt.wantCanRemove {
+				t.Errorf("CanRemove = %v, want %v", result.CanRemove, tt.wantCanRemove)
+			}
+			if result.SkipReason != tt.wantSkip {
+				t.Errorf("SkipReason = %q, want %q", result.SkipReason, tt.wantSkip)
+			}
+			if result.CleanReason != tt.wantClean {
+				t.Errorf("CleanReason = %q, want %q", result.CleanReason, tt.wantClean)
 			}
 		})
 	}

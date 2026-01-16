@@ -85,10 +85,9 @@ func (op GitOp) String() string {
 
 // GitError represents an error from a git operation with structured information.
 type GitError struct {
-	Op         GitOp
-	Stderr     string
-	Err        error
-	customHint string // optional custom hint, takes precedence over auto-detected hints
+	Op     GitOp
+	Stderr string
+	Err    error
 }
 
 func (e *GitError) Error() string {
@@ -100,22 +99,6 @@ func (e *GitError) Error() string {
 
 func (e *GitError) Unwrap() error {
 	return e.Err
-}
-
-// Hint returns a helpful hint message based on the error content.
-func (e *GitError) Hint() string {
-	// Check for custom hint first
-	if e.customHint != "" {
-		return e.customHint
-	}
-	switch {
-	case strings.Contains(e.Stderr, "modified or untracked files"):
-		return "use 'twig remove --force' to force removal"
-	case strings.Contains(e.Stderr, "locked working tree"):
-		return "run 'git worktree unlock <path>' first, or use 'twig remove --force'"
-	default:
-		return ""
-	}
 }
 
 // newGitError creates a GitError from a git operation error.

@@ -7,6 +7,51 @@ import (
 	"strings"
 )
 
+// SkipReason describes why a worktree was skipped.
+type SkipReason string
+
+const (
+	SkipNotMerged  SkipReason = "not merged"
+	SkipHasChanges SkipReason = "has uncommitted changes"
+	SkipLocked     SkipReason = "locked"
+	SkipCurrentDir SkipReason = "current directory"
+	SkipDetached   SkipReason = "detached HEAD"
+)
+
+// SkipError represents an error when a worktree cannot be removed due to a skip condition.
+type SkipError struct {
+	Reason SkipReason
+}
+
+func (e *SkipError) Error() string {
+	return fmt.Sprintf("cannot remove: %s", e.Reason)
+}
+
+// CleanReason describes why a branch is cleanable.
+type CleanReason string
+
+const (
+	CleanMerged       CleanReason = "merged"
+	CleanUpstreamGone CleanReason = "upstream gone"
+)
+
+// CheckResult holds the result of checking whether a worktree can be removed.
+type CheckResult struct {
+	CanRemove    bool        // Whether the worktree can be removed
+	SkipReason   SkipReason  // Reason if cannot be removed
+	CleanReason  CleanReason // Reason if can be removed (for clean command display)
+	Prunable     bool        // Whether worktree is prunable (directory was deleted externally)
+	WorktreePath string      // Path to the worktree
+	Branch       string      // Branch name
+}
+
+// CheckOptions configures the check operation.
+type CheckOptions struct {
+	Force  WorktreeForceLevel // Force level to apply
+	Target string             // Target branch for merged check (empty = skip merged check)
+	Cwd    string             // Current directory for cwd check
+}
+
 // RemoveCommand removes git worktrees with their associated branches.
 type RemoveCommand struct {
 	FS     FileSystem
@@ -18,8 +63,8 @@ type RemoveCommand struct {
 type RemoveOptions struct {
 	// Force specifies the force level.
 	// Matches git worktree behavior: -f for unclean, -f -f for locked.
-	Force  WorktreeForceLevel
-	DryRun bool
+	Force WorktreeForceLevel
+	Check bool // Show what would be removed without making changes
 }
 
 // NewRemoveCommand creates a RemoveCommand with explicit dependencies.
@@ -40,9 +85,11 @@ func NewDefaultRemoveCommand(cfg *Config) *RemoveCommand {
 type RemovedWorktree struct {
 	Branch       string
 	WorktreePath string
-	CleanedDirs  []string // Empty parent directories that were removed
-	Pruned       bool     // Stale worktree record was pruned (directory was already deleted)
-	DryRun       bool
+	CleanedDirs  []string   // Empty parent directories that were removed
+	Pruned       bool       // Stale worktree record was pruned (directory was already deleted)
+	Check        bool       // --check mode: show what would be removed
+	CanRemove    bool       // Whether the worktree can be removed (from Check)
+	SkipReason   SkipReason // Reason if cannot be removed (from Check)
 	GitOutput    []byte
 	Err          error // nil if success
 }
@@ -93,18 +140,42 @@ func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 // formatRemoveError formats an error from the remove operation.
 // It shows a short error message, and optionally the detailed git error.
 func formatRemoveError(w *strings.Builder, branch string, err error, verbose bool) {
+	var skipErr *SkipError
 	var gitErr *GitError
-	if errors.As(err, &gitErr) {
+
+	// Format error message
+	switch {
+	case errors.As(err, &gitErr):
 		fmt.Fprintf(w, "error: %s: failed to %s\n", branch, gitErr.Op)
 		if verbose && gitErr.Stderr != "" {
 			fmt.Fprintf(w, "       git: %s\n", gitErr.Stderr)
 		}
-		if hint := gitErr.Hint(); hint != "" {
-			fmt.Fprintf(w, "hint: %s\n", hint)
-		}
-	} else {
-		// Fallback for non-GitError
+	default:
 		fmt.Fprintf(w, "error: %s: %v\n", branch, err)
+	}
+
+	// Format hint based on error type
+	var hint string
+	switch {
+	case errors.As(err, &skipErr):
+		switch skipErr.Reason {
+		case SkipHasChanges, SkipNotMerged:
+			hint = "use 'twig remove --force' to force removal"
+		case SkipLocked:
+			hint = "run 'git worktree unlock <path>' first, or use 'twig remove -f -f'"
+		}
+	case errors.As(err, &gitErr):
+		switch {
+		case strings.Contains(gitErr.Stderr, "modified or untracked files"):
+			hint = "use 'twig remove --force' to force removal"
+		case strings.Contains(gitErr.Stderr, "locked working tree"):
+			hint = "run 'git worktree unlock <path>' first, or use 'twig remove -f -f'"
+		case gitErr.Err != nil && strings.Contains(gitErr.Err.Error(), "submodule has uncommitted changes"):
+			hint = "use 'twig remove --force' to force removal"
+		}
+	}
+	if hint != "" {
+		fmt.Fprintf(w, "hint: %s\n", hint)
 	}
 }
 
@@ -112,7 +183,7 @@ func formatRemoveError(w *strings.Builder, branch string, err error, verbose boo
 func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 	var stdout strings.Builder
 
-	if r.DryRun {
+	if r.Check {
 		if r.Pruned {
 			fmt.Fprintf(&stdout, "Would prune stale worktree record\n")
 		} else if r.WorktreePath != "" {
@@ -149,40 +220,40 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (RemovedWorktree, error) {
 	var result RemovedWorktree
 	result.Branch = branch
-	result.DryRun = opts.DryRun
+	result.Check = opts.Check
 
-	if branch == "" {
-		return result, fmt.Errorf("branch name is required")
-	}
-	if c.Config.WorktreeSourceDir == "" {
-		return result, fmt.Errorf("worktree source directory is not configured")
-	}
-
-	wtInfo, err := c.Git.WorktreeFindByBranch(branch)
+	// Check removal eligibility first
+	checkResult, err := c.Check(branch, CheckOptions{
+		Force: opts.Force,
+		Cwd:   cwd,
+	})
 	if err != nil {
 		return result, err
 	}
-	result.WorktreePath = wtInfo.Path
-	result.Pruned = wtInfo.Prunable
+
+	// Copy check results
+	result.WorktreePath = checkResult.WorktreePath
+	result.Pruned = checkResult.Prunable
+	result.CanRemove = checkResult.CanRemove
+	result.SkipReason = checkResult.SkipReason
+
+	if !checkResult.CanRemove {
+		return result, &SkipError{Reason: checkResult.SkipReason}
+	}
 
 	// Handle prunable worktree (directory already deleted externally)
-	if wtInfo.Prunable {
+	if checkResult.Prunable {
 		return c.removePrunable(branch, opts, result)
 	}
 
-	// Normal worktree removal
-	if strings.HasPrefix(cwd, wtInfo.Path) {
-		return result, fmt.Errorf("cannot remove: current directory is inside worktree %s", wtInfo.Path)
-	}
-
-	if opts.DryRun {
-		result.CleanedDirs = c.predictEmptyParentDirs(wtInfo.Path)
+	if opts.Check {
+		result.CleanedDirs = c.predictEmptyParentDirs(checkResult.WorktreePath)
 		return result, nil
 	}
 
 	// Check submodule status to determine effective force level
 	effectiveForce := opts.Force
-	smStatus, smErr := c.Git.InDir(wtInfo.Path).CheckSubmoduleCleanStatus()
+	smStatus, smErr := c.Git.InDir(checkResult.WorktreePath).CheckSubmoduleCleanStatus()
 	if smErr == nil {
 		switch smStatus {
 		case SubmoduleCleanStatusClean:
@@ -195,9 +266,8 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 			// Dirty submodules: require user -f for data safety
 			if opts.Force < WorktreeForceLevelUnclean {
 				return result, &GitError{
-					Op:         OpWorktreeRemove,
-					Err:        fmt.Errorf("submodule has uncommitted changes"),
-					customHint: "use 'twig remove --force' to force removal",
+					Op:  OpWorktreeRemove,
+					Err: fmt.Errorf("submodule has uncommitted changes"),
 				}
 			}
 		}
@@ -208,13 +278,13 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 	if effectiveForce > WorktreeForceLevelNone {
 		wtOpts = append(wtOpts, WithForceRemove(effectiveForce))
 	}
-	wtOut, err := c.Git.WorktreeRemove(wtInfo.Path, wtOpts...)
+	wtOut, err := c.Git.WorktreeRemove(checkResult.WorktreePath, wtOpts...)
 	if err != nil {
 		return result, err
 	}
 	gitOutput = append(gitOutput, wtOut...)
 
-	result.CleanedDirs = c.cleanupEmptyParentDirs(wtInfo.Path)
+	result.CleanedDirs = c.cleanupEmptyParentDirs(checkResult.WorktreePath)
 
 	var branchOpts []BranchDeleteOption
 	if opts.Force > WorktreeForceLevelNone {
@@ -233,7 +303,7 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 // removePrunable handles removal of a prunable worktree (directory already deleted).
 // It prunes the stale worktree record and deletes the branch.
 func (c *RemoveCommand) removePrunable(branch string, opts RemoveOptions, result RemovedWorktree) (RemovedWorktree, error) {
-	if opts.DryRun {
+	if opts.Check {
 		return result, nil
 	}
 
@@ -321,4 +391,125 @@ func (c *RemoveCommand) predictEmptyParentDirs(wtPath string) []string {
 	}
 
 	return wouldClean
+}
+
+// Check checks whether a worktree can be removed based on the given options.
+// This method does not modify any state.
+func (c *RemoveCommand) Check(branch string, opts CheckOptions) (CheckResult, error) {
+	var result CheckResult
+	result.Branch = branch
+
+	if branch == "" {
+		return result, fmt.Errorf("branch name is required")
+	}
+	if c.Config.WorktreeSourceDir == "" {
+		return result, fmt.Errorf("worktree source directory is not configured")
+	}
+
+	wtInfo, err := c.Git.WorktreeFindByBranch(branch)
+	if err != nil {
+		return result, err
+	}
+	result.WorktreePath = wtInfo.Path
+	result.Prunable = wtInfo.Prunable
+
+	if wtInfo.Prunable {
+		// Prunable branch: worktree directory was deleted externally
+		if reason := c.checkPrunableSkipReason(branch, opts.Target, opts.Force); reason != "" {
+			result.CanRemove = false
+			result.SkipReason = reason
+			return result, nil
+		}
+	} else {
+		// Normal worktree
+		wt := Worktree{
+			Path:     wtInfo.Path,
+			Branch:   wtInfo.Branch,
+			Locked:   wtInfo.Locked,
+			Detached: wtInfo.Detached,
+		}
+		if reason := c.checkSkipReason(wt, opts.Cwd, opts.Target, opts.Force); reason != "" {
+			result.CanRemove = false
+			result.SkipReason = reason
+			return result, nil
+		}
+	}
+
+	result.CanRemove = true
+	// CleanReason requires a target branch to determine merge status
+	if opts.Target != "" {
+		result.CleanReason = c.getCleanReason(branch, opts.Target)
+	}
+	return result, nil
+}
+
+// checkSkipReason checks if worktree should be skipped and returns the reason.
+// force level controls which conditions can be bypassed (matches git worktree behavior).
+func (c *RemoveCommand) checkSkipReason(wt Worktree, cwd, target string, force WorktreeForceLevel) SkipReason {
+	// Check detached HEAD (never bypassed)
+	if wt.Detached {
+		return SkipDetached
+	}
+
+	// Check current directory (never bypassed)
+	if strings.HasPrefix(cwd, wt.Path) {
+		return SkipCurrentDir
+	}
+
+	// Check locked
+	if wt.Locked && force < WorktreeForceLevelLocked {
+		return SkipLocked
+	}
+
+	// Check uncommitted changes
+	if force < WorktreeForceLevelUnclean {
+		hasChanges, err := c.Git.InDir(wt.Path).HasChanges()
+		if err != nil || hasChanges {
+			return SkipHasChanges
+		}
+	}
+
+	// Check merged (only when target is specified)
+	if target != "" && force < WorktreeForceLevelUnclean {
+		merged, err := c.Git.IsBranchMerged(wt.Branch, target)
+		if err != nil || !merged {
+			return SkipNotMerged
+		}
+	}
+
+	return ""
+}
+
+// checkPrunableSkipReason checks if a prunable branch should be skipped.
+// Only checks merged status since worktree-specific conditions don't apply.
+func (c *RemoveCommand) checkPrunableSkipReason(branch, target string, force WorktreeForceLevel) SkipReason {
+	// Check merged (only when target is specified)
+	if target != "" && force < WorktreeForceLevelUnclean {
+		merged, err := c.Git.IsBranchMerged(branch, target)
+		if err != nil || !merged {
+			return SkipNotMerged
+		}
+	}
+	return ""
+}
+
+// getCleanReason determines why a branch is cleanable.
+func (c *RemoveCommand) getCleanReason(branch, target string) CleanReason {
+	// Check if branch is merged via traditional merge
+	out, err := c.Git.Run(GitCmdBranch, "--merged", target, "--format=%(refname:short)")
+	if err == nil {
+		for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+			if line == branch {
+				return CleanMerged
+			}
+		}
+	}
+
+	// Check if upstream is gone (squash/rebase merge)
+	gone, err := c.Git.IsBranchUpstreamGone(branch)
+	if err == nil && gone {
+		return CleanUpstreamGone
+	}
+
+	return ""
 }
