@@ -603,7 +603,7 @@ func (g *GitRunner) WorktreePrune() ([]byte, error) {
 	return out, nil
 }
 
-// Git submodule command.
+// GitCmdSubmodule is the git submodule command.
 const GitCmdSubmodule = "submodule"
 
 // SubmoduleCleanStatus indicates whether it's safe to remove a worktree with submodules.
@@ -644,7 +644,7 @@ func (g *GitRunner) SubmoduleStatus() ([]SubmoduleInfo, error) {
 	}
 
 	var submodules []SubmoduleInfo
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		if len(line) == 0 {
 			continue
 		}
@@ -694,7 +694,7 @@ func (g *GitRunner) CheckSubmoduleCleanStatus() (SubmoduleCleanStatus, error) {
 		return SubmoduleCleanStatusNone, err
 	}
 
-	hasInitialized := false
+	var hasInitialized bool
 	for _, sm := range submodules {
 		if sm.State == SubmoduleStateUninitialized {
 			continue
