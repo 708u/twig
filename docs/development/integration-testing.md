@@ -164,6 +164,100 @@ func runGit(t *testing.T, dir string, args ...string) string {
 }
 ```
 
+## Example: Testing with Git Submodules
+
+Git submodules require special handling in integration tests due to security
+restrictions introduced in Git 2.38+.
+
+### Why `-c protocol.file.allow=always` is Required
+
+Git 2.38 introduced security restrictions that block local `file://` protocol
+URLs by default. Since integration tests use local repositories as submodules,
+the `-c protocol.file.allow=always` option must be passed to:
+
+- `git submodule add` when adding a submodule
+- `git submodule update` when initializing submodules
+
+Without this option, tests fail on GitHub Actions and other CI environments
+with errors like:
+
+```txt
+fatal: transport 'file' not allowed
+```
+
+### Setup Pattern
+
+```go
+//go:build integration
+
+package twig
+
+import (
+    "os"
+    "path/filepath"
+    "testing"
+)
+
+func TestSubmoduleOperation_Integration(t *testing.T) {
+    t.Parallel()
+
+    repoDir, mainDir := testutil.SetupTestRepo(t)
+
+    // Step 1: Create a submodule repository (separate git repo)
+    submoduleRepo := filepath.Join(repoDir, "submodule-repo")
+    if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+        t.Fatal(err)
+    }
+    testutil.RunGit(t, submoduleRepo, "init")
+    testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+    testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+
+    // Step 2: Add content and commit in submodule repo
+    subFile := filepath.Join(submoduleRepo, "file.txt")
+    if err := os.WriteFile(subFile, []byte("submodule content"), 0644); err != nil {
+        t.Fatal(err)
+    }
+    testutil.RunGit(t, submoduleRepo, "add", ".")
+    testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+
+    // Step 3: Add submodule to main repo (MUST use -c protocol.file.allow=always)
+    testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always",
+        "submodule", "add", submoduleRepo, "mysub")
+    testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+
+    // Now mainDir contains a submodule at "mysub"
+}
+```
+
+### Creating Dirty Submodule States
+
+For testing removal/clean operations that check submodule status:
+
+```go
+// Pattern 1: Uncommitted changes in submodule (dirty working tree)
+submodulePath := filepath.Join(wtPath, "sub")
+if err := os.WriteFile(filepath.Join(submodulePath, "dirty.txt"),
+    []byte("uncommitted"), 0644); err != nil {
+    t.Fatal(err)
+}
+// git submodule status shows: " " (space) prefix = unmodified
+
+// Pattern 2: Modified commit (submodule at different commit than recorded)
+testutil.RunGit(t, submodulePath, "config", "user.email", "test@example.com")
+testutil.RunGit(t, submodulePath, "config", "user.name", "Test")
+testutil.RunGit(t, submodulePath, "add", ".")
+testutil.RunGit(t, submodulePath, "commit", "-m", "advance")
+// git submodule status shows: "+" prefix = modified commit
+```
+
+### Key Points
+
+1. **Always use `-c protocol.file.allow=always`** for `submodule add` and
+   `submodule update` commands
+2. **Submodule repo needs at least one commit** before it can be added
+3. **Configure user.email and user.name** in the submodule repo before committing
+4. **Use `testutil.RunGit`** helper for consistent error handling
+
 ## Best Practices
 
 - Always use `t.Parallel()` for test isolation and performance
