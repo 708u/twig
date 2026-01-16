@@ -706,67 +706,6 @@ func (m mockDirEntry) IsDir() bool                { return m.isDir }
 func (m mockDirEntry) Type() os.FileMode          { return 0 }
 func (m mockDirEntry) Info() (os.FileInfo, error) { return nil, nil }
 
-func TestGitError_Hint(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		gitErr *GitError
-		want   string
-	}{
-		{
-			name:   "nil_error",
-			gitErr: nil,
-			want:   "",
-		},
-		{
-			name: "modified_or_untracked_files",
-			gitErr: &GitError{
-				Op:     OpWorktreeRemove,
-				Stderr: "fatal: '/path' contains modified or untracked files",
-			},
-			want: "use 'twig remove --force' to force removal",
-		},
-		{
-			name: "locked_worktree",
-			gitErr: &GitError{
-				Op:     OpWorktreeRemove,
-				Stderr: "fatal: cannot remove a locked working tree",
-			},
-			want: "run 'git worktree unlock <path>' first, or use 'twig remove --force'",
-		},
-		{
-			name: "unknown_error",
-			gitErr: &GitError{
-				Op:     OpWorktreeRemove,
-				Stderr: "some other error",
-			},
-			want: "",
-		},
-		{
-			name: "empty_stderr",
-			gitErr: &GitError{
-				Op:     OpWorktreeRemove,
-				Stderr: "",
-			},
-			want: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			var got string
-			if tt.gitErr != nil {
-				got = tt.gitErr.Hint()
-			}
-			if got != tt.want {
-				t.Errorf("Hint() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestRemoveResult_Format_WithHint(t *testing.T) {
 	t.Parallel()
 
@@ -830,7 +769,7 @@ func TestRemoveResult_Format_WithHint(t *testing.T) {
 				}},
 			},
 			opts:       FormatOptions{Verbose: false},
-			wantStderr: "error: feature/a: failed to remove worktree\nhint: run 'git worktree unlock <path>' first, or use 'twig remove --force'\n",
+			wantStderr: "error: feature/a: failed to remove worktree\nhint: run 'git worktree unlock <path>' first, or use 'twig remove -f -f'\n",
 		},
 		{
 			name: "non_git_error_fallback",

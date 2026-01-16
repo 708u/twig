@@ -123,7 +123,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		// First, verify removal without --force fails with SkipError and hint
+		// First, verify removal without --force fails with SkipError
 		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for uncommitted changes without --force")
@@ -135,9 +135,6 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 		if skipErr.Reason != SkipHasChanges {
 			t.Errorf("SkipError.Reason = %v, want %v", skipErr.Reason, SkipHasChanges)
-		}
-		if hint := skipErr.Hint(); hint == "" {
-			t.Error("SkipError.Hint() should return hint for uncommitted changes")
 		}
 
 		// Now verify -f (WorktreeForceLevelUnclean) succeeds for uncommitted changes
@@ -173,7 +170,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		// Removal without --force should fail with hint
+		// Removal without --force should fail with SkipError
 		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for locked worktree without --force")
@@ -185,10 +182,6 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 		if skipErr.Reason != SkipLocked {
 			t.Errorf("SkipError.Reason = %v, want %v", skipErr.Reason, SkipLocked)
-		}
-		expectedHint := "run 'git worktree unlock <path>' first, or use 'twig remove -f -f'"
-		if hint := skipErr.Hint(); hint != expectedHint {
-			t.Errorf("SkipError.Hint() = %q, want %q", hint, expectedHint)
 		}
 
 		// Verify worktree is still locked

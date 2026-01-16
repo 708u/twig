@@ -27,18 +27,6 @@ func (e *SkipError) Error() string {
 	return fmt.Sprintf("cannot remove: %s", e.Reason)
 }
 
-// Hint returns a helpful hint message based on the skip reason.
-func (e *SkipError) Hint() string {
-	switch e.Reason {
-	case SkipHasChanges, SkipNotMerged:
-		return "use 'twig remove --force' to force removal"
-	case SkipLocked:
-		return "run 'git worktree unlock <path>' first, or use 'twig remove -f -f'"
-	default:
-		return ""
-	}
-}
-
 // CleanReason describes why a branch is cleanable.
 type CleanReason string
 
@@ -149,31 +137,43 @@ func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 }
 
-// Hinter is an interface for errors that can provide helpful hints.
-type Hinter interface {
-	Hint() string
-}
-
 // formatRemoveError formats an error from the remove operation.
 // It shows a short error message, and optionally the detailed git error.
 func formatRemoveError(w *strings.Builder, branch string, err error, verbose bool) {
-	// Format error message
+	var skipErr *SkipError
 	var gitErr *GitError
-	if errors.As(err, &gitErr) {
+
+	// Format error message
+	switch {
+	case errors.As(err, &gitErr):
 		fmt.Fprintf(w, "error: %s: failed to %s\n", branch, gitErr.Op)
 		if verbose && gitErr.Stderr != "" {
 			fmt.Fprintf(w, "       git: %s\n", gitErr.Stderr)
 		}
-	} else {
+	default:
 		fmt.Fprintf(w, "error: %s: %v\n", branch, err)
 	}
 
-	// Format hint
-	var hinter Hinter
-	if errors.As(err, &hinter) {
-		if hint := hinter.Hint(); hint != "" {
-			fmt.Fprintf(w, "hint: %s\n", hint)
+	// Format hint based on error type
+	var hint string
+	switch {
+	case errors.As(err, &skipErr):
+		switch skipErr.Reason {
+		case SkipHasChanges, SkipNotMerged:
+			hint = "use 'twig remove --force' to force removal"
+		case SkipLocked:
+			hint = "run 'git worktree unlock <path>' first, or use 'twig remove -f -f'"
 		}
+	case errors.As(err, &gitErr):
+		switch {
+		case strings.Contains(gitErr.Stderr, "modified or untracked files"):
+			hint = "use 'twig remove --force' to force removal"
+		case strings.Contains(gitErr.Stderr, "locked working tree"):
+			hint = "run 'git worktree unlock <path>' first, or use 'twig remove -f -f'"
+		}
+	}
+	if hint != "" {
+		fmt.Fprintf(w, "hint: %s\n", hint)
 	}
 }
 
