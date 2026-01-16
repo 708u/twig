@@ -449,16 +449,13 @@ func (c *RemoveCommand) checkSkipReason(wt Worktree, cwd, target string, force W
 		return SkipLocked
 	}
 
-	// Check uncommitted changes
+	// Check uncommitted changes and dirty submodule
 	if force < WorktreeForceLevelUnclean {
 		hasChanges, err := c.Git.InDir(wt.Path).HasChanges()
 		if err != nil || hasChanges {
 			return SkipHasChanges
 		}
-	}
 
-	// Check dirty submodule
-	if force < WorktreeForceLevelUnclean {
 		smStatus, err := c.Git.InDir(wt.Path).CheckSubmoduleCleanStatus()
 		if err == nil && smStatus == SubmoduleCleanStatusDirty {
 			return SkipDirtySubmodule
