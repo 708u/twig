@@ -935,6 +935,28 @@ func TestRemoveCommand_Check(t *testing.T) {
 			wantCanRemove: false,
 			wantSkip:      SkipNotMerged,
 		},
+		{
+			name:   "skip_dirty_submodule",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{"main": {"feat/a"}},
+					// + prefix indicates submodule is at different commit (modified)
+					SubmoduleStatusOutput: "+abc123 submodule-path (v1.0.0)\n",
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipDirtySubmodule,
+		},
 		// Force level: Unclean (-f)
 		{
 			name:   "force_unclean_bypasses_has_changes",
@@ -970,6 +992,26 @@ func TestRemoveCommand_Check(t *testing.T) {
 						{Path: "/repo/feat/a", Branch: "feat/a"},
 					},
 					MergedBranches: map[string][]string{"main": {}},
+				}
+			},
+			wantCanRemove: true,
+		},
+		{
+			name:   "force_unclean_bypasses_dirty_submodule",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelUnclean,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					// + prefix indicates submodule is at different commit (modified)
+					SubmoduleStatusOutput: "+abc123 submodule-path (v1.0.0)\n",
 				}
 			},
 			wantCanRemove: true,

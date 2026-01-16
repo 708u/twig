@@ -11,11 +11,12 @@ import (
 type SkipReason string
 
 const (
-	SkipNotMerged  SkipReason = "not merged"
-	SkipHasChanges SkipReason = "has uncommitted changes"
-	SkipLocked     SkipReason = "locked"
-	SkipCurrentDir SkipReason = "current directory"
-	SkipDetached   SkipReason = "detached HEAD"
+	SkipNotMerged      SkipReason = "not merged"
+	SkipHasChanges     SkipReason = "has uncommitted changes"
+	SkipLocked         SkipReason = "locked"
+	SkipCurrentDir     SkipReason = "current directory"
+	SkipDetached       SkipReason = "detached HEAD"
+	SkipDirtySubmodule SkipReason = "submodule has uncommitted changes"
 )
 
 // SkipError represents an error when a worktree cannot be removed due to a skip condition.
@@ -159,7 +160,7 @@ func formatRemoveError(w *strings.Builder, branch string, err error, verbose boo
 	switch {
 	case errors.As(err, &skipErr):
 		switch skipErr.Reason {
-		case SkipHasChanges, SkipNotMerged:
+		case SkipHasChanges, SkipNotMerged, SkipDirtySubmodule:
 			hint = "use 'twig remove --force' to force removal"
 		case SkipLocked:
 			hint = "run 'git worktree unlock <path>' first, or use 'twig remove -f -f'"
@@ -244,6 +245,17 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 		return c.removePrunable(branch, opts, result)
 	}
 
+	// Check submodule status to determine effective force level.
+	// Clean submodules require auto-force for git worktree remove,
+	// but this is safe since Check() already verified no dirty submodules.
+	effectiveForce := opts.Force
+	smStatus, smErr := c.Git.InDir(checkResult.WorktreePath).CheckSubmoduleCleanStatus()
+	if smErr == nil && smStatus == SubmoduleCleanStatusClean {
+		if effectiveForce < WorktreeForceLevelUnclean {
+			effectiveForce = WorktreeForceLevelUnclean
+		}
+	}
+
 	if opts.Check {
 		result.CleanedDirs = c.predictEmptyParentDirs(checkResult.WorktreePath)
 		return result, nil
@@ -251,8 +263,8 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 
 	var gitOutput []byte
 	var wtOpts []WorktreeRemoveOption
-	if opts.Force > WorktreeForceLevelNone {
-		wtOpts = append(wtOpts, WithForceRemove(opts.Force))
+	if effectiveForce > WorktreeForceLevelNone {
+		wtOpts = append(wtOpts, WithForceRemove(effectiveForce))
 	}
 	wtOut, err := c.Git.WorktreeRemove(checkResult.WorktreePath, wtOpts...)
 	if err != nil {
@@ -442,6 +454,14 @@ func (c *RemoveCommand) checkSkipReason(wt Worktree, cwd, target string, force W
 		hasChanges, err := c.Git.InDir(wt.Path).HasChanges()
 		if err != nil || hasChanges {
 			return SkipHasChanges
+		}
+	}
+
+	// Check dirty submodule
+	if force < WorktreeForceLevelUnclean {
+		smStatus, err := c.Git.InDir(wt.Path).CheckSubmoduleCleanStatus()
+		if err == nil && smStatus == SubmoduleCleanStatusDirty {
+			return SkipDirtySubmodule
 		}
 	}
 
