@@ -27,12 +27,25 @@ twig remove <branch>... [flags]
 - Cleans up empty parent directories after removal (see below)
 - With `--check`: prints what would be removed without making changes
 - Without `--force`: fails if there are uncommitted changes,
-  the branch is not merged, or the worktree is locked
-- With `-f` (once): bypasses uncommitted changes and unmerged branch checks
+  submodules have uncommitted changes, the branch is not merged,
+  or the worktree is locked
+- With `-f` (once): bypasses uncommitted changes, dirty submodule,
+  and unmerged branch checks
 - With `-ff` (twice): also bypasses locked worktree checks
 
 This matches git's behavior where `git worktree remove -f` removes unclean
 worktrees and `git worktree remove -f -f` also removes locked worktrees.
+
+### Submodule Handling
+
+`git worktree remove` requires `--force` for any worktree containing initialized
+submodules, even when submodules are clean. twig improves this behavior:
+
+- **Clean submodules**: Removed automatically without requiring `--force`.
+  twig detects that submodules have no uncommitted changes and handles the
+  removal safely.
+- **Dirty submodules**: Fails with "submodule has uncommitted changes".
+  Use `--force` to remove anyway.
 
 ### Prunable Worktrees
 

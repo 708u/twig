@@ -52,6 +52,7 @@ All conditions must pass for a worktree to be cleaned:
 |--------------------|--------------------------------------------------|
 | Merged             | Branch is merged to target or upstream is gone   |
 | No changes         | No uncommitted changes                           |
+| No dirty submodule | Submodules have no uncommitted changes           |
 | Not locked         | Worktree is not locked                           |
 | Not current        | Not the current directory                        |
 | Not main           | Not the main worktree                            |
@@ -80,10 +81,10 @@ the worktree no longer exists.
 
 With `--force` (`-f`), some safety checks can be bypassed:
 
-| Force Level | Bypassed Conditions                      |
-|-------------|------------------------------------------|
-| `-f`        | Uncommitted changes, not merged          |
-| `-ff`       | Above + locked worktrees                 |
+| Force Level | Bypassed Conditions                              |
+|-------------|--------------------------------------------------|
+| `-f`        | Uncommitted changes, not merged, dirty submodule |
+| `-ff`       | Above + locked worktrees                         |
 
 The following conditions are never bypassed:
 
@@ -125,6 +126,7 @@ clean:
 skip:
   feat/wip (not merged)
   feat/active (has uncommitted changes)
+  feat/submod (submodule has uncommitted changes)
 ```
 
 - `clean:` shows worktrees and prunable branches that will be removed

@@ -79,6 +79,10 @@ type MockGitExecutor struct {
 
 	// FetchErr is returned when fetch is called.
 	FetchErr error
+
+	// SubmoduleStatusOutput is the output of `git submodule status --recursive`.
+	// Empty string means no submodules.
+	SubmoduleStatusOutput string
 }
 
 func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
@@ -124,6 +128,8 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 		return m.handleForEachRef(args)
 	case "fetch":
 		return m.handleFetch(args)
+	case "submodule":
+		return m.handleSubmodule(args)
 	}
 	return nil, nil
 }
@@ -320,4 +326,12 @@ func (m *MockGitExecutor) handleFetch(args []string) ([]byte, error) {
 		*m.CapturedArgs = append(*m.CapturedArgs, args...)
 	}
 	return nil, m.FetchErr
+}
+
+func (m *MockGitExecutor) handleSubmodule(args []string) ([]byte, error) {
+	// args: ["submodule", "status", "--recursive"]
+	if len(args) >= 2 && args[1] == "status" {
+		return []byte(m.SubmoduleStatusOutput), nil
+	}
+	return nil, nil
 }

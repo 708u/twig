@@ -712,4 +712,208 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			t.Errorf("branch should be deleted, got: %s", out)
 		}
 	})
+
+	t.Run("CheckSkipsDirtySubmodule", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule repository
+		submoduleRepo := filepath.Join(repoDir, "submodule-repo")
+		if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "init")
+		testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+		if err := os.WriteFile(filepath.Join(submoduleRepo, "file.txt"), []byte("content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "add", ".")
+		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+
+		// Create worktree and add submodule
+		wtPath := filepath.Join(repoDir, "feature", "with-submodule")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/with-submodule", wtPath)
+		testutil.RunGit(t, wtPath, "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "sub")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add submodule")
+
+		// Make submodule dirty by advancing its commit (+ prefix = modified commit)
+		// This creates a state where submodule is at a different commit than recorded
+		submodulePath := filepath.Join(wtPath, "sub")
+		if err := os.WriteFile(filepath.Join(submodulePath, "new.txt"), []byte("new"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submodulePath, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submodulePath, "config", "user.name", "Test")
+		testutil.RunGit(t, submodulePath, "add", ".")
+		testutil.RunGit(t, submodulePath, "commit", "-m", "advance submodule")
+		// Now submodule is at a different commit than recorded in parent (+ prefix)
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Check should return SkipDirtySubmodule
+		checkResult, err := cmd.Check("feature/with-submodule", CheckOptions{
+			Cwd: mainDir,
+		})
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+
+		if checkResult.CanRemove {
+			t.Error("CanRemove should be false for dirty submodule")
+		}
+		if checkResult.SkipReason != SkipDirtySubmodule {
+			t.Errorf("SkipReason = %v, want %v", checkResult.SkipReason, SkipDirtySubmodule)
+		}
+
+		// Run should also fail with SkipError
+		_, err = cmd.Run("feature/with-submodule", mainDir, RemoveOptions{})
+		if err == nil {
+			t.Fatal("expected error for dirty submodule")
+		}
+
+		var skipErr *SkipError
+		if !errors.As(err, &skipErr) {
+			t.Fatalf("expected SkipError, got %T: %v", err, err)
+		}
+		if skipErr.Reason != SkipDirtySubmodule {
+			t.Errorf("SkipError.Reason = %v, want %v", skipErr.Reason, SkipDirtySubmodule)
+		}
+	})
+
+	t.Run("RemoveWorktreeWithCleanSubmodule", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule repository
+		submoduleRepo := filepath.Join(repoDir, "submodule-repo-clean")
+		if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "init")
+		testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+		if err := os.WriteFile(filepath.Join(submoduleRepo, "file.txt"), []byte("content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "add", ".")
+		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+
+		// Create worktree and add submodule
+		wtPath := filepath.Join(repoDir, "feature", "clean-submodule")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/clean-submodule", wtPath)
+		testutil.RunGit(t, wtPath, "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "sub")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add submodule")
+
+		// Submodule is clean (no uncommitted changes)
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Check should pass (clean submodule)
+		checkResult, err := cmd.Check("feature/clean-submodule", CheckOptions{
+			Cwd: mainDir,
+		})
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+
+		if !checkResult.CanRemove {
+			t.Errorf("CanRemove should be true for clean submodule, SkipReason = %v", checkResult.SkipReason)
+		}
+
+		// Run with Force to delete unmerged branch (auto-force handles worktree removal)
+		_, err = cmd.Run("feature/clean-submodule", mainDir, RemoveOptions{
+			Force: WorktreeForceLevelUnclean,
+		})
+		if err != nil {
+			t.Fatalf("Run failed for clean submodule: %v", err)
+		}
+
+		// Verify worktree is removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+
+		// Verify branch is deleted
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/clean-submodule")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+	})
+
+	t.Run("ForceRemoveWorktreeWithDirtySubmodule", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule repository
+		submoduleRepo := filepath.Join(repoDir, "submodule-repo-force")
+		if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "init")
+		testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+		if err := os.WriteFile(filepath.Join(submoduleRepo, "file.txt"), []byte("content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "add", ".")
+		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+
+		// Create worktree and add submodule
+		wtPath := filepath.Join(repoDir, "feature", "force-submodule")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/force-submodule", wtPath)
+		testutil.RunGit(t, wtPath, "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "sub")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add submodule")
+
+		// Make submodule dirty
+		submodulePath := filepath.Join(wtPath, "sub")
+		if err := os.WriteFile(filepath.Join(submodulePath, "dirty.txt"), []byte("dirty"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Run with --force should succeed
+		_, err = cmd.Run("feature/force-submodule", mainDir, RemoveOptions{
+			Force: WorktreeForceLevelUnclean,
+		})
+		if err != nil {
+			t.Fatalf("Run with force failed: %v", err)
+		}
+
+		// Verify worktree is removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+	})
 }
