@@ -38,11 +38,12 @@ worktrees and `git worktree remove -f -f` also removes locked worktrees.
 
 ### Submodule Handling
 
-When a worktree contains initialized submodules:
+`git worktree remove` requires `--force` for any worktree containing initialized
+submodules, even when submodules are clean. twig improves this behavior:
 
 - **Clean submodules**: Removed automatically without requiring `--force`.
-  twig internally uses force for git worktree remove since git requires it
-  for any initialized submodule, but this is safe when submodules are clean.
+  twig detects that submodules have no uncommitted changes and handles the
+  removal safely.
 - **Dirty submodules**: Fails with "submodule has uncommitted changes".
   Use `--force` to remove anyway.
 
