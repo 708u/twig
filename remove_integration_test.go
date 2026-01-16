@@ -802,11 +802,15 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		// Initialize submodule in the new worktree (use -c to allow file protocol)
 		testutil.RunGit(t, wtPath, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive")
 
-		// Make uncommitted changes in the submodule
+		// Make the submodule dirty by creating a new commit inside it
+		// This makes submodule point to different commit ('+' prefix in git submodule status)
+		// without affecting parent worktree's git status (unlike untracked files)
 		submoduleInWt := filepath.Join(wtPath, "vendor", "lib")
-		if err := os.WriteFile(filepath.Join(submoduleInWt, "dirty.txt"), []byte("uncommitted"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(submoduleInWt, "new.txt"), []byte("new file"), 0644); err != nil {
 			t.Fatal(err)
 		}
+		testutil.RunGit(t, submoduleInWt, "add", ".")
+		testutil.RunGit(t, submoduleInWt, "commit", "-m", "new commit")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -819,20 +823,29 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		// Remove without --force should fail with hint
+		// Remove without --force should fail
+		// Note: submodule changes are detected as "modified" in parent worktree's git status,
+		// so SkipHasChanges is triggered before submodule-specific check
 		_, err = cmd.Run("feature/dirty-submodule", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for dirty submodule without --force")
 		}
 
-		var gitErr *GitError
-		if !errors.As(err, &gitErr) {
-			t.Fatalf("expected GitError, got %T: %v", err, err)
+		var skipErr *SkipError
+		if !errors.As(err, &skipErr) {
+			t.Fatalf("expected SkipError, got %T: %v", err, err)
+		}
+		if skipErr.Reason != SkipHasChanges {
+			t.Errorf("expected SkipHasChanges, got %s", skipErr.Reason)
 		}
 
-		hint := gitErr.Hint()
-		if !strings.Contains(hint, "force") {
-			t.Errorf("hint should mention force, got: %s", hint)
+		// Verify hint is generated via FormatResult
+		result := RemoveResult{
+			Removed: []RemovedWorktree{{Branch: "feature/dirty-submodule", Err: err}},
+		}
+		formatted := result.Format(FormatOptions{})
+		if !strings.Contains(formatted.Stderr, "hint:") || !strings.Contains(formatted.Stderr, "force") {
+			t.Errorf("hint should mention force, got stderr: %s", formatted.Stderr)
 		}
 
 		// Verify worktree still exists
