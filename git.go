@@ -754,7 +754,8 @@ func (g *GitRunner) SubmoduleUpdate(opts ...SubmoduleUpdateOption) (int, error) 
 		opt(&o)
 	}
 
-	args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
+	// Use -c protocol.file.allow=always to support local file:// submodule URLs
+	args := []string{"-c", "protocol.file.allow=always", GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
 	if o.depth > 0 {
 		args = append(args, "--depth", fmt.Sprintf("%d", o.depth))
 	}

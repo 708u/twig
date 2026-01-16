@@ -24,6 +24,8 @@ twig add <name> [flags]
 | `--source <branch>`   |       | Use specified branch's worktree as source          |
 | `--lock`              |       | Lock the worktree after creation                   |
 | `--reason <string>`   |       | Reason for locking (requires `--lock`)             |
+| `--init-submodules`   |       | Initialize submodules in new worktree              |
+| `--no-init-submodules`|       | Do not initialize submodules                       |
 
 ## Behavior
 
@@ -176,6 +178,40 @@ the worktree is locked. This reason is displayed by `git worktree list`.
 
 Locked worktrees require `--force` (or `-f -f`) to be moved or removed
 with git commands.
+
+### Submodule Initialization
+
+With `--init-submodules`, submodules are initialized in the new worktree
+after creation. This runs `git submodule update --init --recursive`.
+
+```bash
+# Initialize submodules in new worktree
+twig add feat/new --init-submodules
+
+# Disable submodule initialization (overrides config)
+twig add feat/new --no-init-submodules
+```
+
+The behavior can be configured in `.twig/settings.toml`:
+
+```toml
+init_submodules = true
+submodule_depth = 1  # Optional: shallow clone depth (0 = full clone)
+```
+
+Priority:
+
+1. CLI flags (highest): `--init-submodules` or `--no-init-submodules`
+2. Config `init_submodules`
+3. Default: disabled
+
+If submodule initialization fails, a warning is displayed but the worktree
+creation succeeds. This ensures the worktree is usable even if submodule
+servers are temporarily unavailable.
+
+Constraints:
+
+- `--init-submodules` and `--no-init-submodules` are mutually exclusive
 
 ### Default Source Configuration
 
