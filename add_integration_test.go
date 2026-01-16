@@ -948,10 +948,10 @@ worktree_destination_base_dir = %q
 
 		// Sync only *.go files
 		cmd := &AddCommand{
-			FS:         osFS{},
-			Git:        NewGitRunner(mainDir),
-			Config:     result.Config,
-			Sync:       true,
+			FS:           osFS{},
+			Git:          NewGitRunner(mainDir),
+			Config:       result.Config,
+			Sync:         true,
 			FilePatterns: []string{"*.go"},
 		}
 
@@ -1042,10 +1042,10 @@ worktree_destination_base_dir = %q
 
 		// Sync *.go and cmd/**
 		cmd := &AddCommand{
-			FS:         osFS{},
-			Git:        NewGitRunner(mainDir),
-			Config:     result.Config,
-			Sync:       true,
+			FS:           osFS{},
+			Git:          NewGitRunner(mainDir),
+			Config:       result.Config,
+			Sync:         true,
 			FilePatterns: []string{"*.go", "cmd/**"},
 		}
 
@@ -1209,10 +1209,10 @@ worktree_destination_base_dir = %q
 
 		// Carry only *.go files
 		cmd := &AddCommand{
-			FS:         osFS{},
-			Git:        NewGitRunner(mainDir),
-			Config:     result.Config,
-			CarryFrom:  mainDir,
+			FS:           osFS{},
+			Git:          NewGitRunner(mainDir),
+			Config:       result.Config,
+			CarryFrom:    mainDir,
 			FilePatterns: []string{"*.go"},
 		}
 
@@ -1306,10 +1306,10 @@ worktree_destination_base_dir = %q
 
 		// Carry *.go and cmd/**
 		cmd := &AddCommand{
-			FS:         osFS{},
-			Git:        NewGitRunner(mainDir),
-			Config:     result.Config,
-			CarryFrom:  mainDir,
+			FS:           osFS{},
+			Git:          NewGitRunner(mainDir),
+			Config:       result.Config,
+			CarryFrom:    mainDir,
 			FilePatterns: []string{"*.go", "cmd/**"},
 		}
 
@@ -1380,10 +1380,10 @@ worktree_destination_base_dir = %q
 
 		// Carry **/*.go - should match ALL Go files including root
 		cmd := &AddCommand{
-			FS:         osFS{},
-			Git:        NewGitRunner(mainDir),
-			Config:     result.Config,
-			CarryFrom:  mainDir,
+			FS:           osFS{},
+			Git:          NewGitRunner(mainDir),
+			Config:       result.Config,
+			CarryFrom:    mainDir,
 			FilePatterns: []string{"**/*.go"},
 		}
 
@@ -1691,6 +1691,212 @@ worktree_destination_base_dir = %q
 		listOut := testutil.RunGit(t, mainDir, "worktree", "list")
 		if !strings.Contains(listOut, "feature/brand-new") {
 			t.Errorf("worktree list should contain feature/brand-new: %s", listOut)
+		}
+	})
+
+	t.Run("InitSubmodulesEnabled", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule repository
+		submoduleRepo := filepath.Join(repoDir, "submodule-repo")
+		if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "init")
+		testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+		if err := os.WriteFile(filepath.Join(submoduleRepo, "submodule-file.txt"), []byte("submodule content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "add", ".")
+		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+
+		// Add submodule to main repo
+		testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "mysub")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+
+		// Setup twig config with init_submodules enabled
+		twigDir := filepath.Join(mainDir, ".twig")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+init_submodules = true
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewDefaultAddCommand(result.Config, AddOptions{})
+
+		addResult, err := cmd.Run("feature/with-submodule")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree was created
+		wtPath := filepath.Join(repoDir, "feature", "with-submodule")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+
+		// Verify submodule was initialized
+		submoduleFile := filepath.Join(wtPath, "mysub", "submodule-file.txt")
+		content, err := os.ReadFile(submoduleFile)
+		if err != nil {
+			t.Fatalf("failed to read submodule file: %v", err)
+		}
+		if string(content) != "submodule content" {
+			t.Errorf("submodule file content = %q, want %q", string(content), "submodule content")
+		}
+
+		// Verify result
+		if !addResult.SubmodulesInited {
+			t.Error("expected SubmodulesInited to be true")
+		}
+		if addResult.SubmoduleCount != 1 {
+			t.Errorf("SubmoduleCount = %d, want 1", addResult.SubmoduleCount)
+		}
+	})
+
+	t.Run("InitSubmodulesDisabled", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule repository
+		submoduleRepo := filepath.Join(repoDir, "submodule-repo")
+		if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "init")
+		testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+		if err := os.WriteFile(filepath.Join(submoduleRepo, "submodule-file.txt"), []byte("submodule content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "add", ".")
+		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+
+		// Add submodule to main repo
+		testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "mysub")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+
+		// Setup twig config without init_submodules (default off)
+		twigDir := filepath.Join(mainDir, ".twig")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewDefaultAddCommand(result.Config, AddOptions{})
+
+		addResult, err := cmd.Run("feature/no-submodule-init")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree was created
+		wtPath := filepath.Join(repoDir, "feature", "no-submodule-init")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+
+		// Verify submodule was NOT initialized (directory exists but empty)
+		submoduleFile := filepath.Join(wtPath, "mysub", "submodule-file.txt")
+		if _, err := os.Stat(submoduleFile); !os.IsNotExist(err) {
+			t.Errorf("submodule file should not exist (submodule not initialized): %s", submoduleFile)
+		}
+
+		// Verify result
+		if addResult.SubmodulesInited {
+			t.Error("expected SubmodulesInited to be false")
+		}
+		if addResult.SubmoduleCount != 0 {
+			t.Errorf("SubmoduleCount = %d, want 0", addResult.SubmoduleCount)
+		}
+	})
+
+	t.Run("InitSubmodulesCLIOverridesConfig", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule repository
+		submoduleRepo := filepath.Join(repoDir, "submodule-repo")
+		if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "init")
+		testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+		if err := os.WriteFile(filepath.Join(submoduleRepo, "submodule-file.txt"), []byte("submodule content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "add", ".")
+		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+
+		// Add submodule to main repo
+		testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "mysub")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+
+		// Setup twig config with init_submodules disabled
+		twigDir := filepath.Join(mainDir, ".twig")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+init_submodules = false
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// CLI option enables init_submodules (overrides config)
+		initTrue := true
+		cmd := NewDefaultAddCommand(result.Config, AddOptions{
+			InitSubmodules: &initTrue,
+		})
+
+		addResult, err := cmd.Run("feature/cli-override")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree was created
+		wtPath := filepath.Join(repoDir, "feature", "cli-override")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+
+		// Verify submodule WAS initialized (CLI override)
+		submoduleFile := filepath.Join(wtPath, "mysub", "submodule-file.txt")
+		content, err := os.ReadFile(submoduleFile)
+		if err != nil {
+			t.Fatalf("failed to read submodule file: %v", err)
+		}
+		if string(content) != "submodule content" {
+			t.Errorf("submodule file content = %q, want %q", string(content), "submodule content")
+		}
+
+		// Verify result
+		if !addResult.SubmodulesInited {
+			t.Error("expected SubmodulesInited to be true")
+		}
+		if addResult.SubmoduleCount != 1 {
+			t.Errorf("SubmoduleCount = %d, want 1", addResult.SubmoduleCount)
 		}
 	})
 }

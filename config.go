@@ -22,6 +22,8 @@ type Config struct {
 	WorktreeDestBaseDir string   `toml:"worktree_destination_base_dir"`
 	DefaultSource       string   `toml:"default_source"`
 	WorktreeSourceDir   string   // Set by LoadConfig to the config load directory
+	InitSubmodules      *bool    `toml:"init_submodules"` // nil=unset, true=enable, false=disable
+	SubmoduleDepth      int      `toml:"submodule_depth"` // 0=full clone, >0=shallow clone depth
 }
 
 // LoadConfigResult contains the loaded config and any warnings.
@@ -108,6 +110,24 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 		return nil, fmt.Errorf("failed to resolve worktree destination base directory: %w", err)
 	}
 
+	// init_submodules: local overrides project
+	var initSubmodules *bool
+	if projCfg != nil && projCfg.InitSubmodules != nil {
+		initSubmodules = projCfg.InitSubmodules
+	}
+	if localCfg != nil && localCfg.InitSubmodules != nil {
+		initSubmodules = localCfg.InitSubmodules
+	}
+
+	// submodule_depth: local overrides project (0 is valid, so check if set)
+	var submoduleDepth int
+	if projCfg != nil && projCfg.SubmoduleDepth > 0 {
+		submoduleDepth = projCfg.SubmoduleDepth
+	}
+	if localCfg != nil && localCfg.SubmoduleDepth > 0 {
+		submoduleDepth = localCfg.SubmoduleDepth
+	}
+
 	return &LoadConfigResult{
 		Config: &Config{
 			Symlinks:            symlinks,
@@ -115,6 +135,8 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 			WorktreeDestBaseDir: destBaseDir,
 			DefaultSource:       defaultSource,
 			WorktreeSourceDir:   srcDir,
+			InitSubmodules:      initSubmodules,
+			SubmoduleDepth:      submoduleDepth,
 		},
 		Warnings: warnings,
 	}, nil

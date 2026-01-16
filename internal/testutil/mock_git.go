@@ -83,6 +83,15 @@ type MockGitExecutor struct {
 	// SubmoduleStatusOutput is the output of `git submodule status --recursive`.
 	// Empty string means no submodules.
 	SubmoduleStatusOutput string
+
+	// SubmoduleUpdateErr is returned when submodule update is called.
+	SubmoduleUpdateErr error
+
+	// SubmoduleUpdateCalled is set to true when submodule update is called.
+	SubmoduleUpdateCalled bool
+
+	// SubmoduleUpdateArgs captures the args passed to submodule update.
+	SubmoduleUpdateArgs []string
 }
 
 func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
@@ -329,9 +338,19 @@ func (m *MockGitExecutor) handleFetch(args []string) ([]byte, error) {
 }
 
 func (m *MockGitExecutor) handleSubmodule(args []string) ([]byte, error) {
-	// args: ["submodule", "status", "--recursive"]
-	if len(args) >= 2 && args[1] == "status" {
+	if len(args) < 2 {
+		return nil, nil
+	}
+
+	switch args[1] {
+	case "status":
+		// args: ["submodule", "status", "--recursive"]
 		return []byte(m.SubmoduleStatusOutput), nil
+	case "update":
+		// args: ["submodule", "update", "--init", "--recursive", ...]
+		m.SubmoduleUpdateCalled = true
+		m.SubmoduleUpdateArgs = args
+		return nil, m.SubmoduleUpdateErr
 	}
 	return nil, nil
 }

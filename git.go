@@ -606,6 +606,11 @@ func (g *GitRunner) WorktreePrune() ([]byte, error) {
 // GitCmdSubmodule is the git submodule command.
 const GitCmdSubmodule = "submodule"
 
+// Git submodule subcommands.
+const (
+	GitSubmoduleUpdate = "update"
+)
+
 // SubmoduleCleanStatus indicates whether it's safe to remove a worktree with submodules.
 type SubmoduleCleanStatus int
 
@@ -724,4 +729,63 @@ func (g *GitRunner) CheckSubmoduleCleanStatus() (SubmoduleCleanStatus, error) {
 		return SubmoduleCleanStatusNone, nil
 	}
 	return SubmoduleCleanStatusClean, nil
+}
+
+type submoduleUpdateOptions struct {
+	depth int
+}
+
+// SubmoduleUpdateOption is a functional option for SubmoduleUpdate.
+type SubmoduleUpdateOption func(*submoduleUpdateOptions)
+
+// WithSubmoduleDepth sets the depth for shallow clone during submodule update.
+// depth=0 means full clone (no --depth flag).
+func WithSubmoduleDepth(depth int) SubmoduleUpdateOption {
+	return func(o *submoduleUpdateOptions) {
+		o.depth = depth
+	}
+}
+
+// SubmoduleUpdate runs git submodule update --init --recursive.
+// Returns the number of initialized submodules.
+func (g *GitRunner) SubmoduleUpdate(opts ...SubmoduleUpdateOption) (int, error) {
+	var o submoduleUpdateOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
+	if o.depth > 0 {
+		args = append(args, "--depth", fmt.Sprintf("%d", o.depth))
+	}
+
+	_, err := g.Run(args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to initialize submodules: %w", err)
+	}
+
+	// Count initialized submodules
+	submodules, err := g.SubmoduleStatus()
+	if err != nil {
+		return 0, nil // Initialization succeeded, but count failed
+	}
+
+	var count int
+	for _, sm := range submodules {
+		if sm.State != SubmoduleStateUninitialized {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// HasSubmodules checks if the repository has any submodules defined.
+// Returns true if .gitmodules exists and contains submodule entries.
+func (g *GitRunner) HasSubmodules() (bool, error) {
+	submodules, err := g.SubmoduleStatus()
+	if err != nil {
+		// If submodule status fails, assume no submodules
+		return false, nil
+	}
+	return len(submodules) > 0, nil
 }

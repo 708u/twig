@@ -9,36 +9,42 @@ import (
 
 // AddCommand creates git worktrees with symlinks.
 type AddCommand struct {
-	FS           FileSystem
-	Git          *GitRunner
-	Config       *Config
-	Sync         bool
-	CarryFrom    string
-	FilePatterns []string
-	Lock         bool
-	LockReason   string
+	FS             FileSystem
+	Git            *GitRunner
+	Config         *Config
+	Sync           bool
+	CarryFrom      string
+	FilePatterns   []string
+	Lock           bool
+	LockReason     string
+	InitSubmodules *bool // nil=use config, true=enable, false=disable
+	SubmoduleDepth int   // 0=full clone, >0=shallow clone depth
 }
 
 // AddOptions holds options for the add command.
 type AddOptions struct {
-	Sync         bool
-	CarryFrom    string   // empty: no carry, non-empty: resolved path to carry from
-	FilePatterns []string // file patterns to carry (empty means all files)
-	Lock         bool
-	LockReason   string
+	Sync           bool
+	CarryFrom      string   // empty: no carry, non-empty: resolved path to carry from
+	FilePatterns   []string // file patterns to carry (empty means all files)
+	Lock           bool
+	LockReason     string
+	InitSubmodules *bool // nil=use config, true=enable, false=disable
+	SubmoduleDepth int   // 0=use config, >0=override config
 }
 
 // NewAddCommand creates an AddCommand with explicit dependencies (for testing).
 func NewAddCommand(fs FileSystem, git *GitRunner, cfg *Config, opts AddOptions) *AddCommand {
 	return &AddCommand{
-		FS:           fs,
-		Git:          git,
-		Config:       cfg,
-		Sync:         opts.Sync,
-		CarryFrom:    opts.CarryFrom,
-		FilePatterns: opts.FilePatterns,
-		Lock:         opts.Lock,
-		LockReason:   opts.LockReason,
+		FS:             fs,
+		Git:            git,
+		Config:         cfg,
+		Sync:           opts.Sync,
+		CarryFrom:      opts.CarryFrom,
+		FilePatterns:   opts.FilePatterns,
+		Lock:           opts.Lock,
+		LockReason:     opts.LockReason,
+		InitSubmodules: opts.InitSubmodules,
+		SubmoduleDepth: opts.SubmoduleDepth,
 	}
 }
 
@@ -57,12 +63,15 @@ type SymlinkResult struct {
 
 // AddResult holds the result of an add operation.
 type AddResult struct {
-	Branch         string
-	WorktreePath   string
-	Symlinks       []SymlinkResult
-	GitOutput      []byte
-	ChangesSynced  bool
-	ChangesCarried bool
+	Branch             string
+	WorktreePath       string
+	Symlinks           []SymlinkResult
+	GitOutput          []byte
+	ChangesSynced      bool
+	ChangesCarried     bool
+	SubmodulesInited   bool  // true if submodule initialization was attempted
+	SubmoduleCount     int   // number of initialized submodules
+	SubmoduleInitError error // error from submodule initialization (warning only)
 }
 
 // AddFormatOptions configures add output formatting.
@@ -97,6 +106,11 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 		}
 	}
 
+	// Output submodule init error as warning
+	if r.SubmoduleInitError != nil {
+		fmt.Fprintf(&stderr, "warning: %v\n", r.SubmoduleInitError)
+	}
+
 	if opts.Verbose {
 		if len(r.GitOutput) > 0 {
 			stdout.Write(r.GitOutput)
@@ -113,6 +127,9 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 		if r.ChangesCarried {
 			stdout.WriteString("Carried uncommitted changes (source is now clean)\n")
 		}
+		if r.SubmodulesInited && r.SubmoduleCount > 0 {
+			fmt.Fprintf(&stdout, "Initialized %d submodule(s)\n", r.SubmoduleCount)
+		}
 	}
 
 	var syncInfo string
@@ -121,7 +138,12 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 	} else if r.ChangesCarried {
 		syncInfo = ", carried"
 	}
-	fmt.Fprintf(&stdout, "twig add: %s (%d symlinks%s)\n", r.Branch, createdCount, syncInfo)
+
+	var submoduleInfo string
+	if r.SubmodulesInited && r.SubmoduleCount > 0 {
+		submoduleInfo = fmt.Sprintf(", %d submodules", r.SubmoduleCount)
+	}
+	fmt.Fprintf(&stdout, "twig add: %s (%d symlinks%s%s)\n", r.Branch, createdCount, syncInfo, submoduleInfo)
 
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 }
@@ -205,6 +227,26 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	}
 	result.GitOutput = gitOutput
 
+	// Initialize submodules in new worktree
+	if c.shouldInitSubmodules() {
+		wtGit := c.Git.InDir(wtPath)
+		hasSubmodules, _ := wtGit.HasSubmodules()
+		if hasSubmodules {
+			result.SubmodulesInited = true
+			var opts []SubmoduleUpdateOption
+			depth := c.effectiveSubmoduleDepth()
+			if depth > 0 {
+				opts = append(opts, WithSubmoduleDepth(depth))
+			}
+			count, initErr := wtGit.SubmoduleUpdate(opts...)
+			if initErr != nil {
+				result.SubmoduleInitError = initErr
+			} else {
+				result.SubmoduleCount = count
+			}
+		}
+	}
+
 	// Apply stashed changes to new worktree
 	if stashHash != "" {
 		_, err = c.Git.InDir(wtPath).StashApplyByHash(stashHash)
@@ -235,6 +277,32 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	result.Symlinks = symlinks
 
 	return result, nil
+}
+
+// shouldInitSubmodules determines if submodules should be initialized.
+// Priority: CLI flag > config > default (false)
+func (c *AddCommand) shouldInitSubmodules() bool {
+	// CLI flag takes precedence
+	if c.InitSubmodules != nil {
+		return *c.InitSubmodules
+	}
+	// Config value
+	if c.Config.InitSubmodules != nil {
+		return *c.Config.InitSubmodules
+	}
+	// Default: disabled
+	return false
+}
+
+// effectiveSubmoduleDepth returns the depth to use for submodule cloning.
+// Priority: CLI flag > config > default (0 = full clone)
+func (c *AddCommand) effectiveSubmoduleDepth() int {
+	// CLI flag takes precedence (if set to non-zero)
+	if c.SubmoduleDepth > 0 {
+		return c.SubmoduleDepth
+	}
+	// Config value
+	return c.Config.SubmoduleDepth
 }
 
 func (c *AddCommand) createWorktree(branch, path string) ([]byte, error) {

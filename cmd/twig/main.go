@@ -275,6 +275,26 @@ Use --file with --sync or --carry to target specific files:
 				return fmt.Errorf("--file requires --carry or --sync flag")
 			}
 
+			// Get submodule flags
+			initSubmodulesEnabled := cmd.Flags().Changed("init-submodules")
+			noInitSubmodulesEnabled := cmd.Flags().Changed("no-init-submodules")
+
+			// --init-submodules and --no-init-submodules are mutually exclusive
+			if initSubmodulesEnabled && noInitSubmodulesEnabled {
+				return fmt.Errorf("cannot use --init-submodules and --no-init-submodules together")
+			}
+
+			// Determine InitSubmodules value
+			var initSubmodules *bool
+			if initSubmodulesEnabled {
+				t := true
+				initSubmodules = &t
+			} else if noInitSubmodulesEnabled {
+				f := false
+				initSubmodules = &f
+			}
+			// nil means use config default
+
 			// --reason requires --lock
 			if lockReason != "" && !lock {
 				return fmt.Errorf("--reason requires --lock")
@@ -297,11 +317,12 @@ Use --file with --sync or --carry to target specific files:
 				addCmd = o.addCommander
 			} else {
 				addCmd = twig.NewDefaultAddCommand(cfg, twig.AddOptions{
-					Sync:         sync,
-					CarryFrom:    carryFrom,
-					FilePatterns: filePatterns,
-					Lock:         lock,
-					LockReason:   lockReason,
+					Sync:           sync,
+					CarryFrom:      carryFrom,
+					FilePatterns:   filePatterns,
+					Lock:           lock,
+					LockReason:     lockReason,
+					InitSubmodules: initSubmodules,
 				})
 			}
 			result, err := addCmd.Run(args[0])
@@ -518,6 +539,8 @@ stop processing of remaining branches.`,
 	addCmd.Flags().Bool("lock", false, "Lock the worktree after creation")
 	addCmd.Flags().String("reason", "", "Reason for locking (requires --lock)")
 	addCmd.Flags().StringArrayP("file", "F", nil, "File patterns to sync/carry (requires --sync or --carry)")
+	addCmd.Flags().Bool("init-submodules", false, "Initialize submodules in new worktree")
+	addCmd.Flags().Bool("no-init-submodules", false, "Do not initialize submodules")
 	addCmd.RegisterFlagCompletionFunc("file", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		// Resolve target directory from -C flag
 		dir, err := resolveCompletionDirectory(cmd)
