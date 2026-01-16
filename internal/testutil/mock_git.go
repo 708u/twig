@@ -102,8 +102,10 @@ func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
 }
 
 func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
-	// Skip -C <dir> option (directory specification, not a command)
-	for len(args) >= 2 && args[0] == "-C" {
+	// Skip git options that come before the command
+	// -C <dir>: directory specification
+	// -c <key=value>: config option
+	for len(args) >= 2 && (args[0] == "-C" || args[0] == "-c") {
 		args = args[2:]
 	}
 
