@@ -246,12 +246,8 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 		return c.removePrunable(branch, opts, result)
 	}
 
-	if opts.Check {
-		result.CleanedDirs = c.predictEmptyParentDirs(checkResult.WorktreePath)
-		return result, nil
-	}
-
 	// Check submodule status to determine effective force level
+	// This must run before --check return to ensure consistent results
 	effectiveForce := opts.Force
 	smStatus, smErr := c.Git.InDir(checkResult.WorktreePath).CheckSubmoduleCleanStatus()
 	if smErr == nil {
@@ -271,6 +267,11 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 				}
 			}
 		}
+	}
+
+	if opts.Check {
+		result.CleanedDirs = c.predictEmptyParentDirs(checkResult.WorktreePath)
+		return result, nil
 	}
 
 	var gitOutput []byte
