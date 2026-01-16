@@ -471,7 +471,7 @@ stop processing of remaining branches.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verbose, _ := cmd.Flags().GetBool("verbose")
 			forceCount, _ := cmd.Flags().GetCount("force")
-			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			check, _ := cmd.Flags().GetBool("check")
 
 			var removeCmd RemoveCommander
 			if o.removeCommander != nil {
@@ -483,8 +483,8 @@ stop processing of remaining branches.`,
 
 			for _, branch := range args {
 				wt, err := removeCmd.Run(branch, cwd, twig.RemoveOptions{
-					Force:  twig.WorktreeForceLevel(forceCount),
-					DryRun: dryRun,
+					Force: twig.WorktreeForceLevel(forceCount),
+					Check: check,
 				})
 				if err != nil {
 					wt.Branch = branch
@@ -562,7 +562,7 @@ stop processing of remaining branches.`,
 	rootCmd.AddCommand(cleanCmd)
 
 	removeCmd.Flags().CountP("force", "f", "Force removal (-f: uncommitted/unmerged, -ff: also locked)")
-	removeCmd.Flags().Bool("dry-run", false, "Show what would be removed without making changes")
+	removeCmd.Flags().Bool("check", false, "Show removal eligibility without making changes")
 	rootCmd.AddCommand(removeCmd)
 
 	initCmd := &cobra.Command{

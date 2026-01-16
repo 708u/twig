@@ -13,7 +13,6 @@ import (
 	"github.com/708u/twig/internal/testutil"
 )
 
-
 func TestRemoveCommand_Integration(t *testing.T) {
 	t.Parallel()
 
@@ -61,7 +60,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("DryRun", func(t *testing.T) {
+	t.Run("Check", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -80,7 +79,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/dry-run-test", mainDir, RemoveOptions{DryRun: true})
+		removeResult, err := cmd.Run("feature/dry-run-test", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -95,8 +94,8 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Verify result
-		if !removeResult.DryRun {
-			t.Error("result.DryRun should be true")
+		if !removeResult.Check {
+			t.Error("result.Check should be true")
 		}
 	})
 
@@ -124,21 +123,18 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		// First, verify removal without --force fails with GitError and hint
+		// First, verify removal without --force fails with SkipError
 		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for uncommitted changes without --force")
 		}
 
-		var gitErr *GitError
-		if !errors.As(err, &gitErr) {
-			t.Fatalf("expected GitError, got %T: %v", err, err)
+		var skipErr *SkipError
+		if !errors.As(err, &skipErr) {
+			t.Fatalf("expected SkipError, got %T: %v", err, err)
 		}
-		if gitErr.Op != OpWorktreeRemove {
-			t.Errorf("GitError.Op = %v, want %v", gitErr.Op, OpWorktreeRemove)
-		}
-		if hint := gitErr.Hint(); hint == "" {
-			t.Error("GitError.Hint() should return hint for uncommitted changes")
+		if skipErr.Reason != SkipHasChanges {
+			t.Errorf("SkipError.Reason = %v, want %v", skipErr.Reason, SkipHasChanges)
 		}
 
 		// Now verify -f (WorktreeForceLevelUnclean) succeeds for uncommitted changes
@@ -174,22 +170,18 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		// Removal without --force should fail with hint
+		// Removal without --force should fail with SkipError
 		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for locked worktree without --force")
 		}
 
-		var gitErr *GitError
-		if !errors.As(err, &gitErr) {
-			t.Fatalf("expected GitError, got %T: %v", err, err)
+		var skipErr *SkipError
+		if !errors.As(err, &skipErr) {
+			t.Fatalf("expected SkipError, got %T: %v", err, err)
 		}
-		if gitErr.Op != OpWorktreeRemove {
-			t.Errorf("GitError.Op = %v, want %v", gitErr.Op, OpWorktreeRemove)
-		}
-		expectedHint := "run 'git worktree unlock <path>' first, or use 'twig remove --force'"
-		if hint := gitErr.Hint(); hint != expectedHint {
-			t.Errorf("GitError.Hint() = %q, want %q", hint, expectedHint)
+		if skipErr.Reason != SkipLocked {
+			t.Errorf("SkipError.Reason = %v, want %v", skipErr.Reason, SkipLocked)
 		}
 
 		// Verify worktree is still locked
@@ -245,8 +237,12 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when inside worktree, got nil")
 		}
-		if !strings.Contains(err.Error(), "cannot remove: current directory is inside worktree") {
-			t.Errorf("unexpected error: %v", err)
+		var skipErr *SkipError
+		if !errors.As(err, &skipErr) {
+			t.Fatalf("expected SkipError, got %T: %v", err, err)
+		}
+		if skipErr.Reason != SkipCurrentDir {
+			t.Errorf("SkipError.Reason = %v, want %v", skipErr.Reason, SkipCurrentDir)
 		}
 	})
 
@@ -514,7 +510,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("DryRunShowsCleanupInfo", func(t *testing.T) {
+	t.Run("CheckShowsCleanupInfo", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -534,7 +530,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feat/dry-cleanup", mainDir, RemoveOptions{DryRun: true})
+		removeResult, err := cmd.Run("feat/dry-cleanup", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -622,7 +618,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("RemovePrunableWorktreeDryRun", func(t *testing.T) {
+	t.Run("RemovePrunableWorktreeCheck", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -645,7 +641,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/prunable-dry-run", mainDir, RemoveOptions{DryRun: true})
+		removeResult, err := cmd.Run("feature/prunable-dry-run", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -654,8 +650,8 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		if !removeResult.Pruned {
 			t.Error("result.Prunable should be true")
 		}
-		if !removeResult.DryRun {
-			t.Error("result.DryRun should be true")
+		if !removeResult.Check {
+			t.Error("result.Check should be true")
 		}
 
 		// Branch should still exist (dry-run)

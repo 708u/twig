@@ -945,49 +945,49 @@ func TestRemoveCmd(t *testing.T) {
 		name      string
 		args      []string
 		wantForce twig.WorktreeForceLevel
-		wantDry   bool
+		wantCheck bool
 	}{
 		{
 			name:      "no_flags",
 			args:      []string{"remove", "feat/a"},
 			wantForce: twig.WorktreeForceLevelNone,
-			wantDry:   false,
+			wantCheck: false,
 		},
 		{
 			name:      "force_flag",
 			args:      []string{"remove", "--force", "feat/a"},
 			wantForce: twig.WorktreeForceLevelUnclean,
-			wantDry:   false,
+			wantCheck: false,
 		},
 		{
 			name:      "force_short_flag",
 			args:      []string{"remove", "-f", "feat/a"},
 			wantForce: twig.WorktreeForceLevelUnclean,
-			wantDry:   false,
+			wantCheck: false,
 		},
 		{
 			name:      "force_double_short_flag",
 			args:      []string{"remove", "-ff", "feat/a"},
 			wantForce: twig.WorktreeForceLevelLocked,
-			wantDry:   false,
+			wantCheck: false,
 		},
 		{
 			name:      "force_double_separate_flags",
 			args:      []string{"remove", "-f", "-f", "feat/a"},
 			wantForce: twig.WorktreeForceLevelLocked,
-			wantDry:   false,
+			wantCheck: false,
 		},
 		{
-			name:      "dry_run_flag",
-			args:      []string{"remove", "--dry-run", "feat/a"},
+			name:      "check_flag",
+			args:      []string{"remove", "--check", "feat/a"},
 			wantForce: twig.WorktreeForceLevelNone,
-			wantDry:   true,
+			wantCheck: true,
 		},
 		{
-			name:      "force_and_dry_run",
-			args:      []string{"remove", "--force", "--dry-run", "feat/a"},
+			name:      "force_and_check",
+			args:      []string{"remove", "--force", "--check", "feat/a"},
 			wantForce: twig.WorktreeForceLevelUnclean,
-			wantDry:   true,
+			wantCheck: true,
 		},
 	}
 
@@ -1016,8 +1016,8 @@ func TestRemoveCmd(t *testing.T) {
 			if call.opts.Force != tt.wantForce {
 				t.Errorf("Force = %v, want %v", call.opts.Force, tt.wantForce)
 			}
-			if call.opts.DryRun != tt.wantDry {
-				t.Errorf("DryRun = %v, want %v", call.opts.DryRun, tt.wantDry)
+			if call.opts.Check != tt.wantCheck {
+				t.Errorf("Check = %v, want %v", call.opts.Check, tt.wantCheck)
 			}
 		})
 	}

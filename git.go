@@ -99,18 +99,6 @@ func (e *GitError) Unwrap() error {
 	return e.Err
 }
 
-// Hint returns a helpful hint message based on the error content.
-func (e *GitError) Hint() string {
-	switch {
-	case strings.Contains(e.Stderr, "modified or untracked files"):
-		return "use 'twig remove --force' to force removal"
-	case strings.Contains(e.Stderr, "locked working tree"):
-		return "run 'git worktree unlock <path>' first, or use 'twig remove --force'"
-	default:
-		return ""
-	}
-}
-
 // newGitError creates a GitError from a git operation error.
 // It extracts stderr from exec.ExitError if available.
 func newGitError(op GitOp, err error) *GitError {
