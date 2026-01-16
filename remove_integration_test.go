@@ -13,7 +13,6 @@ import (
 	"github.com/708u/twig/internal/testutil"
 )
 
-
 func TestRemoveCommand_Integration(t *testing.T) {
 	t.Parallel()
 
@@ -61,7 +60,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("DryRun", func(t *testing.T) {
+	t.Run("Check", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -80,7 +79,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/dry-run-test", mainDir, RemoveOptions{DryRun: true})
+		removeResult, err := cmd.Run("feature/dry-run-test", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -95,8 +94,8 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Verify result
-		if !removeResult.DryRun {
-			t.Error("result.DryRun should be true")
+		if !removeResult.Check {
+			t.Error("result.Check should be true")
 		}
 	})
 
@@ -514,7 +513,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("DryRunShowsCleanupInfo", func(t *testing.T) {
+	t.Run("CheckShowsCleanupInfo", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -534,7 +533,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feat/dry-cleanup", mainDir, RemoveOptions{DryRun: true})
+		removeResult, err := cmd.Run("feat/dry-cleanup", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -622,7 +621,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("RemovePrunableWorktreeDryRun", func(t *testing.T) {
+	t.Run("RemovePrunableWorktreeCheck", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -645,7 +644,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/prunable-dry-run", mainDir, RemoveOptions{DryRun: true})
+		removeResult, err := cmd.Run("feature/prunable-dry-run", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -654,8 +653,8 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		if !removeResult.Pruned {
 			t.Error("result.Prunable should be true")
 		}
-		if !removeResult.DryRun {
-			t.Error("result.DryRun should be true")
+		if !removeResult.Check {
+			t.Error("result.Check should be true")
 		}
 
 		// Branch should still exist (dry-run)
