@@ -44,12 +44,18 @@ type InitCommander interface {
 	Run(dir string, opts twig.InitOptions) (twig.InitResult, error)
 }
 
+// CheckCommander defines the interface for check operations.
+type CheckCommander interface {
+	Run() (twig.CheckResult, error)
+}
+
 type options struct {
 	addCommander    AddCommander    // nil = use default
 	cleanCommander  CleanCommander  // nil = use default
 	listCommander   ListCommander   // nil = use default
 	removeCommander RemoveCommander // nil = use default
 	initCommander   InitCommander   // nil = use default
+	checkCommander  CheckCommander  // nil = use default
 }
 
 // Option configures newRootCmd.
@@ -87,6 +93,13 @@ func WithRemoveCommander(cmd RemoveCommander) Option {
 func WithInitCommander(cmd InitCommander) Option {
 	return func(o *options) {
 		o.initCommander = cmd
+	}
+}
+
+// WithCheckCommander sets the CheckCommander instance for testing.
+func WithCheckCommander(cmd CheckCommander) Option {
+	return func(o *options) {
+		o.checkCommander = cmd
 	}
 }
 
@@ -607,6 +620,47 @@ stop processing of remaining branches.`,
 	}
 	initCmd.Flags().BoolP("force", "f", false, "Overwrite existing configuration file")
 	rootCmd.AddCommand(initCmd)
+
+	checkCmd := &cobra.Command{
+		Use:   "check",
+		Short: "Validate configuration and symlink patterns",
+		Long: `Validate twig configuration and symlink patterns.
+
+Checks:
+  - TOML syntax validity
+  - worktree_destination_base_dir existence and writability
+  - Symlink patterns match files
+  - Gitignored files in symlink patterns`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			quiet, _ := cmd.Flags().GetBool("quiet")
+
+			var checkCommand CheckCommander
+			if o.checkCommander != nil {
+				checkCommand = o.checkCommander
+			} else {
+				checkCommand = twig.NewDefaultCheckCommand(cfg)
+			}
+			result, err := checkCommand.Run()
+			if err != nil {
+				return err
+			}
+
+			formatted := result.Format(twig.CheckFormatOptions{
+				Verbose: verbose,
+				Quiet:   quiet,
+			})
+			fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
+
+			if result.ErrorCount() > 0 {
+				return fmt.Errorf("found %d error(s)", result.ErrorCount())
+			}
+			return nil
+		},
+	}
+	checkCmd.Flags().BoolP("quiet", "q", false, "Show only errors")
+	rootCmd.AddCommand(checkCmd)
 
 	versionCmd := &cobra.Command{
 		Use:   "version",

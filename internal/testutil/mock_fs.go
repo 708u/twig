@@ -2,10 +2,21 @@ package testutil
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 )
+
+// GlobPatternError represents an invalid glob pattern error.
+type GlobPatternError struct {
+	Pattern string
+}
+
+func (e *GlobPatternError) Error() string {
+	return fmt.Sprintf("invalid glob pattern: %s", e.Pattern)
+}
 
 // MockFS is a mock implementation of twig.FileSystem for testing.
 type MockFS struct {
@@ -48,6 +59,10 @@ type MockFS struct {
 
 	// WrittenFiles records files written by WriteFile.
 	WrittenFiles map[string][]byte
+
+	// WritableDirs is a list of directories that are writable.
+	// If nil, all directories are assumed writable.
+	WritableDirs []string
 }
 
 func (m *MockFS) Stat(name string) (fs.FileInfo, error) {
@@ -120,8 +135,18 @@ func (m *MockFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
 	if m.WriteFileFunc != nil {
 		return m.WriteFileFunc(name, data, perm)
 	}
+	if m.WriteFileErr != nil {
+		return m.WriteFileErr
+	}
+	// Check if directory is writable when WritableDirs is configured
+	if m.WritableDirs != nil {
+		dir := filepath.Dir(name)
+		if !slices.Contains(m.WritableDirs, dir) {
+			return fmt.Errorf("permission denied: %s", dir)
+		}
+	}
 	if m.WrittenFiles != nil {
 		m.WrittenFiles[name] = data
 	}
-	return m.WriteFileErr
+	return nil
 }

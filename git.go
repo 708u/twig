@@ -601,3 +601,21 @@ func (g *GitRunner) WorktreePrune() ([]byte, error) {
 	}
 	return out, nil
 }
+
+// CheckIgnore checks if a path is ignored by .gitignore.
+// Returns true if the path is ignored, false otherwise.
+func (g *GitRunner) CheckIgnore(path string) (bool, error) {
+	_, err := g.Run("check-ignore", "-q", path)
+	if err != nil {
+		// git check-ignore exits with 1 if not ignored, 128 on error
+		// -q (quiet) suppresses output
+		var exitErr interface{ ExitCode() int }
+		if errors.As(err, &exitErr) {
+			if exitErr.ExitCode() == 1 {
+				return false, nil
+			}
+		}
+		return false, err
+	}
+	return true, nil
+}
