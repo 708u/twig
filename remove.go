@@ -379,7 +379,7 @@ func (c *RemoveCommand) Check(branch string, opts CheckOptions) (CheckResult, er
 	}
 
 	result.CanRemove = true
-	// Set clean reason only when target is specified (called from CleanCommand)
+	// CleanReason requires a target branch to determine merge status
 	if opts.Target != "" {
 		result.CleanReason = c.getCleanReason(branch, opts.Target)
 	}
