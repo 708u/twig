@@ -744,6 +744,8 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(submodulePath, "new.txt"), []byte("new"), 0644); err != nil {
 			t.Fatal(err)
 		}
+		testutil.RunGit(t, submodulePath, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submodulePath, "config", "user.name", "Test")
 		testutil.RunGit(t, submodulePath, "add", ".")
 		testutil.RunGit(t, submodulePath, "commit", "-m", "advance submodule")
 		// Now submodule is at a different commit than recorded in parent (+ prefix)
