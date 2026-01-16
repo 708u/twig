@@ -123,21 +123,21 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		// First, verify removal without --force fails with GitError and hint
+		// First, verify removal without --force fails with SkipError and hint
 		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for uncommitted changes without --force")
 		}
 
-		var gitErr *GitError
-		if !errors.As(err, &gitErr) {
-			t.Fatalf("expected GitError, got %T: %v", err, err)
+		var skipErr *SkipError
+		if !errors.As(err, &skipErr) {
+			t.Fatalf("expected SkipError, got %T: %v", err, err)
 		}
-		if gitErr.Op != OpWorktreeRemove {
-			t.Errorf("GitError.Op = %v, want %v", gitErr.Op, OpWorktreeRemove)
+		if skipErr.Reason != SkipHasChanges {
+			t.Errorf("SkipError.Reason = %v, want %v", skipErr.Reason, SkipHasChanges)
 		}
-		if hint := gitErr.Hint(); hint == "" {
-			t.Error("GitError.Hint() should return hint for uncommitted changes")
+		if hint := skipErr.Hint(); hint == "" {
+			t.Error("SkipError.Hint() should return hint for uncommitted changes")
 		}
 
 		// Now verify -f (WorktreeForceLevelUnclean) succeeds for uncommitted changes
@@ -179,16 +179,16 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			t.Fatal("expected error for locked worktree without --force")
 		}
 
-		var gitErr *GitError
-		if !errors.As(err, &gitErr) {
-			t.Fatalf("expected GitError, got %T: %v", err, err)
+		var skipErr *SkipError
+		if !errors.As(err, &skipErr) {
+			t.Fatalf("expected SkipError, got %T: %v", err, err)
 		}
-		if gitErr.Op != OpWorktreeRemove {
-			t.Errorf("GitError.Op = %v, want %v", gitErr.Op, OpWorktreeRemove)
+		if skipErr.Reason != SkipLocked {
+			t.Errorf("SkipError.Reason = %v, want %v", skipErr.Reason, SkipLocked)
 		}
-		expectedHint := "run 'git worktree unlock <path>' first, or use 'twig remove --force'"
-		if hint := gitErr.Hint(); hint != expectedHint {
-			t.Errorf("GitError.Hint() = %q, want %q", hint, expectedHint)
+		expectedHint := "run 'git worktree unlock <path>' first, or use 'twig remove -f -f'"
+		if hint := skipErr.Hint(); hint != expectedHint {
+			t.Errorf("SkipError.Hint() = %q, want %q", hint, expectedHint)
 		}
 
 		// Verify worktree is still locked
@@ -244,8 +244,12 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when inside worktree, got nil")
 		}
-		if !strings.Contains(err.Error(), "cannot remove: current directory is inside worktree") {
-			t.Errorf("unexpected error: %v", err)
+		var skipErr *SkipError
+		if !errors.As(err, &skipErr) {
+			t.Fatalf("expected SkipError, got %T: %v", err, err)
+		}
+		if skipErr.Reason != SkipCurrentDir {
+			t.Errorf("SkipError.Reason = %v, want %v", skipErr.Reason, SkipCurrentDir)
 		}
 	})
 

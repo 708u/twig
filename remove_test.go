@@ -302,7 +302,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 				}
 			},
 			wantErr:     true,
-			errContains: "cannot remove: current directory is inside worktree",
+			errContains: "cannot remove: current directory",
 		},
 		{
 			name:   "worktree_remove_fails",

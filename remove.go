@@ -18,6 +18,27 @@ const (
 	SkipDetached   SkipReason = "detached HEAD"
 )
 
+// SkipError represents an error when a worktree cannot be removed due to a skip condition.
+type SkipError struct {
+	Reason SkipReason
+}
+
+func (e *SkipError) Error() string {
+	return fmt.Sprintf("cannot remove: %s", e.Reason)
+}
+
+// Hint returns a helpful hint message based on the skip reason.
+func (e *SkipError) Hint() string {
+	switch e.Reason {
+	case SkipHasChanges, SkipNotMerged:
+		return "use 'twig remove --force' to force removal"
+	case SkipLocked:
+		return "run 'git worktree unlock <path>' first, or use 'twig remove -f -f'"
+	default:
+		return ""
+	}
+}
+
 // CleanReason describes why a branch is cleanable.
 type CleanReason string
 
@@ -76,9 +97,11 @@ func NewDefaultRemoveCommand(cfg *Config) *RemoveCommand {
 type RemovedWorktree struct {
 	Branch       string
 	WorktreePath string
-	CleanedDirs  []string // Empty parent directories that were removed
-	Pruned       bool     // Stale worktree record was pruned (directory was already deleted)
-	Check        bool     // --check mode: show what would be removed
+	CleanedDirs  []string   // Empty parent directories that were removed
+	Pruned       bool       // Stale worktree record was pruned (directory was already deleted)
+	Check        bool       // --check mode: show what would be removed
+	CanRemove    bool       // Whether the worktree can be removed (from Check)
+	SkipReason   SkipReason // Reason if cannot be removed (from Check)
 	GitOutput    []byte
 	Err          error // nil if success
 }
@@ -126,21 +149,31 @@ func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 }
 
+// Hinter is an interface for errors that can provide helpful hints.
+type Hinter interface {
+	Hint() string
+}
+
 // formatRemoveError formats an error from the remove operation.
 // It shows a short error message, and optionally the detailed git error.
 func formatRemoveError(w *strings.Builder, branch string, err error, verbose bool) {
+	// Format error message
 	var gitErr *GitError
 	if errors.As(err, &gitErr) {
 		fmt.Fprintf(w, "error: %s: failed to %s\n", branch, gitErr.Op)
 		if verbose && gitErr.Stderr != "" {
 			fmt.Fprintf(w, "       git: %s\n", gitErr.Stderr)
 		}
-		if hint := gitErr.Hint(); hint != "" {
+	} else {
+		fmt.Fprintf(w, "error: %s: %v\n", branch, err)
+	}
+
+	// Format hint
+	var hinter Hinter
+	if errors.As(err, &hinter) {
+		if hint := hinter.Hint(); hint != "" {
 			fmt.Fprintf(w, "hint: %s\n", hint)
 		}
-	} else {
-		// Fallback for non-GitError
-		fmt.Fprintf(w, "error: %s: %v\n", branch, err)
 	}
 }
 
@@ -187,32 +220,32 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 	result.Branch = branch
 	result.Check = opts.Check
 
-	if branch == "" {
-		return result, fmt.Errorf("branch name is required")
-	}
-	if c.Config.WorktreeSourceDir == "" {
-		return result, fmt.Errorf("worktree source directory is not configured")
-	}
-
-	wtInfo, err := c.Git.WorktreeFindByBranch(branch)
+	// Check removal eligibility first
+	checkResult, err := c.Check(branch, CheckOptions{
+		Force: opts.Force,
+		Cwd:   cwd,
+	})
 	if err != nil {
 		return result, err
 	}
-	result.WorktreePath = wtInfo.Path
-	result.Pruned = wtInfo.Prunable
+
+	// Copy check results
+	result.WorktreePath = checkResult.WorktreePath
+	result.Pruned = checkResult.Prunable
+	result.CanRemove = checkResult.CanRemove
+	result.SkipReason = checkResult.SkipReason
+
+	if !checkResult.CanRemove {
+		return result, &SkipError{Reason: checkResult.SkipReason}
+	}
 
 	// Handle prunable worktree (directory already deleted externally)
-	if wtInfo.Prunable {
+	if checkResult.Prunable {
 		return c.removePrunable(branch, opts, result)
 	}
 
-	// Normal worktree removal
-	if strings.HasPrefix(cwd, wtInfo.Path) {
-		return result, fmt.Errorf("cannot remove: current directory is inside worktree %s", wtInfo.Path)
-	}
-
 	if opts.Check {
-		result.CleanedDirs = c.predictEmptyParentDirs(wtInfo.Path)
+		result.CleanedDirs = c.predictEmptyParentDirs(checkResult.WorktreePath)
 		return result, nil
 	}
 
@@ -221,13 +254,13 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 	if opts.Force > WorktreeForceLevelNone {
 		wtOpts = append(wtOpts, WithForceRemove(opts.Force))
 	}
-	wtOut, err := c.Git.WorktreeRemove(wtInfo.Path, wtOpts...)
+	wtOut, err := c.Git.WorktreeRemove(checkResult.WorktreePath, wtOpts...)
 	if err != nil {
 		return result, err
 	}
 	gitOutput = append(gitOutput, wtOut...)
 
-	result.CleanedDirs = c.cleanupEmptyParentDirs(wtInfo.Path)
+	result.CleanedDirs = c.cleanupEmptyParentDirs(checkResult.WorktreePath)
 
 	var branchOpts []BranchDeleteOption
 	if opts.Force > WorktreeForceLevelNone {
