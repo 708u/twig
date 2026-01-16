@@ -576,7 +576,3 @@ func TestCleanCommand_ResolveTarget(t *testing.T) {
 		})
 	}
 }
-
-// Tests for checkSkipReason and checkPrunableSkipReason have been moved to
-// TestRemoveCommand_Check in remove_test.go since these methods are now
-// part of RemoveCommand.
