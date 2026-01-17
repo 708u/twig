@@ -154,7 +154,7 @@ func TestResolveCarryFrom(t *testing.T) {
 				}
 			}
 
-			got, err := resolveCarryFrom(context.Background(), tt.carryValue, tt.originalCwd, git)
+			got, err := resolveCarryFrom(t.Context(), tt.carryValue, tt.originalCwd, git)
 			if tt.wantErr != "" {
 				if err == nil {
 					t.Fatal("expected error, got nil")
