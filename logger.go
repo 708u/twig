@@ -56,13 +56,13 @@ func (h *CLIHandler) Handle(_ context.Context, r slog.Record) error {
 }
 
 // WithAttrs returns a new handler with the given attributes.
-// This implementation returns the same handler for simplicity.
+// Currently not implemented: attrs are ignored. Use Handle's attrs instead.
 func (h *CLIHandler) WithAttrs(_ []slog.Attr) slog.Handler {
 	return h
 }
 
 // WithGroup returns a new handler with the given group name.
-// This implementation returns the same handler for simplicity.
+// Currently not implemented: group is ignored.
 func (h *CLIHandler) WithGroup(_ string) slog.Handler {
 	return h
 }
