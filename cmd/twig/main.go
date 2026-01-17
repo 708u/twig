@@ -342,7 +342,7 @@ Use --file with --sync or --carry to target specific files:
 				handler := twig.NewCLIHandler(cmd.ErrOrStderr(), twig.VerbosityToLevel(verbosity))
 				// Add command ID for log grouping
 				handlerWithID := handler.WithAttrs([]slog.Attr{
-					slog.String("cmd_id", twig.GenerateCommandID()),
+					twig.LogAttrKeyCmdID.Attr(twig.GenerateCommandID()),
 				})
 				log = slog.New(handlerWithID)
 			}

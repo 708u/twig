@@ -46,7 +46,7 @@ func (h *CLIHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Get category from record attributes (takes precedence over handler attrs)
 	var category string
 	r.Attrs(func(a slog.Attr) bool {
-		if a.Key == "category" {
+		if a.Key == LogAttrKeyCategory.String() {
 			category = a.Value.String()
 			return false
 		}
@@ -56,7 +56,7 @@ func (h *CLIHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Fall back to handler's stored attrs if not found in record
 	if category == "" {
 		for _, a := range h.attrs {
-			if a.Key == "category" {
+			if a.Key == LogAttrKeyCategory.String() {
 				category = a.Value.String()
 				break
 			}
@@ -91,7 +91,7 @@ func (h *CLIHandler) Handle(ctx context.Context, r slog.Record) error {
 }
 
 // WithAttrs returns a new handler with the given attributes.
-// The "cmd_id" attribute is stored separately for efficient access.
+// The cmd_id attribute is stored separately for efficient access.
 func (h *CLIHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	newHandler := &CLIHandler{
 		w:     h.w,
@@ -100,7 +100,7 @@ func (h *CLIHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		cmdID: h.cmdID,
 	}
 	for _, a := range attrs {
-		if a.Key == "cmd_id" {
+		if a.Key == LogAttrKeyCmdID.String() {
 			newHandler.cmdID = a.Value.String()
 		} else {
 			newHandler.attrs = append(newHandler.attrs, a)
@@ -138,7 +138,26 @@ func VerbosityToLevel(verbosity int) slog.Level {
 	}
 }
 
-// Log categories for consistent output prefixes.
+// LogAttrKey is a type-safe key for slog attributes.
+type LogAttrKey string
+
+// String returns the string value of the key.
+func (k LogAttrKey) String() string {
+	return string(k)
+}
+
+// Attr creates a slog.Attr with this key and the given value.
+func (k LogAttrKey) Attr(value string) slog.Attr {
+	return slog.String(string(k), value)
+}
+
+// Log attribute keys for slog records.
+const (
+	LogAttrKeyCategory LogAttrKey = "category"
+	LogAttrKeyCmdID    LogAttrKey = "cmd_id"
+)
+
+// Log category values for consistent output prefixes.
 const (
 	LogCategoryDebug  = "debug"
 	LogCategoryGit    = "git"
@@ -146,9 +165,12 @@ const (
 	LogCategoryGlob   = "glob"
 )
 
-// DefaultCommandIDBytes is the number of random bytes for command ID generation.
-// This produces a 8-character hex string (4 bytes = 8 hex chars).
-const DefaultCommandIDBytes = 4
+// Command ID generation settings.
+const (
+	// DefaultCommandIDBytes is the number of random bytes for command ID generation.
+	// This produces an 8-character hex string (4 bytes = 8 hex chars).
+	DefaultCommandIDBytes = 4
+)
 
 // GenerateCommandID generates a random command ID for log grouping.
 // Returns an 8-character hex string (e.g., "a1b2c3d4").

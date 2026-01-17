@@ -63,7 +63,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 
 			record := slog.NewRecord(fixedTime, tt.logLevel, tt.message, 0)
 			if tt.category != "" {
-				record.AddAttrs(slog.String("category", tt.category))
+				record.AddAttrs(LogAttrKeyCategory.Attr(tt.category))
 			}
 
 			if err := handler.Handle(t.Context(), record); err != nil {
@@ -224,21 +224,21 @@ func TestCLIHandler_WithAttrs(t *testing.T) {
 	}{
 		{
 			name:    "with category attr",
-			attrs:   []slog.Attr{slog.String("category", "git")},
+			attrs:   []slog.Attr{LogAttrKeyCategory.Attr("git")},
 			message: "test message",
 			want:    "2026-01-17 12:34:56 [DEBUG] git: test message\n",
 		},
 		{
 			name:    "with cmd_id attr",
-			attrs:   []slog.Attr{slog.String("cmd_id", "a1b2c3d4")},
+			attrs:   []slog.Attr{LogAttrKeyCmdID.Attr("a1b2c3d4")},
 			message: "test message",
 			want:    "2026-01-17 12:34:56 [DEBUG] [a1b2c3d4] test message\n",
 		},
 		{
 			name: "with both cmd_id and category",
 			attrs: []slog.Attr{
-				slog.String("cmd_id", "a1b2c3d4"),
-				slog.String("category", "git"),
+				LogAttrKeyCmdID.Attr("a1b2c3d4"),
+				LogAttrKeyCategory.Attr("git"),
 			},
 			message: "test message",
 			want:    "2026-01-17 12:34:56 [DEBUG] [a1b2c3d4] git: test message\n",
@@ -275,8 +275,8 @@ func TestCLIHandler_WithAttrs_Chained(t *testing.T) {
 	handler := NewCLIHandler(&buf, slog.LevelDebug)
 
 	// Chain WithAttrs calls
-	h1 := handler.WithAttrs([]slog.Attr{slog.String("cmd_id", "a1b2c3d4")})
-	h2 := h1.WithAttrs([]slog.Attr{slog.String("category", "git")})
+	h1 := handler.WithAttrs([]slog.Attr{LogAttrKeyCmdID.Attr("a1b2c3d4")})
+	h2 := h1.WithAttrs([]slog.Attr{LogAttrKeyCategory.Attr("git")})
 
 	record := slog.NewRecord(fixedTime, slog.LevelDebug, "test message", 0)
 
@@ -297,11 +297,11 @@ func TestCLIHandler_RecordAttrsOverrideHandlerAttrs(t *testing.T) {
 
 	var buf bytes.Buffer
 	handler := NewCLIHandler(&buf, slog.LevelDebug)
-	handlerWithAttrs := handler.WithAttrs([]slog.Attr{slog.String("category", "config")})
+	handlerWithAttrs := handler.WithAttrs([]slog.Attr{LogAttrKeyCategory.Attr("config")})
 
 	record := slog.NewRecord(fixedTime, slog.LevelDebug, "test message", 0)
 	// Record attribute should override handler attribute
-	record.AddAttrs(slog.String("category", "git"))
+	record.AddAttrs(LogAttrKeyCategory.Attr("git"))
 
 	if err := handlerWithAttrs.Handle(t.Context(), record); err != nil {
 		t.Fatalf("Handle() error: %v", err)
