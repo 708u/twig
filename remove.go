@@ -79,7 +79,7 @@ func NewRemoveCommand(fs FileSystem, git *GitRunner, cfg *Config) *RemoveCommand
 
 // NewDefaultRemoveCommand creates a RemoveCommand with production defaults.
 func NewDefaultRemoveCommand(cfg *Config) *RemoveCommand {
-	return NewRemoveCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir), cfg)
+	return NewRemoveCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir, nil), cfg)
 }
 
 // RemovedWorktree holds the result of a single worktree removal.

@@ -3,6 +3,7 @@ package twig
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -118,24 +119,33 @@ func newGitError(op GitOp, err error) *GitError {
 type GitRunner struct {
 	Executor GitExecutor
 	Dir      string
+	Log      *slog.Logger
 }
 
 // NewGitRunner creates a new GitRunner with the default executor.
-func NewGitRunner(dir string) *GitRunner {
+func NewGitRunner(dir string, log *slog.Logger) *GitRunner {
+	if log == nil {
+		log = NewNopLogger()
+	}
 	return &GitRunner{
 		Executor: osGitExecutor{},
 		Dir:      dir,
+		Log:      log,
 	}
 }
 
 // InDir returns a GitRunner that executes commands in the specified directory.
 func (g *GitRunner) InDir(dir string) *GitRunner {
-	return &GitRunner{Executor: g.Executor, Dir: dir}
+	return &GitRunner{Executor: g.Executor, Dir: dir, Log: g.Log}
 }
 
 // Run executes git command with -C flag.
 func (g *GitRunner) Run(args ...string) ([]byte, error) {
-	return g.Executor.Run(append([]string{"-C", g.Dir}, args...)...)
+	fullArgs := append([]string{"-C", g.Dir}, args...)
+	if g.Log != nil {
+		g.Log.Debug(strings.Join(append([]string{"git"}, fullArgs...), " "), "category", LogCategoryGit)
+	}
+	return g.Executor.Run(fullArgs...)
 }
 
 type worktreeAddOptions struct {

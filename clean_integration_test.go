@@ -42,7 +42,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -101,7 +101,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -147,7 +147,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -207,7 +207,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -247,7 +247,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -284,7 +284,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -323,7 +323,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -387,7 +387,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -425,7 +425,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -467,7 +467,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -515,7 +515,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -562,7 +562,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -631,7 +631,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -693,7 +693,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -751,7 +751,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -828,7 +828,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -913,7 +913,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 
@@ -958,7 +958,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: cfgResult.Config,
 		}
 

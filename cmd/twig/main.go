@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -214,7 +215,7 @@ Use --file with --sync or --carry to target specific files:
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
-			git := twig.NewGitRunner(dir)
+			git := twig.NewGitRunner(dir, nil)
 			branches, err := git.BranchList()
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
@@ -241,7 +242,7 @@ Use --file with --sync or --carry to target specific files:
 			}
 
 			// Resolve branch to worktree path
-			git := twig.NewGitRunner(cwd)
+			git := twig.NewGitRunner(cwd, nil)
 			sourceWT, err := git.WorktreeFindByBranch(source)
 			if err != nil {
 				return fmt.Errorf("failed to find worktree for branch %q: %w", source, err)
@@ -260,7 +261,8 @@ Use --file with --sync or --carry to target specific files:
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			verbose, _ := cmd.Flags().GetBool("verbose")
+			verbosity, _ := cmd.Flags().GetCount("verbose")
+			verbose := verbosity >= 1
 			sync, _ := cmd.Flags().GetBool("sync")
 			quiet, _ := cmd.Flags().GetBool("quiet")
 			lock, _ := cmd.Flags().GetBool("lock")
@@ -287,7 +289,7 @@ Use --file with --sync or --carry to target specific files:
 			var carryFrom string
 			if carryEnabled {
 				carryValue, _ := cmd.Flags().GetString("carry")
-				git := twig.NewGitRunner(cwd)
+				git := twig.NewGitRunner(cwd, nil)
 				var err error
 				carryFrom, err = resolveCarryFrom(carryValue, originalCwd, git)
 				if err != nil {
@@ -331,12 +333,20 @@ Use --file with --sync or --carry to target specific files:
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			quiet, _ := cmd.Flags().GetBool("quiet")
+			verbosity, _ := cmd.Flags().GetCount("verbose")
+
+			// Create logger based on verbosity level
+			var log *slog.Logger
+			if verbosity >= 2 {
+				handler := twig.NewCLIHandler(cmd.ErrOrStderr(), twig.VerbosityToLevel(verbosity))
+				log = slog.New(handler)
+			}
 
 			var listCmd ListCommander
 			if o.listCommander != nil {
 				listCmd = o.listCommander
 			} else {
-				listCmd = twig.NewDefaultListCommand(cwd)
+				listCmd = twig.NewDefaultListCommand(cwd, log)
 			}
 			result, err := listCmd.Run()
 			if err != nil {
@@ -366,7 +376,8 @@ Safety checks (all must pass):
   - Not the main worktree`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			verbose, _ := cmd.Flags().GetBool("verbose")
+			verbosity, _ := cmd.Flags().GetCount("verbose")
+			verbose := verbosity >= 1
 			yes, _ := cmd.Flags().GetBool("yes")
 			check, _ := cmd.Flags().GetBool("check")
 			target, _ := cmd.Flags().GetString("target")
@@ -458,7 +469,7 @@ stop processing of remaining branches.`,
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
-			git := twig.NewGitRunner(dir)
+			git := twig.NewGitRunner(dir, nil)
 			branches, err := git.WorktreeListBranches()
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
@@ -473,7 +484,8 @@ stop processing of remaining branches.`,
 			return available, cobra.ShellCompDirectiveNoFileComp
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			verbose, _ := cmd.Flags().GetBool("verbose")
+			verbosity, _ := cmd.Flags().GetCount("verbose")
+			verbose := verbosity >= 1
 			forceCount, _ := cmd.Flags().GetCount("force")
 			check, _ := cmd.Flags().GetBool("check")
 
@@ -512,7 +524,7 @@ stop processing of remaining branches.`,
 
 	// Register flags
 	rootCmd.PersistentFlags().StringVarP(&dirFlag, "directory", "C", "", "Run as if twig was started in <path>")
-	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
+	rootCmd.PersistentFlags().CountP("verbose", "v", "Enable verbose output (-v for verbose, -vv for debug)")
 
 	addCmd.Flags().BoolP("sync", "s", false, "Sync uncommitted changes to new worktree")
 	addCmd.Flags().StringP("carry", "c", "", "Move uncommitted changes (<branch>: from specified worktree)")
@@ -532,14 +544,14 @@ stop processing of remaining branches.`,
 
 		// If --source is specified, resolve to that worktree
 		if source, _ := cmd.Flags().GetString("source"); source != "" {
-			git := twig.NewGitRunner(dir)
+			git := twig.NewGitRunner(dir, nil)
 			if sourceWT, findErr := git.WorktreeFindByBranch(source); findErr == nil {
 				dir = sourceWT.Path
 			}
 		}
 
 		// Get changed files from the target directory
-		git := twig.NewGitRunner(dir)
+		git := twig.NewGitRunner(dir, nil)
 		files, err := git.ChangedFiles()
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError

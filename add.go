@@ -47,7 +47,7 @@ func NewAddCommand(fs FileSystem, git *GitRunner, cfg *Config, opts AddOptions) 
 
 // NewDefaultAddCommand creates an AddCommand with production defaults.
 func NewDefaultAddCommand(cfg *Config, opts AddOptions) *AddCommand {
-	return NewAddCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir), cfg, opts)
+	return NewAddCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir, nil), cfg, opts)
 }
 
 // SymlinkResult holds information about a symlink operation.
