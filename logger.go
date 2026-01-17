@@ -2,18 +2,24 @@ package twig
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
+	"time"
 )
 
 // CLIHandler is a slog.Handler that outputs plain text for CLI usage.
-// Format: "2006-01-02 15:04:05 [LEVEL] category: message"
+// Format: "2006-01-02 15:04:05 [LEVEL] [cmd_id] category: message"
 type CLIHandler struct {
 	w     io.Writer
 	level slog.Level
+	attrs []slog.Attr
+	cmdID string
 	mu    sync.Mutex
 }
 
@@ -29,7 +35,7 @@ func (h *CLIHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 // Handle writes a log record to the handler's writer.
-// Format: 2006-01-02 15:04:05 [LEVEL] category: message
+// Format: 2006-01-02 15:04:05 [LEVEL] [cmd_id] category: message
 func (h *CLIHandler) Handle(ctx context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -37,7 +43,7 @@ func (h *CLIHandler) Handle(ctx context.Context, r slog.Record) error {
 	timestamp := r.Time.Format("2006-01-02 15:04:05")
 	level := strings.ToUpper(r.Level.String())
 
-	// Get category from attributes
+	// Get category from record attributes (takes precedence over handler attrs)
 	var category string
 	r.Attrs(func(a slog.Attr) bool {
 		if a.Key == "category" {
@@ -47,18 +53,60 @@ func (h *CLIHandler) Handle(ctx context.Context, r slog.Record) error {
 		return true
 	})
 
-	if category != "" {
-		_, err := fmt.Fprintf(h.w, "%s [%s] %s: %s\n", timestamp, level, category, r.Message)
-		return err
+	// Fall back to handler's stored attrs if not found in record
+	if category == "" {
+		for _, a := range h.attrs {
+			if a.Key == "category" {
+				category = a.Value.String()
+				break
+			}
+		}
 	}
-	_, err := fmt.Fprintf(h.w, "%s [%s] %s\n", timestamp, level, r.Message)
+
+	// Build output with optional cmd_id
+	var sb strings.Builder
+	sb.WriteString(timestamp)
+	sb.WriteString(" [")
+	sb.WriteString(level)
+	sb.WriteString("]")
+
+	if h.cmdID != "" {
+		sb.WriteString(" [")
+		sb.WriteString(h.cmdID)
+		sb.WriteString("]")
+	}
+
+	if category != "" {
+		sb.WriteString(" ")
+		sb.WriteString(category)
+		sb.WriteString(": ")
+	} else {
+		sb.WriteString(" ")
+	}
+	sb.WriteString(r.Message)
+	sb.WriteString("\n")
+
+	_, err := h.w.Write([]byte(sb.String()))
 	return err
 }
 
 // WithAttrs returns a new handler with the given attributes.
-// Currently not implemented: attrs are ignored. Use Handle's attrs instead.
-func (h *CLIHandler) WithAttrs(_ []slog.Attr) slog.Handler {
-	return h
+// The "cmd_id" attribute is stored separately for efficient access.
+func (h *CLIHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	newHandler := &CLIHandler{
+		w:     h.w,
+		level: h.level,
+		attrs: slices.Clone(h.attrs),
+		cmdID: h.cmdID,
+	}
+	for _, a := range attrs {
+		if a.Key == "cmd_id" {
+			newHandler.cmdID = a.Value.String()
+		} else {
+			newHandler.attrs = append(newHandler.attrs, a)
+		}
+	}
+	return newHandler
 }
 
 // WithGroup returns a new handler with the given group name.
@@ -97,3 +145,25 @@ const (
 	LogCategoryConfig = "config"
 	LogCategoryGlob   = "glob"
 )
+
+// DefaultCommandIDBytes is the number of random bytes for command ID generation.
+// This produces a 8-character hex string (4 bytes = 8 hex chars).
+const DefaultCommandIDBytes = 4
+
+// GenerateCommandID generates a random command ID for log grouping.
+// Returns an 8-character hex string (e.g., "a1b2c3d4").
+func GenerateCommandID() string {
+	return GenerateCommandIDWithLength(DefaultCommandIDBytes)
+}
+
+// GenerateCommandIDWithLength generates a command ID with the specified byte length.
+// The returned string is hex-encoded, so it has 2*byteLen characters.
+func GenerateCommandIDWithLength(byteLen int) string {
+	b := make([]byte, byteLen)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp-based ID if crypto/rand fails
+		mask := uint64(1<<(byteLen*8)) - 1
+		return fmt.Sprintf("%0*x", byteLen*2, time.Now().UnixNano()&int64(mask))
+	}
+	return hex.EncodeToString(b)
+}

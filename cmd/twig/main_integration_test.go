@@ -357,9 +357,9 @@ func TestListCommand_VerboseFlag_Integration(t *testing.T) {
 			t.Fatalf("Execute failed: %v", err)
 		}
 
-		// Verify debug log is output to stderr
-		if !strings.Contains(stderr.String(), "[DEBUG] git:") {
-			t.Errorf("stderr should contain debug log, got: %q", stderr.String())
+		// Verify debug log is output to stderr (format: [DEBUG] [cmd_id] git:)
+		if !strings.Contains(stderr.String(), "[DEBUG]") || !strings.Contains(stderr.String(), "git:") {
+			t.Errorf("stderr should contain debug log with git category, got: %q", stderr.String())
 		}
 
 		// Verify normal output is still on stdout
