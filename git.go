@@ -124,11 +124,7 @@ type GitRunner struct {
 
 // NewGitRunner creates a new GitRunner with the default executor.
 func NewGitRunner(dir string) *GitRunner {
-	return &GitRunner{
-		Executor: osGitExecutor{},
-		Dir:      dir,
-		Log:      NewNopLogger(),
-	}
+	return NewGitRunnerWithLogger(dir, nil)
 }
 
 // NewGitRunnerWithLogger creates a new GitRunner with a custom logger.
