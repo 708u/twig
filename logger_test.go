@@ -4,18 +4,20 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
-	"regexp"
 	"testing"
+	"time"
 )
 
 func TestCLIHandler_Handle(t *testing.T) {
+	fixedTime := time.Date(2026, 1, 17, 12, 34, 56, 0, time.UTC)
+
 	tests := []struct {
 		name     string
 		level    slog.Level
 		logLevel slog.Level
 		message  string
 		category string
-		want     string // format after timestamp (e.g., "[DEBUG] git: message\n")
+		want     string
 	}{
 		{
 			name:     "debug level with category",
@@ -23,7 +25,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 			logLevel: slog.LevelDebug,
 			message:  "checking branch",
 			category: "debug",
-			want:     "[DEBUG] debug: checking branch\n",
+			want:     "2026-01-17 12:34:56 [DEBUG] debug: checking branch\n",
 		},
 		{
 			name:     "debug level with git category",
@@ -31,7 +33,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 			logLevel: slog.LevelDebug,
 			message:  "worktree add -b feat/new",
 			category: "git",
-			want:     "[DEBUG] git: worktree add -b feat/new\n",
+			want:     "2026-01-17 12:34:56 [DEBUG] git: worktree add -b feat/new\n",
 		},
 		{
 			name:     "info level without category",
@@ -39,7 +41,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 			logLevel: slog.LevelInfo,
 			message:  "operation complete",
 			category: "",
-			want:     "[INFO] operation complete\n",
+			want:     "2026-01-17 12:34:56 [INFO] operation complete\n",
 		},
 		{
 			name:     "warn level without category",
@@ -47,38 +49,27 @@ func TestCLIHandler_Handle(t *testing.T) {
 			logLevel: slog.LevelWarn,
 			message:  "something happened",
 			category: "",
-			want:     "[WARN] something happened\n",
+			want:     "2026-01-17 12:34:56 [WARN] something happened\n",
 		},
 	}
-
-	// Pattern: YYYY-MM-DD HH:MM:SS followed by the rest
-	timestampPattern := regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} `)
 
 	ctx := context.Background()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			handler := NewCLIHandler(&buf, tt.level)
-			logger := slog.New(handler)
 
+			record := slog.NewRecord(fixedTime, tt.logLevel, tt.message, 0)
 			if tt.category != "" {
-				logger.Log(ctx, tt.logLevel, tt.message, "category", tt.category)
-			} else {
-				logger.Log(ctx, tt.logLevel, tt.message)
+				record.AddAttrs(slog.String("category", tt.category))
 			}
 
-			got := buf.String()
-
-			// Verify timestamp format exists
-			if !timestampPattern.MatchString(got) {
-				t.Errorf("output missing timestamp prefix: %q", got)
-				return
+			if err := handler.Handle(ctx, record); err != nil {
+				t.Fatalf("Handle() error: %v", err)
 			}
 
-			// Strip timestamp and compare rest
-			gotWithoutTimestamp := timestampPattern.ReplaceAllString(got, "")
-			if gotWithoutTimestamp != tt.want {
-				t.Errorf("got %q, want %q", gotWithoutTimestamp, tt.want)
+			if got := buf.String(); got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
 	}
