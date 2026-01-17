@@ -231,7 +231,8 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	result.GitOutput = gitOutput
 
 	// Initialize submodules in new worktree
-	if c.shouldInitSubmodules() {
+	// Priority: CLI flag (forces enable) > config > default (false)
+	if c.InitSubmodules || (c.Config.InitSubmodules != nil && *c.Config.InitSubmodules) {
 		wtGit := c.Git.InDir(wtPath)
 		hasSubmodules, _ := wtGit.HasSubmodules()
 		if hasSubmodules {
@@ -276,21 +277,6 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	result.Symlinks = symlinks
 
 	return result, nil
-}
-
-// shouldInitSubmodules determines if submodules should be initialized.
-// Priority: CLI flag (forces enable) > config > default (false)
-func (c *AddCommand) shouldInitSubmodules() bool {
-	// CLI flag forces enable
-	if c.InitSubmodules {
-		return true
-	}
-	// Config value
-	if c.Config.InitSubmodules != nil {
-		return *c.Config.InitSubmodules
-	}
-	// Default: disabled
-	return false
 }
 
 func (c *AddCommand) createWorktree(branch, path string) ([]byte, error) {
