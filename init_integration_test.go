@@ -68,6 +68,9 @@ func TestInitCommand_Integration(t *testing.T) {
 		if !strings.Contains(contentStr, "# worktree_destination_base_dir") {
 			t.Error("settings should contain commented worktree_destination_base_dir")
 		}
+		if !strings.Contains(contentStr, "# init_submodules") {
+			t.Error("settings should contain commented init_submodules")
+		}
 	})
 
 	t.Run("SkipsExistingFile", func(t *testing.T) {

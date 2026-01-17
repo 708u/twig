@@ -20,6 +20,9 @@ symlinks = []
 
 # Additional symlink patterns (collected from both project and local configs)
 # extra_symlinks = [".envrc", ".tool-versions"]
+
+# Initialize submodules when creating worktrees (default: false)
+# init_submodules = true
 `
 
 // InitCommand initializes twig configuration in a directory.

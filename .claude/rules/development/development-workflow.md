@@ -81,3 +81,17 @@ go test -tags=integration ./...
 
 This command runs both unit tests and integration tests.
 All tests must pass before the modification is considered complete.
+
+### 6. Run Linter
+
+Run golangci-lint to check code quality:
+
+```bash
+make lint
+make fmt
+```
+
+- `make lint`: Check for lint errors
+- `make fmt`: Auto-fix formatting issues
+
+All lint errors must be resolved before the modification is considered complete.
