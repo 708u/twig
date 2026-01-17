@@ -86,7 +86,7 @@ func (h *CLIHandler) Handle(ctx context.Context, r slog.Record) error {
 	sb.WriteString(r.Message)
 	sb.WriteString("\n")
 
-	_, err := h.w.Write([]byte(sb.String()))
+	_, err := io.WriteString(h.w, sb.String())
 	return err
 }
 
