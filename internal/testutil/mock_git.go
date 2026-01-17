@@ -2,10 +2,28 @@ package testutil
 
 import (
 	"context"
-	"errors"
+	"os"
 	"slices"
 	"strings"
 )
+
+// MockExitError simulates exec.ExitError for testing.
+type MockExitError struct {
+	Code int
+}
+
+func (e *MockExitError) Error() string {
+	return "exit status " + string(rune('0'+e.Code))
+}
+
+func (e *MockExitError) ExitCode() int {
+	return e.Code
+}
+
+// Satisfy os.ProcessState interface requirement
+func (e *MockExitError) ProcessState() *os.ProcessState {
+	return nil
+}
 
 // MockWorktree represents a worktree entry for testing.
 type MockWorktree struct {
@@ -177,7 +195,7 @@ func (m *MockGitExecutor) handleRevParse(args []string) ([]byte, error) {
 			return nil, nil
 		}
 	}
-	return nil, errors.New("not found")
+	return nil, &MockExitError{Code: 1}
 }
 
 func (m *MockGitExecutor) handleWorktreeList() ([]byte, error) {
