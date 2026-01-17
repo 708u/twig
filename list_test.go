@@ -97,6 +97,29 @@ func TestListCommand_Run(t *testing.T) {
 	}
 }
 
+func TestNewListCommand_NilLogger(t *testing.T) {
+	t.Parallel()
+
+	mock := &testutil.MockGitExecutor{
+		Worktrees: []testutil.MockWorktree{
+			{Path: "/repo/main", Branch: "main"},
+		},
+	}
+	git := &GitRunner{Executor: mock, Log: NewNopLogger()}
+
+	// Should not panic when log is nil
+	cmd := NewListCommand(git, nil)
+	if cmd.Log == nil {
+		t.Error("Log should not be nil after NewListCommand")
+	}
+
+	// Should be able to run without panic
+	_, err := cmd.Run()
+	if err != nil {
+		t.Errorf("Run() error = %v", err)
+	}
+}
+
 func TestListResult_Format(t *testing.T) {
 	t.Parallel()
 

@@ -6,6 +6,16 @@ import (
 	"github.com/708u/twig/internal/testutil"
 )
 
+func TestNewGitRunnerWithLogger_NilLogger(t *testing.T) {
+	t.Parallel()
+
+	// Should not panic when log is nil
+	runner := NewGitRunnerWithLogger("/tmp", nil)
+	if runner.Log == nil {
+		t.Error("Log should not be nil after NewGitRunnerWithLogger")
+	}
+}
+
 func TestGitRunner_IsBranchUpstreamGone(t *testing.T) {
 	t.Parallel()
 
