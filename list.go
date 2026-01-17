@@ -16,9 +16,6 @@ type ListCommand struct {
 
 // NewListCommand creates a ListCommand with explicit dependencies (for testing).
 func NewListCommand(git *GitRunner, log *slog.Logger) *ListCommand {
-	if log == nil {
-		log = NewNopLogger()
-	}
 	return &ListCommand{
 		Git: git,
 		Log: log,
