@@ -35,7 +35,7 @@ func TestAddCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		addResult, err := cmd.Run("feature/test")
+		addResult, err := cmd.Run(t.Context(), "feature/test")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -109,7 +109,7 @@ func TestAddCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/default-dest")
+		_, err = cmd.Run(t.Context(), "feature/default-dest")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -144,7 +144,7 @@ func TestAddCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("existing-branch")
+		_, err = cmd.Run(t.Context(), "existing-branch")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -173,7 +173,7 @@ func TestAddCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("test-branch")
+		_, err = cmd.Run(t.Context(), "test-branch")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -237,7 +237,7 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/local-override")
+		_, err = cmd.Run(t.Context(), "feature/local-override")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -305,7 +305,7 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/extra-symlinks")
+		_, err = cmd.Run(t.Context(), "feature/extra-symlinks")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -375,7 +375,7 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/local-extra")
+		_, err = cmd.Run(t.Context(), "feature/local-extra")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -449,7 +449,7 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/both-extra")
+		_, err = cmd.Run(t.Context(), "feature/both-extra")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -528,7 +528,7 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/local-dest")
+		_, err = cmd.Run(t.Context(), "feature/local-dest")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -568,7 +568,7 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		addResult, err := cmd.Run("feature/warn-test")
+		addResult, err := cmd.Run(t.Context(), "feature/warn-test")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -641,7 +641,7 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/glob-test")
+		_, err = cmd.Run(t.Context(), "feature/glob-test")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -707,7 +707,7 @@ worktree_destination_base_dir = %q
 			Sync:   true,
 		}
 
-		addResult, err := cmd.Run("feature/sync-test")
+		addResult, err := cmd.Run(t.Context(), "feature/sync-test")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -770,7 +770,7 @@ worktree_destination_base_dir = %q
 			CarryFrom: mainDir,
 		}
 
-		addResult, err := cmd.Run("feature/carry-test")
+		addResult, err := cmd.Run(t.Context(), "feature/carry-test")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -840,7 +840,7 @@ worktree_destination_base_dir = %q
 			CarryFrom: featureWtPath, // Carry from different worktree
 		}
 
-		addResult, err := cmd.Run("feature/carry-from-other")
+		addResult, err := cmd.Run(t.Context(), "feature/carry-from-other")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -905,7 +905,7 @@ worktree_destination_base_dir = %q
 			Sync:   true,
 		}
 
-		addResult, err := cmd.Run("feature/no-changes")
+		addResult, err := cmd.Run(t.Context(), "feature/no-changes")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -955,7 +955,7 @@ worktree_destination_base_dir = %q
 			FilePatterns: []string{"*.go"},
 		}
 
-		addResult, err := cmd.Run("feature/sync-go-only")
+		addResult, err := cmd.Run(t.Context(), "feature/sync-go-only")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1049,7 +1049,7 @@ worktree_destination_base_dir = %q
 			FilePatterns: []string{"*.go", "cmd/**"},
 		}
 
-		addResult, err := cmd.Run("feature/sync-multi-pattern")
+		addResult, err := cmd.Run(t.Context(), "feature/sync-multi-pattern")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1100,7 +1100,7 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		addResult, err := cmd.Run("feature/quiet-test")
+		addResult, err := cmd.Run(t.Context(), "feature/quiet-test")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1141,7 +1141,7 @@ worktree_destination_base_dir = %q
 			Lock:   true,
 		}
 
-		_, err = cmd.Run("feature/locked")
+		_, err = cmd.Run(t.Context(), "feature/locked")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1171,7 +1171,7 @@ worktree_destination_base_dir = %q
 			LockReason: "USB drive work",
 		}
 
-		_, err = cmd.Run("feature/locked-reason")
+		_, err = cmd.Run(t.Context(), "feature/locked-reason")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1216,7 +1216,7 @@ worktree_destination_base_dir = %q
 			FilePatterns: []string{"*.go"},
 		}
 
-		addResult, err := cmd.Run("feature/carry-go-only")
+		addResult, err := cmd.Run(t.Context(), "feature/carry-go-only")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1313,7 +1313,7 @@ worktree_destination_base_dir = %q
 			FilePatterns: []string{"*.go", "cmd/**"},
 		}
 
-		_, err = cmd.Run("feature/carry-multiple")
+		_, err = cmd.Run(t.Context(), "feature/carry-multiple")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1387,7 +1387,7 @@ worktree_destination_base_dir = %q
 			FilePatterns: []string{"**/*.go"},
 		}
 
-		_, err = cmd.Run("feature/globstar")
+		_, err = cmd.Run(t.Context(), "feature/globstar")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1491,7 +1491,7 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/remote-only")
+		_, err = cmd.Run(t.Context(), "feature/remote-only")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1589,7 +1589,7 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/both-local-remote")
+		_, err = cmd.Run(t.Context(), "feature/both-local-remote")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1670,7 +1670,7 @@ worktree_destination_base_dir = %q
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/brand-new")
+		_, err = cmd.Run(t.Context(), "feature/brand-new")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1740,7 +1740,7 @@ init_submodules = true
 
 		cmd := NewDefaultAddCommand(result.Config, AddOptions{})
 
-		addResult, err := cmd.Run("feature/with-submodule")
+		addResult, err := cmd.Run(t.Context(), "feature/with-submodule")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1806,7 +1806,7 @@ init_submodules = true
 
 		cmd := NewDefaultAddCommand(result.Config, AddOptions{})
 
-		addResult, err := cmd.Run("feature/no-submodule-init")
+		addResult, err := cmd.Run(t.Context(), "feature/no-submodule-init")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -1872,7 +1872,7 @@ init_submodules = false
 			InitSubmodules: true,
 		})
 
-		addResult, err := cmd.Run("feature/cli-override")
+		addResult, err := cmd.Run(t.Context(), "feature/cli-override")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}

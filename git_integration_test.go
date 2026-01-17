@@ -24,7 +24,7 @@ func TestGitRunner_WorktreeFindByBranch_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		got, err := runner.WorktreeFindByBranch("feature/test")
+		got, err := runner.WorktreeFindByBranch(t.Context(), "feature/test")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -40,7 +40,7 @@ func TestGitRunner_WorktreeFindByBranch_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		_, err := runner.WorktreeFindByBranch("nonexistent")
+		_, err := runner.WorktreeFindByBranch(t.Context(), "nonexistent")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -63,7 +63,7 @@ func TestGitRunner_WorktreeRemove_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		_, err := runner.WorktreeRemove(wtPath)
+		_, err := runner.WorktreeRemove(t.Context(), wtPath)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -81,7 +81,7 @@ func TestGitRunner_WorktreeRemove_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		_, err := runner.WorktreeRemove("/nonexistent/path")
+		_, err := runner.WorktreeRemove(t.Context(), "/nonexistent/path")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -108,7 +108,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		files, err := runner.ChangedFiles()
+		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -127,7 +127,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		files, err := runner.ChangedFiles()
+		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -151,7 +151,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		files, err := runner.ChangedFiles()
+		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -169,7 +169,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		files, err := runner.ChangedFiles()
+		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -198,7 +198,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		files, err := runner.ChangedFiles()
+		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -222,7 +222,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		files, err := runner.ChangedFiles()
+		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -245,7 +245,7 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		_, err := runner.BranchDelete("to-delete")
+		_, err := runner.BranchDelete(t.Context(), "to-delete")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -267,7 +267,7 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		_, err := runner.BranchDelete("unmerged", WithForceDelete())
+		_, err := runner.BranchDelete(t.Context(), "unmerged", WithForceDelete())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -285,7 +285,7 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 
 		runner := NewGitRunner(mainDir)
 
-		_, err := runner.BranchDelete("nonexistent")
+		_, err := runner.BranchDelete(t.Context(), "nonexistent")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}

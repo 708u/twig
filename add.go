@@ -1,6 +1,7 @@
 package twig
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -152,7 +153,7 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 }
 
 // Run creates a new worktree for the given branch name.
-func (c *AddCommand) Run(name string) (AddResult, error) {
+func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	var result AddResult
 	result.Branch = name
 
@@ -187,7 +188,7 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	// Stash changes if sync or carry is enabled
 	var stashHash string
 	if stashMsg != "" {
-		hasChanges, err := stashSourceGit.HasChanges()
+		hasChanges, err := stashSourceGit.HasChanges(ctx)
 		if err != nil {
 			return result, fmt.Errorf("failed to check for changes: %w", err)
 		}
@@ -213,7 +214,7 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 					}
 				}
 			}
-			hash, err := stashSourceGit.StashPush(stashMsg, pathspecs...)
+			hash, err := stashSourceGit.StashPush(ctx, stashMsg, pathspecs...)
 			if err != nil {
 				return result, fmt.Errorf("failed to stash changes: %w", err)
 			}
@@ -221,10 +222,10 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 		}
 	}
 
-	gitOutput, err := c.createWorktree(name, wtPath)
+	gitOutput, err := c.createWorktree(ctx, name, wtPath)
 	if err != nil {
 		if stashHash != "" {
-			_, _ = stashSourceGit.StashPopByHash(stashHash)
+			_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
 		}
 		return result, err
 	}
@@ -233,7 +234,7 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	// Initialize submodules in new worktree (CLI flag forces enable)
 	if c.InitSubmodules || c.Config.ShouldInitSubmodules() {
 		wtGit := c.Git.InDir(wtPath)
-		count, initErr := wtGit.SubmoduleUpdate()
+		count, initErr := wtGit.SubmoduleUpdate(ctx)
 		if initErr != nil {
 			result.SubmoduleInit.Attempted = true
 			result.SubmoduleInit.Skipped = true
@@ -246,19 +247,19 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 
 	// Apply stashed changes to new worktree
 	if stashHash != "" {
-		_, err = c.Git.InDir(wtPath).StashApplyByHash(stashHash)
+		_, err = c.Git.InDir(wtPath).StashApplyByHash(ctx, stashHash)
 		if err != nil {
-			_, _ = c.Git.WorktreeRemove(wtPath, WithForceRemove(WorktreeForceLevelUnclean))
-			_, _ = stashSourceGit.StashPopByHash(stashHash)
+			_, _ = c.Git.WorktreeRemove(ctx, wtPath, WithForceRemove(WorktreeForceLevelUnclean))
+			_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
 			return result, fmt.Errorf("failed to apply changes to new worktree: %w", err)
 		}
 		if isCarry {
 			// Carry: drop stash (source becomes clean)
-			_, _ = stashSourceGit.StashDropByHash(stashHash)
+			_, _ = stashSourceGit.StashDropByHash(ctx, stashHash)
 			result.ChangesCarried = true
 		} else {
 			// Sync: restore stash in source (both have changes)
-			_, err = stashSourceGit.StashPopByHash(stashHash)
+			_, err = stashSourceGit.StashPopByHash(ctx, stashHash)
 			if err != nil {
 				return result, fmt.Errorf("failed to restore changes in source: %w", err)
 			}
@@ -276,14 +277,18 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	return result, nil
 }
 
-func (c *AddCommand) createWorktree(branch, path string) ([]byte, error) {
+func (c *AddCommand) createWorktree(ctx context.Context, branch, path string) ([]byte, error) {
 	if _, err := c.FS.Stat(path); err == nil {
 		return nil, fmt.Errorf("directory already exists: %s", path)
 	}
 
 	var opts []WorktreeAddOption
-	if c.Git.LocalBranchExists(branch) {
-		branches, err := c.Git.WorktreeListBranches()
+	exists, err := c.Git.LocalBranchExists(ctx, branch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check branch existence: %w", err)
+	}
+	if exists {
+		branches, err := c.Git.WorktreeListBranches(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list worktree branches: %w", err)
 		}
@@ -291,14 +296,14 @@ func (c *AddCommand) createWorktree(branch, path string) ([]byte, error) {
 			return nil, fmt.Errorf("branch %s is already checked out in another worktree", branch)
 		}
 	} else {
-		remote, err := c.Git.FindRemoteForBranch(branch)
+		remote, err := c.Git.FindRemoteForBranch(ctx, branch)
 		if err != nil {
 			return nil, err
 		}
 
 		if remote != "" {
 			// Remote branch found, fetch it
-			if err := c.Git.Fetch(remote, branch); err != nil {
+			if err := c.Git.Fetch(ctx, remote, branch); err != nil {
 				return nil, fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
 			}
 			// After fetch, git worktree add will auto-track the remote branch
@@ -315,7 +320,7 @@ func (c *AddCommand) createWorktree(branch, path string) ([]byte, error) {
 		}
 	}
 
-	output, err := c.Git.WorktreeAdd(path, branch, opts...)
+	output, err := c.Git.WorktreeAdd(ctx, path, branch, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create worktree: %w", err)
 	}

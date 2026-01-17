@@ -65,7 +65,7 @@ func TestListCommand_Run(t *testing.T) {
 				Git: &GitRunner{Executor: mock},
 			}
 
-			result, err := cmd.Run()
+			result, err := cmd.Run(t.Context())
 
 			if tt.wantErr {
 				if err == nil {

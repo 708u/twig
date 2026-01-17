@@ -40,7 +40,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/to-remove", mainDir, RemoveOptions{})
+		removeResult, err := cmd.Run(t.Context(), "feature/to-remove", mainDir, RemoveOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -79,7 +79,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/dry-run-test", mainDir, RemoveOptions{Check: true})
+		removeResult, err := cmd.Run(t.Context(), "feature/dry-run-test", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -124,7 +124,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// First, verify removal without --force fails with SkipError
-		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{})
+		_, err = cmd.Run(t.Context(), "feature/force-test", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for uncommitted changes without --force")
 		}
@@ -138,7 +138,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Now verify -f (WorktreeForceLevelUnclean) succeeds for uncommitted changes
-		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{Force: WorktreeForceLevelUnclean})
+		_, err = cmd.Run(t.Context(), "feature/force-test", mainDir, RemoveOptions{Force: WorktreeForceLevelUnclean})
 		if err != nil {
 			t.Fatalf("Run with force failed: %v", err)
 		}
@@ -171,7 +171,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Removal without --force should fail with SkipError
-		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{})
+		_, err = cmd.Run(t.Context(), "feature/locked-test", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for locked worktree without --force")
 		}
@@ -191,13 +191,13 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Verify -f (WorktreeForceLevelUnclean) still fails for locked worktree
-		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{Force: WorktreeForceLevelUnclean})
+		_, err = cmd.Run(t.Context(), "feature/locked-test", mainDir, RemoveOptions{Force: WorktreeForceLevelUnclean})
 		if err == nil {
 			t.Fatal("expected error for locked worktree with single -f")
 		}
 
 		// Now verify -ff (WorktreeForceLevelLocked) removes the locked worktree
-		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{Force: WorktreeForceLevelLocked})
+		_, err = cmd.Run(t.Context(), "feature/locked-test", mainDir, RemoveOptions{Force: WorktreeForceLevelLocked})
 		if err != nil {
 			t.Fatalf("force remove of locked worktree with -ff failed: %v", err)
 		}
@@ -233,7 +233,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/inside-test", wtPath, RemoveOptions{})
+		_, err = cmd.Run(t.Context(), "feature/inside-test", wtPath, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error when inside worktree, got nil")
 		}
@@ -264,7 +264,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("orphan-branch", mainDir, RemoveOptions{})
+		_, err = cmd.Run(t.Context(), "orphan-branch", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for branch not in worktree, got nil")
 		}
@@ -300,7 +300,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		// Remove all worktrees
 		var removeResult RemoveResult
 		for _, branch := range branches {
-			wt, err := cmd.Run(branch, mainDir, RemoveOptions{})
+			wt, err := cmd.Run(t.Context(), branch, mainDir, RemoveOptions{})
 			if err != nil {
 				wt.Branch = branch
 				wt.Err = err
@@ -360,7 +360,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		// Try to remove both
 		var removeResult RemoveResult
 		for _, branch := range []string{validBranch, invalidBranch} {
-			wt, err := cmd.Run(branch, mainDir, RemoveOptions{})
+			wt, err := cmd.Run(t.Context(), branch, mainDir, RemoveOptions{})
 			if err != nil {
 				wt.Branch = branch
 				wt.Err = err
@@ -421,7 +421,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feat/nested/very/deep", mainDir, RemoveOptions{})
+		removeResult, err := cmd.Run(t.Context(), "feat/nested/very/deep", mainDir, RemoveOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -473,7 +473,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Remove first worktree
-		removeResult, err := cmd.Run("feat/test1", mainDir, RemoveOptions{})
+		removeResult, err := cmd.Run(t.Context(), "feat/test1", mainDir, RemoveOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -494,7 +494,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Now remove second worktree
-		removeResult, err = cmd.Run("feat/test2", mainDir, RemoveOptions{})
+		removeResult, err = cmd.Run(t.Context(), "feat/test2", mainDir, RemoveOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -530,7 +530,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feat/dry-cleanup", mainDir, RemoveOptions{Check: true})
+		removeResult, err := cmd.Run(t.Context(), "feat/dry-cleanup", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -595,7 +595,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/prunable-test", mainDir, RemoveOptions{})
+		removeResult, err := cmd.Run(t.Context(), "feature/prunable-test", mainDir, RemoveOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -641,7 +641,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/prunable-dry-run", mainDir, RemoveOptions{Check: true})
+		removeResult, err := cmd.Run(t.Context(), "feature/prunable-dry-run", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -694,7 +694,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Remove with force option
-		removeResult, err := cmd.Run("feature/prunable-force", mainDir, RemoveOptions{
+		removeResult, err := cmd.Run(t.Context(), "feature/prunable-force", mainDir, RemoveOptions{
 			Force: WorktreeForceLevelUnclean,
 		})
 		if err != nil {
@@ -762,7 +762,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Check should return SkipDirtySubmodule
-		checkResult, err := cmd.Check("feature/with-submodule", CheckOptions{
+		checkResult, err := cmd.Check(t.Context(), "feature/with-submodule", CheckOptions{
 			Cwd: mainDir,
 		})
 		if err != nil {
@@ -777,7 +777,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Run should also fail with SkipError
-		_, err = cmd.Run("feature/with-submodule", mainDir, RemoveOptions{})
+		_, err = cmd.Run(t.Context(), "feature/with-submodule", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for dirty submodule")
 		}
@@ -830,7 +830,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Check should pass (clean submodule)
-		checkResult, err := cmd.Check("feature/clean-submodule", CheckOptions{
+		checkResult, err := cmd.Check(t.Context(), "feature/clean-submodule", CheckOptions{
 			Cwd: mainDir,
 		})
 		if err != nil {
@@ -842,7 +842,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Run with Force to delete unmerged branch (auto-force handles worktree removal)
-		_, err = cmd.Run("feature/clean-submodule", mainDir, RemoveOptions{
+		_, err = cmd.Run(t.Context(), "feature/clean-submodule", mainDir, RemoveOptions{
 			Force: WorktreeForceLevelUnclean,
 		})
 		if err != nil {
@@ -900,7 +900,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Test Check() returns ChangedFiles
-		checkResult, err := cmd.Check("feature/changed-files-test", CheckOptions{
+		checkResult, err := cmd.Check(t.Context(), "feature/changed-files-test", CheckOptions{
 			Cwd: mainDir,
 		})
 		if err != nil {
@@ -929,7 +929,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Test Run() also returns ChangedFiles in result
-		removeResult, err := cmd.Run("feature/changed-files-test", mainDir, RemoveOptions{})
+		removeResult, err := cmd.Run(t.Context(), "feature/changed-files-test", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for uncommitted changes")
 		}
@@ -983,7 +983,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Run with --force should succeed
-		_, err = cmd.Run("feature/force-submodule", mainDir, RemoveOptions{
+		_, err = cmd.Run(t.Context(), "feature/force-submodule", mainDir, RemoveOptions{
 			Force: WorktreeForceLevelUnclean,
 		})
 		if err != nil {

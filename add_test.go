@@ -450,7 +450,7 @@ func TestAddCommand_Run(t *testing.T) {
 				FilePatterns: tt.filePatterns,
 			}
 
-			result, err := cmd.Run(tt.branch)
+			result, err := cmd.Run(t.Context(), tt.branch)
 
 			if tt.wantErr {
 				if err == nil {
@@ -571,7 +571,7 @@ func TestAddCommand_Run_Lock(t *testing.T) {
 				LockReason: tt.lockReason,
 			}
 
-			_, err := cmd.Run(tt.branch)
+			_, err := cmd.Run(t.Context(), tt.branch)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -853,7 +853,7 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 				InitSubmodules: tt.initSubmodules,
 			}
 
-			result, err := cmd.Run(tt.branch)
+			result, err := cmd.Run(t.Context(), tt.branch)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
