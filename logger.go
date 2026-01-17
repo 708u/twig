@@ -4,13 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"log/slog"
 	"slices"
 	"strings"
 	"sync"
-	"time"
 )
 
 // CLIHandler is a slog.Handler that outputs plain text for CLI usage.
@@ -183,9 +181,7 @@ func GenerateCommandID() string {
 func GenerateCommandIDWithLength(byteLen int) string {
 	b := make([]byte, byteLen)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback to timestamp-based ID if crypto/rand fails
-		mask := uint64(1<<(byteLen*8)) - 1
-		return fmt.Sprintf("%0*x", byteLen*2, time.Now().UnixNano()&int64(mask))
+		return ""
 	}
 	return hex.EncodeToString(b)
 }
