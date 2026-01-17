@@ -127,7 +127,8 @@ func (r RemoveResult) ErrorCount() int {
 func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 	var stdout, stderr strings.Builder
 
-	for _, wt := range r.Removed {
+	for i := range r.Removed {
+		wt := &r.Removed[i]
 		if wt.Err != nil {
 			formatRemoveError(&stderr, wt.Branch, wt.Err, opts.Verbose, wt.ChangedFiles)
 			continue
