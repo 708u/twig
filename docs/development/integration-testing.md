@@ -378,6 +378,17 @@ testutil.RunGit(t, submodulePath, "commit", "-m", "advance")
    committing
 4. **Use `testutil.RunGit`** helper for consistent error handling
 
+## Test Naming
+
+Name tests based on external behavior, not internal implementation.
+
+Test names should describe what a user observes from outside the system. Avoid
+naming tests after internal mechanisms that users don't interact with directly.
+
+For example, if a feature allows deletion without the `--force` flag, name the
+test to reflect that no force is required, rather than describing internal
+implementation details like which git flag is used internally.
+
 ## Best Practices
 
 - Use `t.Parallel()` for test isolation and performance (except when using
