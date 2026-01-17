@@ -108,6 +108,7 @@ Configure in `.twig/settings.toml`:
 - `worktree_destination_base_dir`: Destination directory for worktrees
 - `default_source`: Source branch for symlinks (creates symlinks from main even when adding from a derived worktree)
 - `symlinks`: Glob patterns for symlink targets
+- `init_submodules`: Initialize submodules when creating worktrees
 
 Personal settings can be overridden in `.twig/settings.local.toml` (.gitignore recommended).
 
