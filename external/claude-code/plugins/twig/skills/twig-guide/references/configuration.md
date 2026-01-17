@@ -56,6 +56,22 @@ Additional symlink patterns. Collected from both project and local configs.
 extra_symlinks = [".tool-versions", ".claude"]
 ```
 
+### init_submodules
+
+Enable automatic submodule initialization when creating worktrees.
+
+```toml
+init_submodules = true
+```
+
+Default: `false` (disabled)
+
+When enabled, `git submodule update --init --recursive` is run after
+worktree creation. The CLI flag `--init-submodules` forces enable regardless
+of this setting.
+
+See [add subcommand](commands/add.md#submodule-initialization) for details.
+
 ## Merge Rules
 
 When both files exist, settings are merged:
@@ -66,6 +82,7 @@ When both files exist, settings are merged:
 | `default_source`                | Local overrides project | (current worktree)             |
 | `symlinks`                      | Local overrides project | `[]`                           |
 | `extra_symlinks`                | Collected from both     | `[]`                           |
+| `init_submodules`               | Local overrides project | `false`                        |
 
 ## symlinks vs extra_symlinks
 
@@ -102,6 +119,7 @@ Result: Only `.my-envrc` is symlinked (project symlinks ignored).
 worktree_destination_base_dir = "/Users/dev/projects/myapp-worktree"
 default_source = "main"
 symlinks = [".envrc", ".tool-versions", "config/**"]
+init_submodules = true
 ```
 
 ```toml

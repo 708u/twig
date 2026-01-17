@@ -606,6 +606,11 @@ func (g *GitRunner) WorktreePrune() ([]byte, error) {
 // GitCmdSubmodule is the git submodule command.
 const GitCmdSubmodule = "submodule"
 
+// Git submodule subcommands.
+const (
+	GitSubmoduleUpdate = "update"
+)
+
 // SubmoduleCleanStatus indicates whether it's safe to remove a worktree with submodules.
 type SubmoduleCleanStatus int
 
@@ -724,4 +729,29 @@ func (g *GitRunner) CheckSubmoduleCleanStatus() (SubmoduleCleanStatus, error) {
 		return SubmoduleCleanStatusNone, nil
 	}
 	return SubmoduleCleanStatusClean, nil
+}
+
+// SubmoduleUpdate runs git submodule update --init --recursive.
+// Returns the number of initialized submodules.
+func (g *GitRunner) SubmoduleUpdate() (int, error) {
+	args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
+
+	_, err := g.Run(args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to initialize submodules: %w", err)
+	}
+
+	// Count initialized submodules
+	submodules, err := g.SubmoduleStatus()
+	if err != nil {
+		return 0, nil // Initialization succeeded, but count failed
+	}
+
+	var count int
+	for _, sm := range submodules {
+		if sm.State != SubmoduleStateUninitialized {
+			count++
+		}
+	}
+	return count, nil
 }

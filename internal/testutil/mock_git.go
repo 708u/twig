@@ -83,6 +83,15 @@ type MockGitExecutor struct {
 	// SubmoduleStatusOutput is the output of `git submodule status --recursive`.
 	// Empty string means no submodules.
 	SubmoduleStatusOutput string
+
+	// SubmoduleUpdateErr is returned when submodule update is called.
+	SubmoduleUpdateErr error
+
+	// SubmoduleUpdateCalled is set to true when submodule update is called.
+	SubmoduleUpdateCalled bool
+
+	// SubmoduleUpdateArgs captures the args passed to submodule update.
+	SubmoduleUpdateArgs []string
 }
 
 func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
@@ -93,7 +102,7 @@ func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
 }
 
 func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
-	// Skip -C <dir> option (directory specification, not a command)
+	// Skip -C <dir> option that comes before the command
 	for len(args) >= 2 && args[0] == "-C" {
 		args = args[2:]
 	}
@@ -303,8 +312,7 @@ func (m *MockGitExecutor) handleForEachRef(args []string) ([]byte, error) {
 	}
 
 	// Handle refs/remotes/*/<branch> for remote branch detection
-	if strings.HasPrefix(ref, "refs/remotes/*/") {
-		branch := strings.TrimPrefix(ref, "refs/remotes/*/")
+	if branch, ok := strings.CutPrefix(ref, "refs/remotes/*/"); ok {
 		var results []string
 		for remote, branches := range m.RemoteBranches {
 			if slices.Contains(branches, branch) {
@@ -329,9 +337,19 @@ func (m *MockGitExecutor) handleFetch(args []string) ([]byte, error) {
 }
 
 func (m *MockGitExecutor) handleSubmodule(args []string) ([]byte, error) {
-	// args: ["submodule", "status", "--recursive"]
-	if len(args) >= 2 && args[1] == "status" {
+	if len(args) < 2 {
+		return nil, nil
+	}
+
+	switch args[1] {
+	case "status":
+		// args: ["submodule", "status", "--recursive"]
 		return []byte(m.SubmoduleStatusOutput), nil
+	case "update":
+		// args: ["submodule", "update", "--init", "--recursive", ...]
+		m.SubmoduleUpdateCalled = true
+		m.SubmoduleUpdateArgs = args
+		return nil, m.SubmoduleUpdateErr
 	}
 	return nil, nil
 }

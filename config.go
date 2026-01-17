@@ -22,6 +22,15 @@ type Config struct {
 	WorktreeDestBaseDir string   `toml:"worktree_destination_base_dir"`
 	DefaultSource       string   `toml:"default_source"`
 	WorktreeSourceDir   string   // Set by LoadConfig to the config load directory
+	InitSubmodules      *bool    `toml:"init_submodules"` // nil=unset, true=enable, false=disable
+}
+
+// ShouldInitSubmodules returns whether submodule initialization is enabled.
+func (c *Config) ShouldInitSubmodules() bool {
+	if c.InitSubmodules != nil {
+		return *c.InitSubmodules
+	}
+	return false
 }
 
 // LoadConfigResult contains the loaded config and any warnings.
@@ -108,6 +117,15 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 		return nil, fmt.Errorf("failed to resolve worktree destination base directory: %w", err)
 	}
 
+	// init_submodules: local overrides project
+	var initSubmodules *bool
+	if projCfg != nil && projCfg.InitSubmodules != nil {
+		initSubmodules = projCfg.InitSubmodules
+	}
+	if localCfg != nil && localCfg.InitSubmodules != nil {
+		initSubmodules = localCfg.InitSubmodules
+	}
+
 	return &LoadConfigResult{
 		Config: &Config{
 			Symlinks:            symlinks,
@@ -115,6 +133,7 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 			WorktreeDestBaseDir: destBaseDir,
 			DefaultSource:       defaultSource,
 			WorktreeSourceDir:   srcDir,
+			InitSubmodules:      initSubmodules,
 		},
 		Warnings: warnings,
 	}, nil
