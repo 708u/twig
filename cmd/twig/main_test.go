@@ -149,6 +149,7 @@ func TestResolveCarryFrom(t *testing.T) {
 				git = &twig.GitRunner{
 					Executor: &testutil.MockGitExecutor{Worktrees: tt.worktrees},
 					Dir:      "/mock",
+					Log:      twig.NewNopLogger(),
 				}
 			}
 

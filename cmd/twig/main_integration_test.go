@@ -46,7 +46,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 
 		// Now simulate --source main from feat/a worktree
 		// The PreRunE logic: resolve main branch to its worktree path, then reload config
-		git := twig.NewGitRunner(featAPath, nil)
+		git := twig.NewGitRunner(featAPath)
 		mainWT, err := git.WorktreeFindByBranch("main")
 		if err != nil {
 			t.Fatalf("failed to find main worktree: %v", err)
@@ -104,7 +104,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 
 		// Simulate -C pointing to mainDir and --source pointing to main
 		// This should work: -C sets working directory, --source sets source branch
-		git := twig.NewGitRunner(mainDir, nil)
+		git := twig.NewGitRunner(mainDir)
 		sourceWT, err := git.WorktreeFindByBranch("main")
 		if err != nil {
 			t.Fatalf("failed to find main worktree: %v", err)
@@ -140,7 +140,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		git := twig.NewGitRunner(mainDir, nil)
+		git := twig.NewGitRunner(mainDir)
 		_, err := git.WorktreeFindByBranch("nonexistent")
 		if err == nil {
 			t.Fatal("expected error for nonexistent branch")
@@ -158,7 +158,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		// Create a branch without a worktree
 		testutil.RunGit(t, mainDir, "branch", "orphan-branch")
 
-		git := twig.NewGitRunner(mainDir, nil)
+		git := twig.NewGitRunner(mainDir)
 		_, err := git.WorktreeFindByBranch("orphan-branch")
 		if err == nil {
 			t.Fatal("expected error for branch without worktree")
@@ -221,7 +221,7 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 
 		// When default_source is applied, config should be reloaded from main
 		// Simulate the PreRunE logic
-		git := twig.NewGitRunner(featAPath, nil)
+		git := twig.NewGitRunner(featAPath)
 		mainWT, err := git.WorktreeFindByBranch(resultFeatA.Config.DefaultSource)
 		if err != nil {
 			t.Fatalf("failed to find worktree for default_source: %v", err)

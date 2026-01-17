@@ -215,7 +215,7 @@ Use --file with --sync or --carry to target specific files:
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
-			git := twig.NewGitRunner(dir, nil)
+			git := twig.NewGitRunner(dir)
 			branches, err := git.BranchList()
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
@@ -242,7 +242,7 @@ Use --file with --sync or --carry to target specific files:
 			}
 
 			// Resolve branch to worktree path
-			git := twig.NewGitRunner(cwd, nil)
+			git := twig.NewGitRunner(cwd)
 			sourceWT, err := git.WorktreeFindByBranch(source)
 			if err != nil {
 				return fmt.Errorf("failed to find worktree for branch %q: %w", source, err)
@@ -289,7 +289,7 @@ Use --file with --sync or --carry to target specific files:
 			var carryFrom string
 			if carryEnabled {
 				carryValue, _ := cmd.Flags().GetString("carry")
-				git := twig.NewGitRunner(cwd, nil)
+				git := twig.NewGitRunner(cwd)
 				var err error
 				carryFrom, err = resolveCarryFrom(carryValue, originalCwd, git)
 				if err != nil {
@@ -469,7 +469,7 @@ stop processing of remaining branches.`,
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
-			git := twig.NewGitRunner(dir, nil)
+			git := twig.NewGitRunner(dir)
 			branches, err := git.WorktreeListBranches()
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
@@ -544,14 +544,14 @@ stop processing of remaining branches.`,
 
 		// If --source is specified, resolve to that worktree
 		if source, _ := cmd.Flags().GetString("source"); source != "" {
-			git := twig.NewGitRunner(dir, nil)
+			git := twig.NewGitRunner(dir)
 			if sourceWT, findErr := git.WorktreeFindByBranch(source); findErr == nil {
 				dir = sourceWT.Path
 			}
 		}
 
 		// Get changed files from the target directory
-		git := twig.NewGitRunner(dir, nil)
+		git := twig.NewGitRunner(dir)
 		files, err := git.ChangedFiles()
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError

@@ -62,8 +62,9 @@ func (h *CLIHandler) WithGroup(_ string) slog.Handler {
 }
 
 // NewNopLogger creates a logger that discards all output.
-// Useful for tests that don't need to verify log output.
+// Used as the default logger when no logging is needed.
 func NewNopLogger() *slog.Logger {
+	// LevelError+1 sets threshold above all log levels, filtering everything
 	return slog.New(NewCLIHandler(io.Discard, slog.LevelError+1))
 }
 

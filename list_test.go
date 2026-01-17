@@ -62,7 +62,7 @@ func TestListCommand_Run(t *testing.T) {
 				Worktrees: tt.worktrees,
 			}
 			cmd := &ListCommand{
-				Git: &GitRunner{Executor: mock},
+				Git: &GitRunner{Executor: mock, Log: NewNopLogger()},
 			}
 
 			result, err := cmd.Run()

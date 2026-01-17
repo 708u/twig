@@ -123,7 +123,16 @@ type GitRunner struct {
 }
 
 // NewGitRunner creates a new GitRunner with the default executor.
-func NewGitRunner(dir string, log *slog.Logger) *GitRunner {
+func NewGitRunner(dir string) *GitRunner {
+	return &GitRunner{
+		Executor: osGitExecutor{},
+		Dir:      dir,
+		Log:      NewNopLogger(),
+	}
+}
+
+// NewGitRunnerWithLogger creates a new GitRunner with a custom logger.
+func NewGitRunnerWithLogger(dir string, log *slog.Logger) *GitRunner {
 	if log == nil {
 		log = NewNopLogger()
 	}
@@ -142,9 +151,7 @@ func (g *GitRunner) InDir(dir string) *GitRunner {
 // Run executes git command with -C flag.
 func (g *GitRunner) Run(args ...string) ([]byte, error) {
 	fullArgs := append([]string{"-C", g.Dir}, args...)
-	if g.Log != nil {
-		g.Log.Debug(strings.Join(append([]string{"git"}, fullArgs...), " "), "category", LogCategoryGit)
-	}
+	g.Log.Debug(strings.Join(append([]string{"git"}, fullArgs...), " "), "category", LogCategoryGit)
 	return g.Executor.Run(fullArgs...)
 }
 

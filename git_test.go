@@ -48,7 +48,7 @@ func TestGitRunner_IsBranchUpstreamGone(t *testing.T) {
 			mockGit := &testutil.MockGitExecutor{
 				UpstreamGoneBranches: tt.upstreamGone,
 			}
-			runner := &GitRunner{Executor: mockGit}
+			runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
 
 			got, err := runner.IsBranchUpstreamGone(tt.branch)
 
@@ -124,7 +124,7 @@ func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 				MergedBranches:       tt.merged,
 				UpstreamGoneBranches: tt.upstreamGone,
 			}
-			runner := &GitRunner{Executor: mockGit}
+			runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
 
 			got, err := runner.IsBranchMerged(tt.branch, tt.target)
 
