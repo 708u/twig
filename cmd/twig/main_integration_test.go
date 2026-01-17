@@ -335,6 +335,70 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 	})
 }
 
+func TestListCommand_VerboseFlag_Integration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("DoubleVerboseOutputsDebugLog", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		cmd := newRootCmd()
+
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+
+		cmd.SetOut(stdout)
+		cmd.SetErr(stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "list", "-vv"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Fatalf("Execute failed: %v", err)
+		}
+
+		// Verify debug log is output to stderr
+		if !strings.Contains(stderr.String(), "[DEBUG] git:") {
+			t.Errorf("stderr should contain debug log, got: %q", stderr.String())
+		}
+
+		// Verify normal output is still on stdout
+		if !strings.Contains(stdout.String(), "[main]") {
+			t.Errorf("stdout should contain worktree list, got: %q", stdout.String())
+		}
+	})
+
+	t.Run("NoVerboseFlagNoDebugLog", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		cmd := newRootCmd()
+
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+
+		cmd.SetOut(stdout)
+		cmd.SetErr(stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "list"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Fatalf("Execute failed: %v", err)
+		}
+
+		// Verify no debug log on stderr
+		if strings.Contains(stderr.String(), "[DEBUG]") {
+			t.Errorf("stderr should not contain debug log, got: %q", stderr.String())
+		}
+
+		// Verify normal output is on stdout
+		if !strings.Contains(stdout.String(), "[main]") {
+			t.Errorf("stdout should contain worktree list, got: %q", stdout.String())
+		}
+	})
+}
+
 func TestCleanCommand_InteractiveConfirmation_Integration(t *testing.T) {
 	t.Parallel()
 

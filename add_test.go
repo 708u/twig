@@ -443,7 +443,7 @@ func TestAddCommand_Run(t *testing.T) {
 
 			cmd := &AddCommand{
 				FS:           mockFS,
-				Git:          &GitRunner{Executor: mockGit},
+				Git:          &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config:       tt.config,
 				Sync:         tt.sync,
 				CarryFrom:    tt.carryFrom,
@@ -565,7 +565,7 @@ func TestAddCommand_Run_Lock(t *testing.T) {
 
 			cmd := &AddCommand{
 				FS:         mockFS,
-				Git:        &GitRunner{Executor: mockGit},
+				Git:        &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config:     tt.config,
 				Lock:       tt.lock,
 				LockReason: tt.lockReason,
@@ -848,7 +848,7 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 
 			cmd := &AddCommand{
 				FS:             mockFS,
-				Git:            &GitRunner{Executor: mockGit},
+				Git:            &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config:         tt.config,
 				InitSubmodules: tt.initSubmodules,
 			}

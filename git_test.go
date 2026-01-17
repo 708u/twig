@@ -7,6 +7,16 @@ import (
 	"github.com/708u/twig/internal/testutil"
 )
 
+func TestNewGitRunnerWithLogger_NilLogger(t *testing.T) {
+	t.Parallel()
+
+	// Should not panic when log is nil
+	runner := NewGitRunnerWithLogger("/tmp", nil)
+	if runner.Log == nil {
+		t.Error("Log should not be nil after NewGitRunnerWithLogger")
+	}
+}
+
 func TestGitRunner_ChangedFiles(t *testing.T) {
 	t.Parallel()
 
@@ -66,7 +76,7 @@ func TestGitRunner_ChangedFiles(t *testing.T) {
 			mockGit := &testutil.MockGitExecutor{
 				StatusOutput: tt.statusOutput,
 			}
-			runner := &GitRunner{Executor: mockGit}
+			runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
 
 			got, err := runner.ChangedFiles(t.Context())
 			if err != nil {
@@ -122,7 +132,7 @@ func TestGitRunner_IsBranchUpstreamGone(t *testing.T) {
 			mockGit := &testutil.MockGitExecutor{
 				UpstreamGoneBranches: tt.upstreamGone,
 			}
-			runner := &GitRunner{Executor: mockGit}
+			runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
 
 			got, err := runner.IsBranchUpstreamGone(t.Context(), tt.branch)
 
@@ -198,7 +208,7 @@ func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 				MergedBranches:       tt.merged,
 				UpstreamGoneBranches: tt.upstreamGone,
 			}
-			runner := &GitRunner{Executor: mockGit}
+			runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
 
 			got, err := runner.IsBranchMerged(t.Context(), tt.branch, tt.target)
 
