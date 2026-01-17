@@ -861,6 +861,85 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("CheckReturnsChangedFiles", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		wtPath := filepath.Join(repoDir, "feature", "changed-files-test")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/changed-files-test", wtPath)
+
+		// Create a tracked file and commit it
+		trackedFile := filepath.Join(wtPath, "tracked.txt")
+		if err := os.WriteFile(trackedFile, []byte("initial content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "tracked.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add tracked file")
+
+		// Modify the tracked file to create " M" status
+		if err := os.WriteFile(trackedFile, []byte("modified content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create untracked file for "??" status
+		untrackedFile := filepath.Join(wtPath, "untracked.txt")
+		if err := os.WriteFile(untrackedFile, []byte("new content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Test Check() returns ChangedFiles
+		checkResult, err := cmd.Check("feature/changed-files-test", CheckOptions{
+			Cwd: mainDir,
+		})
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+
+		if len(checkResult.ChangedFiles) == 0 {
+			t.Fatal("expected ChangedFiles to be populated")
+		}
+
+		// Verify specific files are in the list
+		var foundUntracked, foundModified bool
+		for _, f := range checkResult.ChangedFiles {
+			if f.Path == "untracked.txt" && f.Status == "??" {
+				foundUntracked = true
+			}
+			if f.Path == "tracked.txt" && strings.Contains(f.Status, "M") {
+				foundModified = true
+			}
+		}
+		if !foundUntracked {
+			t.Error("expected untracked file in ChangedFiles")
+		}
+		if !foundModified {
+			t.Error("expected modified file in ChangedFiles")
+		}
+
+		// Test Run() also returns ChangedFiles in result
+		removeResult, err := cmd.Run("feature/changed-files-test", mainDir, RemoveOptions{})
+		if err == nil {
+			t.Fatal("expected error for uncommitted changes")
+		}
+
+		// Even on error, ChangedFiles should be populated
+		if len(removeResult.ChangedFiles) == 0 {
+			t.Error("expected ChangedFiles to be populated in RemovedWorktree")
+		}
+	})
+
 	t.Run("ForceRemoveWorktreeWithDirtySubmodule", func(t *testing.T) {
 		t.Parallel()
 

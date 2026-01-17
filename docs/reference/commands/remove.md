@@ -91,6 +91,45 @@ The cleanup is safe:
 - Preserves directories containing other worktrees or files
 - Cleanup errors are non-fatal (main operation succeeds)
 
+### Verbose Output
+
+With `--verbose`, additional information is displayed:
+
+- With `--check`: shows the list of uncommitted changes in the worktree
+- On failure due to uncommitted changes: shows the list of changed files
+
+Example with `--check --verbose`:
+
+```txt
+twig remove feat/test --check -v
+Would remove worktree: /path/to/feat/test
+Uncommitted changes:
+   M src/main.go
+  A  src/new.go
+  ?? tmp/debug.log
+Would delete branch: feat/test
+```
+
+Example on failure with `--verbose`:
+
+```txt
+twig remove feat/test -v
+error: feat/test: cannot remove: has uncommitted changes
+Uncommitted changes:
+   M src/main.go
+  ?? tmp/debug.log
+hint: use 'twig remove --force' to force removal
+```
+
+The status codes follow git status --porcelain format:
+
+| Code | Meaning              |
+|------|----------------------|
+| `M` | Modified (unstaged)  |
+| `M` | Modified (staged)    |
+| `A` | Added (staged)       |
+| `??` | Untracked            |
+
 ## Multiple Branches
 
 When multiple branches are specified, errors on individual branches

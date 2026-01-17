@@ -434,26 +434,34 @@ func (g *GitRunner) BranchDelete(branch string, opts ...BranchDeleteOption) ([]b
 	return out, nil
 }
 
-// ChangedFiles returns a list of files with uncommitted changes
-// including staged, unstaged, and untracked files.
-func (g *GitRunner) ChangedFiles() ([]string, error) {
+// FileStatus represents a file with its git status.
+type FileStatus struct {
+	Status string // e.g., " M", "A ", "??"
+	Path   string
+}
+
+// ChangedFiles returns files with uncommitted changes including staged,
+// unstaged, and untracked files. Status codes are the first 2 characters
+// from git status --porcelain output.
+func (g *GitRunner) ChangedFiles() ([]FileStatus, error) {
 	output, err := g.Run(GitCmdStatus, "--porcelain", "-uall")
 	if err != nil {
 		return nil, fmt.Errorf("failed to check git status: %w", err)
 	}
 
-	var files []string
+	var files []FileStatus
 	for _, line := range strings.Split(string(output), "\n") {
 		if len(line) < 3 {
 			continue
 		}
 		// Format: "XY filename" where XY is 2-char status
-		file := strings.TrimSpace(line[2:])
+		status := line[:2]
+		path := strings.TrimSpace(line[2:])
 		// Handle renamed files "old -> new"
-		if idx := strings.Index(file, " -> "); idx != -1 {
-			file = file[idx+4:]
+		if idx := strings.Index(path, " -> "); idx != -1 {
+			path = path[idx+4:]
 		}
-		files = append(files, file)
+		files = append(files, FileStatus{Status: status, Path: path})
 	}
 	return files, nil
 }
