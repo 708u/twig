@@ -1244,3 +1244,144 @@ func TestRemoveCommand_Check(t *testing.T) {
 		})
 	}
 }
+
+func TestRemovedWorktree_Format_VerboseChangedFiles(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		result     RemovedWorktree
+		opts       FormatOptions
+		wantStdout string
+	}{
+		{
+			name: "check_verbose_with_changed_files",
+			result: RemovedWorktree{
+				Branch:       "feat/test",
+				WorktreePath: "/base/feat/test",
+				Check:        true,
+				ChangedFiles: []FileStatus{
+					{Status: " M", Path: "src/main.go"},
+					{Status: "A ", Path: "src/new.go"},
+					{Status: "??", Path: "tmp/debug.log"},
+				},
+			},
+			opts: FormatOptions{Verbose: true},
+			wantStdout: "Would remove worktree: /base/feat/test\n" +
+				"Uncommitted changes:\n" +
+				"   M src/main.go\n" +
+				"  A  src/new.go\n" +
+				"  ?? tmp/debug.log\n" +
+				"Would delete branch: feat/test\n",
+		},
+		{
+			name: "check_verbose_no_changed_files",
+			result: RemovedWorktree{
+				Branch:       "feat/test",
+				WorktreePath: "/base/feat/test",
+				Check:        true,
+				ChangedFiles: nil,
+			},
+			opts: FormatOptions{Verbose: true},
+			wantStdout: "Would remove worktree: /base/feat/test\n" +
+				"Would delete branch: feat/test\n",
+		},
+		{
+			name: "check_non_verbose_with_changed_files",
+			result: RemovedWorktree{
+				Branch:       "feat/test",
+				WorktreePath: "/base/feat/test",
+				Check:        true,
+				ChangedFiles: []FileStatus{
+					{Status: " M", Path: "src/main.go"},
+				},
+			},
+			opts: FormatOptions{Verbose: false},
+			wantStdout: "Would remove worktree: /base/feat/test\n" +
+				"Would delete branch: feat/test\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tt.result.Format(tt.opts)
+			if got.Stdout != tt.wantStdout {
+				t.Errorf("Stdout = %q, want %q", got.Stdout, tt.wantStdout)
+			}
+		})
+	}
+}
+
+func TestRemoveResult_Format_VerboseChangedFilesOnError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		result     RemoveResult
+		opts       FormatOptions
+		wantStderr string
+	}{
+		{
+			name: "skip_has_changes_verbose",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{{
+					Branch: "feat/test",
+					Err:    &SkipError{Reason: SkipHasChanges},
+					ChangedFiles: []FileStatus{
+						{Status: " M", Path: "src/main.go"},
+						{Status: "??", Path: "tmp/debug.log"},
+					},
+				}},
+			},
+			opts: FormatOptions{Verbose: true},
+			wantStderr: "error: feat/test: cannot remove: has uncommitted changes\n" +
+				"Uncommitted changes:\n" +
+				"   M src/main.go\n" +
+				"  ?? tmp/debug.log\n" +
+				"hint: use 'twig remove --force' to force removal\n",
+		},
+		{
+			name: "skip_has_changes_non_verbose",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{{
+					Branch: "feat/test",
+					Err:    &SkipError{Reason: SkipHasChanges},
+					ChangedFiles: []FileStatus{
+						{Status: " M", Path: "src/main.go"},
+					},
+				}},
+			},
+			opts: FormatOptions{Verbose: false},
+			wantStderr: "error: feat/test: cannot remove: has uncommitted changes\n" +
+				"hint: use 'twig remove --force' to force removal\n",
+		},
+		{
+			name: "skip_not_merged_verbose_no_changed_files_shown",
+			result: RemoveResult{
+				Removed: []RemovedWorktree{{
+					Branch: "feat/test",
+					Err:    &SkipError{Reason: SkipNotMerged},
+					ChangedFiles: []FileStatus{
+						{Status: " M", Path: "src/main.go"},
+					},
+				}},
+			},
+			opts: FormatOptions{Verbose: true},
+			wantStderr: "error: feat/test: cannot remove: not merged\n" +
+				"hint: use 'twig remove --force' to force removal\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tt.result.Format(tt.opts)
+			if got.Stderr != tt.wantStderr {
+				t.Errorf("Stderr = %q, want %q", got.Stderr, tt.wantStderr)
+			}
+		})
+	}
+}

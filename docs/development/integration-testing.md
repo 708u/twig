@@ -9,6 +9,51 @@ paths: "**/*_integration_test.go, **/internal/testutil/**"
 Integration tests verify that components work correctly together using real I/O
 operations (filesystem, git commands, etc.) instead of mocks.
 
+## When to Write Integration Tests
+
+Unit tests with mocks verify that code behaves correctly **given certain
+inputs**. Integration tests verify that **the inputs themselves are correct**
+when obtained from real external systems.
+
+### Required: Data Acquisition and Propagation
+
+Write integration tests when external data is acquired and propagated through
+multiple layers:
+
+```txt
+External System → Acquisition → Intermediate Structure → Final Result
+```
+
+Unit tests can verify each component in isolation with mocked data, but cannot
+guarantee:
+
+1. The acquisition layer correctly parses external system output
+2. The data is correctly stored in intermediate structures
+3. The data is correctly propagated to final output structures
+
+Unit tests mock external calls and verify logic. Integration tests verify that
+data flows correctly from the real external system through all layers.
+
+### Not Required: Pure Transformation
+
+Integration tests are unnecessary for logic that only transforms
+already-acquired data without external system interaction.
+
+### Decision Checklist
+
+Write an integration test if **any** of these apply:
+
+- New field populated from external system output
+- Data propagated across struct boundaries
+- Parser for external command output format
+- Multiple external calls combined into one operation
+
+Skip integration test if **all** of these apply:
+
+- Logic operates on already-acquired data
+- Unit test covers all code paths with mocked inputs
+- No external system interaction
+
 ## Build Tag
 
 Use `//go:build integration` to separate integration tests from unit tests:

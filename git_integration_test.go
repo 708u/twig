@@ -131,7 +131,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(files) != 1 || files[0] != "staged.txt" {
+		if len(files) != 1 || files[0].Path != "staged.txt" {
 			t.Errorf("expected [staged.txt], got %v", files)
 		}
 	})
@@ -155,7 +155,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(files) != 1 || files[0] != "tracked.txt" {
+		if len(files) != 1 || files[0].Path != "tracked.txt" {
 			t.Errorf("expected [tracked.txt], got %v", files)
 		}
 	})
@@ -173,7 +173,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(files) != 1 || files[0] != "untracked.txt" {
+		if len(files) != 1 || files[0].Path != "untracked.txt" {
 			t.Errorf("expected [untracked.txt], got %v", files)
 		}
 	})
@@ -227,7 +227,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		// Should return the new name
-		if len(files) != 1 || files[0] != "new.txt" {
+		if len(files) != 1 || files[0].Path != "new.txt" {
 			t.Errorf("expected [new.txt], got %v", files)
 		}
 	})
