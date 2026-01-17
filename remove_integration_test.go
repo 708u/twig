@@ -946,12 +946,8 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/squash-remove")
 
-		// Simulate squash merge on main (different commit hash than feature branch)
-		mainFile := filepath.Join(mainDir, "squash.txt")
-		if err := os.WriteFile(mainFile, []byte("squash content"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		testutil.RunGit(t, mainDir, "add", ".")
+		// Squash merge to main
+		testutil.RunGit(t, mainDir, "merge", "--squash", "feature/squash-remove")
 		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add squash (#1)")
 
 		// Delete remote branch (as GitHub does after squash merge)
@@ -1020,12 +1016,8 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/prunable-squash")
 
-		// Simulate squash merge on main
-		mainFile := filepath.Join(mainDir, "prunable.txt")
-		if err := os.WriteFile(mainFile, []byte("prunable content"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		testutil.RunGit(t, mainDir, "add", ".")
+		// Squash merge to main
+		testutil.RunGit(t, mainDir, "merge", "--squash", "feature/prunable-squash")
 		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add prunable (#2)")
 
 		// Delete remote branch

@@ -805,16 +805,8 @@ func TestCleanCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/squashed")
 
-		// Simulate squash merge on main (combine all commits into one)
-		mainFile1 := filepath.Join(mainDir, "feature1.txt")
-		mainFile2 := filepath.Join(mainDir, "feature2.txt")
-		if err := os.WriteFile(mainFile1, []byte("feature content 1"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(mainFile2, []byte("feature content 2"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		testutil.RunGit(t, mainDir, "add", ".")
+		// Squash merge to main
+		testutil.RunGit(t, mainDir, "merge", "--squash", "feature/squashed")
 		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add features (#1)")
 
 		// Delete remote branch (as GitHub does after squash merge)
@@ -887,20 +879,8 @@ func TestCleanCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/rebased")
 
-		// Simulate rebase merge on main (apply commits one by one)
-		mainFile1 := filepath.Join(mainDir, "rebased1.txt")
-		if err := os.WriteFile(mainFile1, []byte("rebased content 1"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		testutil.RunGit(t, mainDir, "add", "rebased1.txt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add rebased file 1")
-
-		mainFile2 := filepath.Join(mainDir, "rebased2.txt")
-		if err := os.WriteFile(mainFile2, []byte("rebased content 2"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		testutil.RunGit(t, mainDir, "add", "rebased2.txt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add rebased file 2")
+		// Rebase merge to main (cherry-pick creates new commit hashes like GitHub's rebase merge)
+		testutil.RunGit(t, mainDir, "cherry-pick", "feature/rebased~1..feature/rebased")
 
 		// Delete remote branch (as GitHub does after rebase merge)
 		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/rebased")
@@ -1014,12 +994,8 @@ func TestCleanCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/squash-clean")
 
-		// Simulate squash merge on main
-		mainFile := filepath.Join(mainDir, "squash.txt")
-		if err := os.WriteFile(mainFile, []byte("squash content"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		testutil.RunGit(t, mainDir, "add", ".")
+		// Squash merge to main
+		testutil.RunGit(t, mainDir, "merge", "--squash", "feature/squash-clean")
 		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add squash (#1)")
 
 		// Delete remote branch (as GitHub does after squash merge)
@@ -1066,5 +1042,4 @@ func TestCleanCommand_Integration(t *testing.T) {
 			}
 		}
 	})
-
 }
