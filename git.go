@@ -209,7 +209,7 @@ func (g *GitRunner) WorktreeAdd(ctx context.Context, path, branch string, opts .
 func (g *GitRunner) LocalBranchExists(ctx context.Context, branch string) (bool, error) {
 	_, err := g.Run(ctx, GitCmdRevParse, "--verify", RefsHeadsPrefix+branch)
 	if err != nil {
-		// Check if context was cancelled
+		// Check if context was canceled
 		if ctx.Err() != nil {
 			return false, ctx.Err()
 		}

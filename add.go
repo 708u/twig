@@ -288,7 +288,8 @@ func (c *AddCommand) createWorktree(ctx context.Context, branch, path string) ([
 		return nil, fmt.Errorf("failed to check branch existence: %w", err)
 	}
 	if exists {
-		branches, err := c.Git.WorktreeListBranches(ctx)
+		var branches []string
+		branches, err = c.Git.WorktreeListBranches(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list worktree branches: %w", err)
 		}
@@ -296,14 +297,16 @@ func (c *AddCommand) createWorktree(ctx context.Context, branch, path string) ([
 			return nil, fmt.Errorf("branch %s is already checked out in another worktree", branch)
 		}
 	} else {
-		remote, err := c.Git.FindRemoteForBranch(ctx, branch)
+		var remote string
+		remote, err = c.Git.FindRemoteForBranch(ctx, branch)
 		if err != nil {
 			return nil, err
 		}
 
 		if remote != "" {
 			// Remote branch found, fetch it
-			if err := c.Git.Fetch(ctx, remote, branch); err != nil {
+			err = c.Git.Fetch(ctx, remote, branch)
+			if err != nil {
 				return nil, fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
 			}
 			// After fetch, git worktree add will auto-track the remote branch
