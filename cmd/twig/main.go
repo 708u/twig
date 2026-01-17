@@ -217,7 +217,7 @@ Use --file with --sync or --carry to target specific files:
 				return nil, cobra.ShellCompDirectiveError
 			}
 			git := twig.NewGitRunner(dir)
-			branches, err := git.BranchList(context.Background())
+			branches, err := git.BranchList(cmd.Context())
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
@@ -471,7 +471,7 @@ stop processing of remaining branches.`,
 				return nil, cobra.ShellCompDirectiveError
 			}
 			git := twig.NewGitRunner(dir)
-			branches, err := git.WorktreeListBranches(context.Background())
+			branches, err := git.WorktreeListBranches(cmd.Context())
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
@@ -543,7 +543,7 @@ stop processing of remaining branches.`,
 			return nil, cobra.ShellCompDirectiveError
 		}
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 		// If --source is specified, resolve to that worktree
 		if source, _ := cmd.Flags().GetString("source"); source != "" {
 			git := twig.NewGitRunner(dir)
