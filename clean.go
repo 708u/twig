@@ -44,6 +44,7 @@ type CleanCandidate struct {
 	Skipped      bool
 	SkipReason   SkipReason
 	CleanReason  CleanReason
+	ChangedFiles []FileStatus
 }
 
 // CleanResult aggregates results from clean operations.
@@ -98,6 +99,12 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 			fmt.Fprintln(&stdout, "skip:")
 			for _, c := range skipped {
 				fmt.Fprintf(&stdout, "  %s (%s)\n", c.Branch, c.SkipReason)
+				if (c.SkipReason == SkipHasChanges || c.SkipReason == SkipDirtySubmodule) &&
+					len(c.ChangedFiles) > 0 {
+					for _, f := range c.ChangedFiles {
+						fmt.Fprintf(&stdout, "    %s %s\n", f.Status, f.Path)
+					}
+				}
 			}
 			fmt.Fprintln(&stdout)
 		}
@@ -121,6 +128,12 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 		fmt.Fprintln(&stdout, "skip:")
 		for _, c := range skipped {
 			fmt.Fprintf(&stdout, "  %s (%s)\n", c.Branch, c.SkipReason)
+			if (c.SkipReason == SkipHasChanges || c.SkipReason == SkipDirtySubmodule) &&
+				len(c.ChangedFiles) > 0 {
+				for _, f := range c.ChangedFiles {
+					fmt.Fprintf(&stdout, "    %s %s\n", f.Status, f.Path)
+				}
+			}
 		}
 	}
 
@@ -188,6 +201,7 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 			Skipped:      !checkResult.CanRemove,
 			SkipReason:   checkResult.SkipReason,
 			CleanReason:  checkResult.CleanReason,
+			ChangedFiles: checkResult.ChangedFiles,
 		}
 		result.Candidates = append(result.Candidates, candidate)
 	}
