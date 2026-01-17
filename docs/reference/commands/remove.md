@@ -68,6 +68,26 @@ For prunable worktrees:
 - No cwd check is performed (directory doesn't exist)
 - `--check` shows "Would prune stale worktree record"
 
+### Upstream Gone Branches
+
+When a branch's remote tracking branch has been deleted (e.g., after a squash
+or rebase merge on GitHub), the branch is considered "upstream gone". These
+branches require `-D` instead of `-d` for deletion because their commits
+differ from the target branch.
+
+twig handles this automatically:
+
+```bash
+# After squash merge on GitHub, remote branch is deleted
+# Local branch shows "gone" in git branch -vv
+
+# twig remove works without --force
+twig remove feat/squashed
+```
+
+This applies to both normal and prunable worktrees. The upstream gone status
+is detected automatically and the appropriate deletion flag is used.
+
 ### Empty Directory Cleanup
 
 After removing a worktree, twig automatically removes any empty parent
