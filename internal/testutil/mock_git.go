@@ -45,6 +45,10 @@ type MockGitExecutor struct {
 	// HasChanges indicates if git status --porcelain returns output.
 	HasChanges bool
 
+	// StatusOutput is the custom output for git status --porcelain.
+	// If set, this overrides HasChanges.
+	StatusOutput string
+
 	// StashPushErr is returned when stash push is called.
 	StashPushErr error
 
@@ -248,8 +252,12 @@ func (m *MockGitExecutor) handleBranch(args []string) ([]byte, error) {
 func (m *MockGitExecutor) handleStatus(args []string) ([]byte, error) {
 	// args: ["status", "--porcelain"]
 	if len(args) >= 2 && args[1] == "--porcelain" {
+		// Use StatusOutput if set (allows custom status output)
+		if m.StatusOutput != "" {
+			return []byte(m.StatusOutput), nil
+		}
 		if m.HasChanges {
-			return []byte("M  modified.go\n"), nil
+			return []byte(" M modified.go\n"), nil
 		}
 		return []byte{}, nil
 	}

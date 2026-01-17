@@ -38,12 +38,13 @@ const (
 
 // CheckResult holds the result of checking whether a worktree can be removed.
 type CheckResult struct {
-	CanRemove    bool        // Whether the worktree can be removed
-	SkipReason   SkipReason  // Reason if cannot be removed
-	CleanReason  CleanReason // Reason if can be removed (for clean command display)
-	Prunable     bool        // Whether worktree is prunable (directory was deleted externally)
-	WorktreePath string      // Path to the worktree
-	Branch       string      // Branch name
+	CanRemove    bool         // Whether the worktree can be removed
+	SkipReason   SkipReason   // Reason if cannot be removed
+	CleanReason  CleanReason  // Reason if can be removed (for clean command display)
+	Prunable     bool         // Whether worktree is prunable (directory was deleted externally)
+	WorktreePath string       // Path to the worktree
+	Branch       string       // Branch name
+	ChangedFiles []FileStatus // Uncommitted changes (for verbose output)
 }
 
 // CheckOptions configures the check operation.
@@ -86,11 +87,12 @@ func NewDefaultRemoveCommand(cfg *Config) *RemoveCommand {
 type RemovedWorktree struct {
 	Branch       string
 	WorktreePath string
-	CleanedDirs  []string   // Empty parent directories that were removed
-	Pruned       bool       // Stale worktree record was pruned (directory was already deleted)
-	Check        bool       // --check mode: show what would be removed
-	CanRemove    bool       // Whether the worktree can be removed (from Check)
-	SkipReason   SkipReason // Reason if cannot be removed (from Check)
+	CleanedDirs  []string     // Empty parent directories that were removed
+	Pruned       bool         // Stale worktree record was pruned (directory was already deleted)
+	Check        bool         // --check mode: show what would be removed
+	CanRemove    bool         // Whether the worktree can be removed (from Check)
+	SkipReason   SkipReason   // Reason if cannot be removed (from Check)
+	ChangedFiles []FileStatus // Uncommitted changes (for verbose output)
 	GitOutput    []byte
 	Err          error // nil if success
 }
@@ -127,7 +129,7 @@ func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 
 	for _, wt := range r.Removed {
 		if wt.Err != nil {
-			formatRemoveError(&stderr, wt.Branch, wt.Err, opts.Verbose)
+			formatRemoveError(&stderr, wt.Branch, wt.Err, opts.Verbose, wt.ChangedFiles)
 			continue
 		}
 		formatted := wt.Format(opts)
@@ -140,7 +142,7 @@ func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 
 // formatRemoveError formats an error from the remove operation.
 // It shows a short error message, and optionally the detailed git error.
-func formatRemoveError(w *strings.Builder, branch string, err error, verbose bool) {
+func formatRemoveError(w *strings.Builder, branch string, err error, verbose bool, changedFiles []FileStatus) {
 	var skipErr *SkipError
 	var gitErr *GitError
 
@@ -153,6 +155,16 @@ func formatRemoveError(w *strings.Builder, branch string, err error, verbose boo
 		}
 	default:
 		fmt.Fprintf(w, "error: %s: %v\n", branch, err)
+	}
+
+	// Show changed files in verbose mode for SkipHasChanges
+	if verbose && len(changedFiles) > 0 {
+		if errors.As(err, &skipErr) && skipErr.Reason == SkipHasChanges {
+			fmt.Fprintf(w, "Uncommitted changes:\n")
+			for _, f := range changedFiles {
+				fmt.Fprintf(w, "  %s %s\n", f.Status, f.Path)
+			}
+		}
 	}
 
 	// Format hint based on error type
@@ -187,6 +199,13 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 			fmt.Fprintf(&stdout, "Would prune stale worktree record\n")
 		} else if r.WorktreePath != "" {
 			fmt.Fprintf(&stdout, "Would remove worktree: %s\n", r.WorktreePath)
+		}
+		// Show changed files in verbose check mode
+		if opts.Verbose && len(r.ChangedFiles) > 0 {
+			fmt.Fprintf(&stdout, "Uncommitted changes:\n")
+			for _, f := range r.ChangedFiles {
+				fmt.Fprintf(&stdout, "  %s %s\n", f.Status, f.Path)
+			}
 		}
 		fmt.Fprintf(&stdout, "Would delete branch: %s\n", r.Branch)
 		for _, dir := range r.CleanedDirs {
@@ -235,6 +254,7 @@ func (c *RemoveCommand) Run(branch string, cwd string, opts RemoveOptions) (Remo
 	result.Pruned = checkResult.Prunable
 	result.CanRemove = checkResult.CanRemove
 	result.SkipReason = checkResult.SkipReason
+	result.ChangedFiles = checkResult.ChangedFiles
 
 	if !checkResult.CanRemove {
 		return result, &SkipError{Reason: checkResult.SkipReason}
@@ -415,6 +435,10 @@ func (c *RemoveCommand) Check(branch string, opts CheckOptions) (CheckResult, er
 			Branch:   wtInfo.Branch,
 			Locked:   wtInfo.Locked,
 			Detached: wtInfo.Detached,
+		}
+		// Get changed files for verbose output (low cost, useful for all cases)
+		if changedFiles, err := c.Git.InDir(wtInfo.Path).ChangedFilesWithStatus(); err == nil {
+			result.ChangedFiles = changedFiles
 		}
 		if reason := c.checkSkipReason(wt, opts.Cwd, opts.Target, opts.Force); reason != "" {
 			result.CanRemove = false
