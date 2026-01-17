@@ -10,9 +10,9 @@ twig list [flags]
 
 ## Flags
 
-| Flag        | Short | Description                           |
-|-------------|-------|---------------------------------------|
-| `--quiet`   | `-q`  | Output only worktree paths            |
+| Flag        | Short | Description                               |
+|-------------|-------|-------------------------------------------|
+| `--quiet`   | `-q`  | Output only worktree paths                |
 | `--verbose` | `-v`  | Enable verbose output (use -vv for debug) |
 
 ## Behavior
