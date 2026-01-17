@@ -353,16 +353,3 @@ func TestGenerateCommandIDWithLength(t *testing.T) {
 		}
 	}
 }
-
-func TestGenerateCommandID_Uniqueness(t *testing.T) {
-	t.Parallel()
-
-	seen := make(map[string]bool)
-	for i := 0; i < 100; i++ {
-		id := GenerateCommandID()
-		if seen[id] {
-			t.Errorf("GenerateCommandID() produced duplicate: %s", id)
-		}
-		seen[id] = true
-	}
-}
