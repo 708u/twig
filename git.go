@@ -133,6 +133,9 @@ func NewGitRunner(dir string) *GitRunner {
 
 // NewGitRunnerWithLogger creates a new GitRunner with a custom logger.
 func NewGitRunnerWithLogger(dir string, log *slog.Logger) *GitRunner {
+	if log == nil {
+		log = NewNopLogger()
+	}
 	return &GitRunner{
 		Executor: osGitExecutor{},
 		Dir:      dir,
