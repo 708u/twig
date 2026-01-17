@@ -24,13 +24,13 @@ func NewCLIHandler(w io.Writer, level slog.Level) *CLIHandler {
 }
 
 // Enabled reports whether the handler handles records at the given level.
-func (h *CLIHandler) Enabled(_ context.Context, level slog.Level) bool {
+func (h *CLIHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return level >= h.level
 }
 
 // Handle writes a log record to the handler's writer.
 // Format: 2006-01-02 15:04:05 [LEVEL] category: message
-func (h *CLIHandler) Handle(_ context.Context, r slog.Record) error {
+func (h *CLIHandler) Handle(ctx context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
