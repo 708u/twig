@@ -83,6 +83,29 @@ type AddFormatOptions struct {
 	Quiet   bool
 }
 
+// AddSkipReason describes why a worktree cannot be added.
+type AddSkipReason string
+
+const (
+	AddSkipDirectoryExists  AddSkipReason = "directory already exists"
+	AddSkipBranchCheckedOut AddSkipReason = "branch already checked out"
+)
+
+// AddCheckResult holds the result of checking whether a worktree can be added.
+type AddCheckResult struct {
+	CanAdd       bool          // Whether the worktree can be added
+	SkipReason   AddSkipReason // Reason if cannot be added
+	WorktreePath string        // Path where worktree would be created
+	Branch       string        // Branch name
+	CreateBranch bool          // Whether a new branch needs to be created
+	Remote       string        // Remote to fetch from (empty if no fetch needed)
+}
+
+// AddCheckOptions configures the check operation.
+type AddCheckOptions struct {
+	// No options needed currently, but provided for future extensibility
+}
+
 // Format formats the AddResult for display.
 func (r AddResult) Format(opts AddFormatOptions) FormatResult {
 	if opts.Quiet {
@@ -156,19 +179,18 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	var result AddResult
 	result.Branch = name
 
-	if name == "" {
-		return result, fmt.Errorf("branch name is required")
+	// Check if worktree can be added
+	checkResult, err := c.Check(name, AddCheckOptions{})
+	if err != nil {
+		return result, err
 	}
 
-	if c.Config.WorktreeSourceDir == "" {
-		return result, fmt.Errorf("worktree source directory is not configured")
-	}
-	if c.Config.WorktreeDestBaseDir == "" {
-		return result, fmt.Errorf("worktree destination base directory is not configured")
-	}
+	result.WorktreePath = checkResult.WorktreePath
+	wtPath := checkResult.WorktreePath
 
-	wtPath := filepath.Join(c.Config.WorktreeDestBaseDir, name)
-	result.WorktreePath = wtPath
+	if !checkResult.CanAdd {
+		return result, fmt.Errorf("%s: %s", checkResult.WorktreePath, checkResult.SkipReason)
+	}
 
 	// Determine stash mode and source
 	var stashMsg string
@@ -187,7 +209,8 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	// Stash changes if sync or carry is enabled
 	var stashHash string
 	if stashMsg != "" {
-		hasChanges, err := stashSourceGit.HasChanges()
+		var hasChanges bool
+		hasChanges, err = stashSourceGit.HasChanges()
 		if err != nil {
 			return result, fmt.Errorf("failed to check for changes: %w", err)
 		}
@@ -201,7 +224,8 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 				}
 				seen := make(map[string]bool)
 				for _, pattern := range c.FilePatterns {
-					matches, err := c.FS.Glob(globDir, pattern)
+					var matches []string
+					matches, err = c.FS.Glob(globDir, pattern)
 					if err != nil {
 						return result, fmt.Errorf("invalid glob pattern %q: %w", pattern, err)
 					}
@@ -213,7 +237,8 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 					}
 				}
 			}
-			hash, err := stashSourceGit.StashPush(stashMsg, pathspecs...)
+			var hash string
+			hash, err = stashSourceGit.StashPush(stashMsg, pathspecs...)
 			if err != nil {
 				return result, fmt.Errorf("failed to stash changes: %w", err)
 			}
@@ -221,7 +246,7 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 		}
 	}
 
-	gitOutput, err := c.createWorktree(name, wtPath)
+	gitOutput, err := c.createWorktree(name, wtPath, checkResult)
 	if err != nil {
 		if stashHash != "" {
 			_, _ = stashSourceGit.StashPopByHash(stashHash)
@@ -276,36 +301,77 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	return result, nil
 }
 
-func (c *AddCommand) createWorktree(branch, path string) ([]byte, error) {
-	if _, err := c.FS.Stat(path); err == nil {
-		return nil, fmt.Errorf("directory already exists: %s", path)
+// Check checks whether a worktree can be added for the given branch name.
+// This method does not modify any state.
+func (c *AddCommand) Check(name string, opts AddCheckOptions) (AddCheckResult, error) {
+	var result AddCheckResult
+	result.Branch = name
+
+	if name == "" {
+		return result, fmt.Errorf("branch name is required")
 	}
 
-	var opts []WorktreeAddOption
-	if c.Git.LocalBranchExists(branch) {
+	if c.Config.WorktreeSourceDir == "" {
+		return result, fmt.Errorf("worktree source directory is not configured")
+	}
+	if c.Config.WorktreeDestBaseDir == "" {
+		return result, fmt.Errorf("worktree destination base directory is not configured")
+	}
+
+	wtPath := filepath.Join(c.Config.WorktreeDestBaseDir, name)
+	result.WorktreePath = wtPath
+
+	// Check if directory already exists
+	if _, err := c.FS.Stat(wtPath); err == nil {
+		result.CanAdd = false
+		result.SkipReason = AddSkipDirectoryExists
+		return result, nil
+	}
+
+	// Check branch status
+	if c.Git.LocalBranchExists(name) {
 		branches, err := c.Git.WorktreeListBranches()
 		if err != nil {
-			return nil, fmt.Errorf("failed to list worktree branches: %w", err)
+			return result, fmt.Errorf("failed to list worktree branches: %w", err)
 		}
-		if slices.Contains(branches, branch) {
-			return nil, fmt.Errorf("branch %s is already checked out in another worktree", branch)
+		if slices.Contains(branches, name) {
+			result.CanAdd = false
+			result.SkipReason = AddSkipBranchCheckedOut
+			return result, nil
 		}
+		// Local branch exists but not checked out - can add
 	} else {
-		remote, err := c.Git.FindRemoteForBranch(branch)
+		remote, err := c.Git.FindRemoteForBranch(name)
 		if err != nil {
-			return nil, err
+			return result, err
 		}
 
 		if remote != "" {
-			// Remote branch found, fetch it
-			if err := c.Git.Fetch(remote, branch); err != nil {
-				return nil, fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
-			}
-			// After fetch, git worktree add will auto-track the remote branch
+			// Remote branch found - needs fetch
+			result.Remote = remote
 		} else {
-			// No remote branch found, create new local branch
-			opts = append(opts, WithCreateBranch())
+			// No local or remote branch - needs creation
+			result.CreateBranch = true
 		}
+	}
+
+	result.CanAdd = true
+	return result, nil
+}
+
+func (c *AddCommand) createWorktree(branch, path string, checkResult AddCheckResult) ([]byte, error) {
+	var opts []WorktreeAddOption
+
+	// Fetch from remote if needed
+	if checkResult.Remote != "" {
+		if err := c.Git.Fetch(checkResult.Remote, branch); err != nil {
+			return nil, fmt.Errorf("failed to fetch %s from %s: %w", branch, checkResult.Remote, err)
+		}
+	}
+
+	// Add -b flag if creating new branch
+	if checkResult.CreateBranch {
+		opts = append(opts, WithCreateBranch())
 	}
 
 	if c.Lock {

@@ -63,55 +63,6 @@ func TestAddCommand_Run(t *testing.T) {
 			wantBFlag: false,
 		},
 		{
-			name:   "directory_exists",
-			branch: "feature/test",
-			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
-			setupFS: func(t *testing.T) *testutil.MockFS {
-				t.Helper()
-				return &testutil.MockFS{
-					ExistingPaths: []string{"/repo/main-worktree/feature/test"},
-				}
-			},
-			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
-				t.Helper()
-				return &testutil.MockGitExecutor{}
-			},
-			wantErr:     true,
-			errContains: "directory already exists",
-		},
-		{
-			name:   "empty_name",
-			branch: "",
-			config: &Config{WorktreeSourceDir: "/repo/main"},
-			setupFS: func(t *testing.T) *testutil.MockFS {
-				t.Helper()
-				return &testutil.MockFS{}
-			},
-			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
-				t.Helper()
-				return &testutil.MockGitExecutor{}
-			},
-			wantErr:     true,
-			errContains: "branch name is required",
-		},
-		{
-			name:   "branch_checked_out",
-			branch: "already-used",
-			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
-			setupFS: func(t *testing.T) *testutil.MockFS {
-				t.Helper()
-				return &testutil.MockFS{}
-			},
-			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
-				t.Helper()
-				return &testutil.MockGitExecutor{
-					Worktrees: []testutil.MockWorktree{{Path: "/repo/already-used", Branch: "already-used"}},
-				}
-			},
-			wantErr:     true,
-			errContains: "already checked out",
-		},
-		{
 			name:   "worktree_add_error",
 			branch: "feature/test",
 			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
@@ -1075,6 +1026,210 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 			}
 			if created != tt.wantCreated {
 				t.Errorf("got %d created, want %d", created, tt.wantCreated)
+			}
+		})
+	}
+}
+
+func TestAddCommand_Check(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		branch           string
+		config           *Config
+		setupFS          func(t *testing.T) *testutil.MockFS
+		setupGit         func(t *testing.T) *testutil.MockGitExecutor
+		wantCanAdd       bool
+		wantSkipReason   AddSkipReason
+		wantCreateBranch bool
+		wantRemote       string
+		wantErr          bool
+		errContains      string
+	}{
+		{
+			name:   "directory_exists",
+			branch: "feature/test",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{
+					ExistingPaths: []string{"/repo/main-worktree/feature/test"},
+				}
+			},
+			setupGit: func(t *testing.T) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{}
+			},
+			wantCanAdd:     false,
+			wantSkipReason: AddSkipDirectoryExists,
+		},
+		{
+			name:   "branch_checked_out",
+			branch: "already-used",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					ExistingBranches: []string{"already-used"},
+					Worktrees:        []testutil.MockWorktree{{Path: "/repo/already-used", Branch: "already-used"}},
+				}
+			},
+			wantCanAdd:     false,
+			wantSkipReason: AddSkipBranchCheckedOut,
+		},
+		{
+			name:   "new_branch",
+			branch: "feature/new",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{}
+			},
+			wantCanAdd:       true,
+			wantCreateBranch: true,
+		},
+		{
+			name:   "existing_local_branch",
+			branch: "existing",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					ExistingBranches: []string{"existing"},
+					Worktrees:        []testutil.MockWorktree{{Path: "/repo/main", Branch: "main"}},
+				}
+			},
+			wantCanAdd:       true,
+			wantCreateBranch: false,
+		},
+		{
+			name:   "remote_branch_exists",
+			branch: "feature/remote-only",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Remotes: []string{"origin"},
+					RemoteBranches: map[string][]string{
+						"origin": {"feature/remote-only"},
+					},
+				}
+			},
+			wantCanAdd:       true,
+			wantRemote:       "origin",
+			wantCreateBranch: false,
+		},
+		{
+			name:   "empty_name",
+			branch: "",
+			config: &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{}
+			},
+			wantErr:     true,
+			errContains: "branch name is required",
+		},
+		{
+			name:   "missing_source_dir",
+			branch: "feature/test",
+			config: &Config{WorktreeDestBaseDir: "/repo/main-worktree"},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{}
+			},
+			wantErr:     true,
+			errContains: "worktree source directory is not configured",
+		},
+		{
+			name:   "missing_dest_dir",
+			branch: "feature/test",
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupFS: func(t *testing.T) *testutil.MockFS {
+				t.Helper()
+				return &testutil.MockFS{}
+			},
+			setupGit: func(t *testing.T) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{}
+			},
+			wantErr:     true,
+			errContains: "worktree destination base directory is not configured",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockFS := tt.setupFS(t)
+			mockGit := tt.setupGit(t)
+
+			cmd := &AddCommand{
+				FS:     mockFS,
+				Git:    &GitRunner{Executor: mockGit},
+				Config: tt.config,
+			}
+
+			result, err := cmd.Check(tt.branch, AddCheckOptions{})
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result.CanAdd != tt.wantCanAdd {
+				t.Errorf("CanAdd = %v, want %v", result.CanAdd, tt.wantCanAdd)
+			}
+
+			if result.SkipReason != tt.wantSkipReason {
+				t.Errorf("SkipReason = %q, want %q", result.SkipReason, tt.wantSkipReason)
+			}
+
+			if result.CreateBranch != tt.wantCreateBranch {
+				t.Errorf("CreateBranch = %v, want %v", result.CreateBranch, tt.wantCreateBranch)
+			}
+
+			if result.Remote != tt.wantRemote {
+				t.Errorf("Remote = %q, want %q", result.Remote, tt.wantRemote)
+			}
+
+			if result.Branch != tt.branch {
+				t.Errorf("Branch = %q, want %q", result.Branch, tt.branch)
 			}
 		})
 	}
