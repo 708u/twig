@@ -10,8 +10,7 @@ import (
 )
 
 // CLIHandler is a slog.Handler that outputs plain text for CLI usage.
-// It formats log messages as "[category] message" where category is
-// derived from the "category" attribute or the log level name.
+// Format: "2006-01-02 15:04:05 [LEVEL] category: message"
 type CLIHandler struct {
 	w     io.Writer
 	level slog.Level
@@ -30,13 +29,16 @@ func (h *CLIHandler) Enabled(_ context.Context, level slog.Level) bool {
 }
 
 // Handle writes a log record to the handler's writer.
-// Format: [category] message
+// Format: 2006-01-02 15:04:05 [LEVEL] category: message
 func (h *CLIHandler) Handle(_ context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Get category from attributes, fallback to level name
-	category := strings.ToLower(r.Level.String())
+	timestamp := r.Time.Format("2006-01-02 15:04:05")
+	level := strings.ToUpper(r.Level.String())
+
+	// Get category from attributes
+	var category string
 	r.Attrs(func(a slog.Attr) bool {
 		if a.Key == "category" {
 			category = a.Value.String()
@@ -45,7 +47,11 @@ func (h *CLIHandler) Handle(_ context.Context, r slog.Record) error {
 		return true
 	})
 
-	_, err := fmt.Fprintf(h.w, "[%s] %s\n", category, r.Message)
+	if category != "" {
+		_, err := fmt.Fprintf(h.w, "%s [%s] %s: %s\n", timestamp, level, category, r.Message)
+		return err
+	}
+	_, err := fmt.Fprintf(h.w, "%s [%s] %s\n", timestamp, level, r.Message)
 	return err
 }
 

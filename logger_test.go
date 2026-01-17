@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"regexp"
 	"testing"
 )
 
@@ -14,7 +15,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 		logLevel slog.Level
 		message  string
 		category string
-		want     string
+		want     string // format after timestamp (e.g., "[DEBUG] git: message\n")
 	}{
 		{
 			name:     "debug level with category",
@@ -22,7 +23,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 			logLevel: slog.LevelDebug,
 			message:  "checking branch",
 			category: "debug",
-			want:     "[debug] checking branch\n",
+			want:     "[DEBUG] debug: checking branch\n",
 		},
 		{
 			name:     "debug level with git category",
@@ -30,15 +31,15 @@ func TestCLIHandler_Handle(t *testing.T) {
 			logLevel: slog.LevelDebug,
 			message:  "worktree add -b feat/new",
 			category: "git",
-			want:     "[git] worktree add -b feat/new\n",
+			want:     "[DEBUG] git: worktree add -b feat/new\n",
 		},
 		{
-			name:     "info level without category uses level name",
+			name:     "info level without category",
 			level:    slog.LevelDebug,
 			logLevel: slog.LevelInfo,
 			message:  "operation complete",
 			category: "",
-			want:     "[info] operation complete\n",
+			want:     "[INFO] operation complete\n",
 		},
 		{
 			name:     "warn level without category",
@@ -46,9 +47,12 @@ func TestCLIHandler_Handle(t *testing.T) {
 			logLevel: slog.LevelWarn,
 			message:  "something happened",
 			category: "",
-			want:     "[warn] something happened\n",
+			want:     "[WARN] something happened\n",
 		},
 	}
+
+	// Pattern: YYYY-MM-DD HH:MM:SS followed by the rest
+	timestampPattern := regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} `)
 
 	ctx := context.Background()
 	for _, tt := range tests {
@@ -64,8 +68,17 @@ func TestCLIHandler_Handle(t *testing.T) {
 			}
 
 			got := buf.String()
-			if got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
+
+			// Verify timestamp format exists
+			if !timestampPattern.MatchString(got) {
+				t.Errorf("output missing timestamp prefix: %q", got)
+				return
+			}
+
+			// Strip timestamp and compare rest
+			gotWithoutTimestamp := timestampPattern.ReplaceAllString(got, "")
+			if gotWithoutTimestamp != tt.want {
+				t.Errorf("got %q, want %q", gotWithoutTimestamp, tt.want)
 			}
 		})
 	}
