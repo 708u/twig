@@ -299,6 +299,12 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	var branchOpts []BranchDeleteOption
 	if opts.Force > WorktreeForceLevelNone {
 		branchOpts = append(branchOpts, WithForceDelete())
+	} else {
+		// upstream gone (squash/rebase merge) requires -D since commits differ
+		// Run() reaches here only after Check() verified no uncommitted changes
+		if gone, goneErr := c.Git.IsBranchUpstreamGone(ctx, branch); goneErr == nil && gone {
+			branchOpts = append(branchOpts, WithForceDelete())
+		}
 	}
 	brOut, err := c.Git.BranchDelete(ctx, branch, branchOpts...)
 	if err != nil {
@@ -326,6 +332,11 @@ func (c *RemoveCommand) removePrunable(ctx context.Context, branch string, opts 
 	var branchOpts []BranchDeleteOption
 	if opts.Force > WorktreeForceLevelNone {
 		branchOpts = append(branchOpts, WithForceDelete())
+	} else {
+		// upstream gone (squash/rebase merge) requires -D since commits differ
+		if gone, err := c.Git.IsBranchUpstreamGone(ctx, branch); err == nil && gone {
+			branchOpts = append(branchOpts, WithForceDelete())
+		}
 	}
 	brOut, err := c.Git.BranchDelete(ctx, branch, branchOpts...)
 	if err != nil {

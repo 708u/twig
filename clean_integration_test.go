@@ -986,4 +986,85 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("CleansSquashMergedBranches", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a bare remote repository
+		remoteDir := filepath.Join(repoDir, "remote.git")
+		testutil.RunGit(t, repoDir, "init", "--bare", remoteDir)
+
+		// Add remote to main
+		testutil.RunGit(t, mainDir, "remote", "add", "origin", remoteDir)
+		testutil.RunGit(t, mainDir, "push", "-u", "origin", "main")
+
+		// Create a feature branch worktree
+		wtPath := filepath.Join(repoDir, "feature", "squash-clean")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/squash-clean", wtPath)
+
+		// Make commits on the feature branch
+		testFile := filepath.Join(wtPath, "squash.txt")
+		if err := os.WriteFile(testFile, []byte("squash content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "squash.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add squash file")
+
+		// Push to remote
+		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/squash-clean")
+
+		// Simulate squash merge on main
+		mainFile := filepath.Join(mainDir, "squash.txt")
+		if err := os.WriteFile(mainFile, []byte("squash content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add squash (#1)")
+
+		// Delete remote branch (as GitHub does after squash merge)
+		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/squash-clean")
+		testutil.RunGit(t, mainDir, "fetch", "--prune")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Execute clean (not check mode) - this should actually delete the branch
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Yes: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Should have removed the worktree
+		if len(result.Removed) != 1 {
+			t.Errorf("expected 1 removed, got %d", len(result.Removed))
+		}
+
+		// Worktree should be removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+
+		// Branch should be deleted
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/squash-clean")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+
+		// Verify no errors occurred
+		for _, r := range result.Removed {
+			if r.Err != nil {
+				t.Errorf("removal error for %s: %v", r.Branch, r.Err)
+			}
+		}
+	})
+
 }
