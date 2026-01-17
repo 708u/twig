@@ -230,9 +230,8 @@ func (c *AddCommand) Run(name string) (AddResult, error) {
 	}
 	result.GitOutput = gitOutput
 
-	// Initialize submodules in new worktree
-	// Priority: CLI flag (forces enable) > config > default (false)
-	if c.InitSubmodules || (c.Config.InitSubmodules != nil && *c.Config.InitSubmodules) {
+	// Initialize submodules in new worktree (CLI flag forces enable)
+	if c.InitSubmodules || c.Config.ShouldInitSubmodules() {
 		wtGit := c.Git.InDir(wtPath)
 		hasSubmodules, _ := wtGit.HasSubmodules()
 		if hasSubmodules {

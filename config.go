@@ -25,6 +25,14 @@ type Config struct {
 	InitSubmodules      *bool    `toml:"init_submodules"` // nil=unset, true=enable, false=disable
 }
 
+// ShouldInitSubmodules returns whether submodule initialization is enabled.
+func (c *Config) ShouldInitSubmodules() bool {
+	if c.InitSubmodules != nil {
+		return *c.InitSubmodules
+	}
+	return false
+}
+
 // LoadConfigResult contains the loaded config and any warnings.
 type LoadConfigResult struct {
 	Config   *Config
