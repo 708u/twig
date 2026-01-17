@@ -1755,11 +1755,11 @@ init_submodules = true
 		}
 
 		// Verify result
-		if !addResult.SubmodulesInited {
-			t.Error("expected SubmodulesInited to be true")
+		if !addResult.SubmoduleInit.Attempted {
+			t.Error("expected SubmoduleInit.Attempted to be true")
 		}
-		if addResult.SubmoduleCount != 1 {
-			t.Errorf("SubmoduleCount = %d, want 1", addResult.SubmoduleCount)
+		if addResult.SubmoduleInit.Count != 1 {
+			t.Errorf("SubmoduleInit.Count = %d, want 1", addResult.SubmoduleInit.Count)
 		}
 	})
 
@@ -1819,11 +1819,11 @@ init_submodules = true
 		}
 
 		// Verify result
-		if addResult.SubmodulesInited {
-			t.Error("expected SubmodulesInited to be false")
+		if addResult.SubmoduleInit.Attempted {
+			t.Error("expected SubmoduleInit.Attempted to be false")
 		}
-		if addResult.SubmoduleCount != 0 {
-			t.Errorf("SubmoduleCount = %d, want 0", addResult.SubmoduleCount)
+		if addResult.SubmoduleInit.Count != 0 {
+			t.Errorf("SubmoduleInit.Count = %d, want 0", addResult.SubmoduleInit.Count)
 		}
 	})
 
@@ -1891,11 +1891,11 @@ init_submodules = false
 		}
 
 		// Verify result
-		if !addResult.SubmodulesInited {
-			t.Error("expected SubmodulesInited to be true")
+		if !addResult.SubmoduleInit.Attempted {
+			t.Error("expected SubmoduleInit.Attempted to be true")
 		}
-		if addResult.SubmoduleCount != 1 {
-			t.Errorf("SubmoduleCount = %d, want 1", addResult.SubmoduleCount)
+		if addResult.SubmoduleInit.Count != 1 {
+			t.Errorf("SubmoduleInit.Count = %d, want 1", addResult.SubmoduleInit.Count)
 		}
 	})
 }
