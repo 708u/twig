@@ -946,12 +946,12 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/squash-remove")
 
-		// Simulate GitHub squash merge: merge to main and push
+		// Simulate squash merge: merge to main and push to remote
 		testutil.RunGit(t, mainDir, "merge", "--squash", "feature/squash-remove")
 		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add squash (#1)")
 		testutil.RunGit(t, mainDir, "push", "origin", "main")
 
-		// GitHub deletes remote branch after merge
+		// Remote branch is deleted after merge
 		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/squash-remove")
 
 		// User fetches from remote (upstream gone)
@@ -1019,12 +1019,12 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/prunable-squash")
 
-		// Simulate GitHub squash merge: merge to main and push
+		// Simulate squash merge: merge to main and push to remote
 		testutil.RunGit(t, mainDir, "merge", "--squash", "feature/prunable-squash")
 		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add prunable (#2)")
 		testutil.RunGit(t, mainDir, "push", "origin", "main")
 
-		// GitHub deletes remote branch after merge
+		// Remote branch is deleted after merge
 		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/prunable-squash")
 
 		// User fetches from remote (upstream gone)
@@ -1105,11 +1105,11 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/rebase-remove")
 
-		// Simulate GitHub rebase merge: cherry-pick creates new commit hashes and push
+		// Simulate rebase merge: cherry-pick creates new commit hashes and push to remote
 		testutil.RunGit(t, mainDir, "cherry-pick", "feature/rebase-remove~1..feature/rebase-remove")
 		testutil.RunGit(t, mainDir, "push", "origin", "main")
 
-		// GitHub deletes remote branch after merge
+		// Remote branch is deleted after merge
 		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/rebase-remove")
 
 		// User fetches from remote (upstream gone)
