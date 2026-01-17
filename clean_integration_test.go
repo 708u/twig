@@ -805,13 +805,16 @@ func TestCleanCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/squashed")
 
-		// Squash merge to main
+		// Simulate GitHub squash merge: merge to main and push
 		testutil.RunGit(t, mainDir, "merge", "--squash", "feature/squashed")
 		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add features (#1)")
+		testutil.RunGit(t, mainDir, "push", "origin", "main")
 
-		// Delete remote branch (as GitHub does after squash merge)
+		// GitHub deletes remote branch after merge
 		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/squashed")
-		testutil.RunGit(t, mainDir, "fetch", "--prune")
+
+		// User fetches from remote (upstream gone)
+		testutil.RunGit(t, wtPath, "fetch", "--prune")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -879,12 +882,15 @@ func TestCleanCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/rebased")
 
-		// Rebase merge to main (cherry-pick creates new commit hashes like GitHub's rebase merge)
+		// Simulate GitHub rebase merge: cherry-pick creates new commit hashes and push
 		testutil.RunGit(t, mainDir, "cherry-pick", "feature/rebased~1..feature/rebased")
+		testutil.RunGit(t, mainDir, "push", "origin", "main")
 
-		// Delete remote branch (as GitHub does after rebase merge)
+		// GitHub deletes remote branch after merge
 		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/rebased")
-		testutil.RunGit(t, mainDir, "fetch", "--prune")
+
+		// User fetches from remote (upstream gone)
+		testutil.RunGit(t, wtPath, "fetch", "--prune")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -994,13 +1000,16 @@ func TestCleanCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/squash-clean")
 
-		// Squash merge to main
+		// Simulate GitHub squash merge: merge to main and push
 		testutil.RunGit(t, mainDir, "merge", "--squash", "feature/squash-clean")
 		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add squash (#1)")
+		testutil.RunGit(t, mainDir, "push", "origin", "main")
 
-		// Delete remote branch (as GitHub does after squash merge)
+		// GitHub deletes remote branch after merge
 		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/squash-clean")
-		testutil.RunGit(t, mainDir, "fetch", "--prune")
+
+		// User fetches from remote (upstream gone)
+		testutil.RunGit(t, wtPath, "fetch", "--prune")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -1078,12 +1087,15 @@ func TestCleanCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/rebase-clean")
 
-		// Rebase merge to main (cherry-pick creates new commit hashes)
+		// Simulate GitHub rebase merge: cherry-pick creates new commit hashes and push
 		testutil.RunGit(t, mainDir, "cherry-pick", "feature/rebase-clean~1..feature/rebase-clean")
+		testutil.RunGit(t, mainDir, "push", "origin", "main")
 
-		// Delete remote branch (as GitHub does after rebase merge)
+		// GitHub deletes remote branch after merge
 		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/rebase-clean")
-		testutil.RunGit(t, mainDir, "fetch", "--prune")
+
+		// User fetches from remote (upstream gone)
+		testutil.RunGit(t, wtPath, "fetch", "--prune")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
