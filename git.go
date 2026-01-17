@@ -1,6 +1,7 @@
 package twig
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -12,13 +13,13 @@ import (
 // Commands are fixed to "git" - only subcommands and args are passed.
 type GitExecutor interface {
 	// Run executes git with args and returns stdout.
-	Run(args ...string) ([]byte, error)
+	Run(ctx context.Context, args ...string) ([]byte, error)
 }
 
 type osGitExecutor struct{}
 
-func (e osGitExecutor) Run(args ...string) ([]byte, error) {
-	return exec.Command("git", args...).Output()
+func (e osGitExecutor) Run(ctx context.Context, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, "git", args...).Output()
 }
 
 // GitOp represents the type of git operation.
@@ -134,8 +135,8 @@ func (g *GitRunner) InDir(dir string) *GitRunner {
 }
 
 // Run executes git command with -C flag.
-func (g *GitRunner) Run(args ...string) ([]byte, error) {
-	return g.Executor.Run(append([]string{"-C", g.Dir}, args...)...)
+func (g *GitRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
+	return g.Executor.Run(ctx, append([]string{"-C", g.Dir}, args...)...)
 }
 
 type worktreeAddOptions struct {
@@ -179,27 +180,34 @@ func WithLockReason(reason string) WorktreeAddOption {
 }
 
 // WorktreeAdd creates a new worktree at the specified path.
-func (g *GitRunner) WorktreeAdd(path, branch string, opts ...WorktreeAddOption) ([]byte, error) {
+func (g *GitRunner) WorktreeAdd(ctx context.Context, path, branch string, opts ...WorktreeAddOption) ([]byte, error) {
 	var o worktreeAddOptions
 	for _, opt := range opts {
 		opt(&o)
 	}
 
 	if o.createBranch {
-		return g.worktreeAddWithNewBranch(branch, path, o)
+		return g.worktreeAddWithNewBranch(ctx, branch, path, o)
 	}
-	return g.worktreeAdd(path, branch, o)
+	return g.worktreeAdd(ctx, path, branch, o)
 }
 
 // LocalBranchExists checks if a branch exists in the local repository.
-func (g *GitRunner) LocalBranchExists(branch string) bool {
-	_, err := g.Run(GitCmdRevParse, "--verify", RefsHeadsPrefix+branch)
-	return err == nil
+func (g *GitRunner) LocalBranchExists(ctx context.Context, branch string) (bool, error) {
+	_, err := g.Run(ctx, GitCmdRevParse, "--verify", RefsHeadsPrefix+branch)
+	if err != nil {
+		// Check if context was cancelled
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+		return false, nil
+	}
+	return true, nil
 }
 
 // BranchList returns all local branch names.
-func (g *GitRunner) BranchList() ([]string, error) {
-	output, err := g.Run(GitCmdBranch, "--format=%(refname:short)")
+func (g *GitRunner) BranchList(ctx context.Context) ([]string, error) {
+	output, err := g.Run(ctx, GitCmdBranch, "--format=%(refname:short)")
 	if err != nil {
 		return nil, err
 	}
@@ -215,11 +223,14 @@ func (g *GitRunner) BranchList() ([]string, error) {
 // FindRemotesForBranch returns all remotes that have the specified branch
 // in local remote-tracking branches.
 // This checks refs/remotes/*/<branch> locally without network access.
-func (g *GitRunner) FindRemotesForBranch(branch string) []string {
-	out, err := g.Run(GitCmdForEachRef, "--format=%(refname:short)",
+func (g *GitRunner) FindRemotesForBranch(ctx context.Context, branch string) ([]string, error) {
+	out, err := g.Run(ctx, GitCmdForEachRef, "--format=%(refname:short)",
 		fmt.Sprintf("refs/remotes/*/%s", branch))
 	if err != nil {
-		return nil
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, nil
 	}
 
 	var remotes []string
@@ -232,15 +243,18 @@ func (g *GitRunner) FindRemotesForBranch(branch string) []string {
 			remotes = append(remotes, line[:idx])
 		}
 	}
-	return remotes
+	return remotes, nil
 }
 
 // FindRemoteForBranch finds the remote that has the specified branch.
 // Returns the remote name if exactly one remote has the branch.
 // Returns empty string if no remote has the branch.
 // Returns error if multiple remotes have the branch (ambiguous).
-func (g *GitRunner) FindRemoteForBranch(branch string) (string, error) {
-	remotes := g.FindRemotesForBranch(branch)
+func (g *GitRunner) FindRemoteForBranch(ctx context.Context, branch string) (string, error) {
+	remotes, err := g.FindRemotesForBranch(ctx, branch)
+	if err != nil {
+		return "", err
+	}
 
 	switch len(remotes) {
 	case 0:
@@ -253,10 +267,10 @@ func (g *GitRunner) FindRemoteForBranch(branch string) (string, error) {
 }
 
 // Fetch fetches the specified refspec from the remote.
-func (g *GitRunner) Fetch(remote string, refspec ...string) error {
+func (g *GitRunner) Fetch(ctx context.Context, remote string, refspec ...string) error {
 	args := []string{GitCmdFetch, remote}
 	args = append(args, refspec...)
-	_, err := g.Run(args...)
+	_, err := g.Run(ctx, args...)
 	return err
 }
 
@@ -282,8 +296,8 @@ func (w Worktree) ShortHEAD() string {
 }
 
 // WorktreeList returns all worktrees with their paths and branches.
-func (g *GitRunner) WorktreeList() ([]Worktree, error) {
-	out, err := g.worktreeListPorcelain()
+func (g *GitRunner) WorktreeList(ctx context.Context) ([]Worktree, error) {
+	out, err := g.worktreeListPorcelain(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -331,8 +345,8 @@ func (g *GitRunner) WorktreeList() ([]Worktree, error) {
 }
 
 // WorktreeListBranches returns a list of branch names currently checked out in worktrees.
-func (g *GitRunner) WorktreeListBranches() ([]string, error) {
-	output, err := g.worktreeListPorcelain()
+func (g *GitRunner) WorktreeListBranches(ctx context.Context) ([]string, error) {
+	output, err := g.worktreeListPorcelain(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -348,8 +362,8 @@ func (g *GitRunner) WorktreeListBranches() ([]string, error) {
 
 // WorktreeFindByBranch returns the Worktree for the given branch.
 // Returns an error if the branch is not checked out in any worktree.
-func (g *GitRunner) WorktreeFindByBranch(branch string) (*Worktree, error) {
-	worktrees, err := g.WorktreeList()
+func (g *GitRunner) WorktreeFindByBranch(ctx context.Context, branch string) (*Worktree, error) {
+	worktrees, err := g.WorktreeList(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -392,13 +406,13 @@ func WithForceRemove(level WorktreeForceLevel) WorktreeRemoveOption {
 
 // WorktreeRemove removes the worktree at the given path.
 // By default fails if there are uncommitted changes. Use WithForceRemove() to force.
-func (g *GitRunner) WorktreeRemove(path string, opts ...WorktreeRemoveOption) ([]byte, error) {
+func (g *GitRunner) WorktreeRemove(ctx context.Context, path string, opts ...WorktreeRemoveOption) ([]byte, error) {
 	var o worktreeRemoveOptions
 	for _, opt := range opts {
 		opt(&o)
 	}
 
-	out, err := g.worktreeRemove(path, o.forceLevel)
+	out, err := g.worktreeRemove(ctx, path, o.forceLevel)
 	if err != nil {
 		return nil, newGitError(OpWorktreeRemove, err)
 	}
@@ -421,13 +435,13 @@ func WithForceDelete() BranchDeleteOption {
 
 // BranchDelete deletes a local branch.
 // By default uses -d (safe delete). Use WithForceDelete() to use -D (force delete).
-func (g *GitRunner) BranchDelete(branch string, opts ...BranchDeleteOption) ([]byte, error) {
+func (g *GitRunner) BranchDelete(ctx context.Context, branch string, opts ...BranchDeleteOption) ([]byte, error) {
 	var o branchDeleteOptions
 	for _, opt := range opts {
 		opt(&o)
 	}
 
-	out, err := g.branchDelete(branch, o.force)
+	out, err := g.branchDelete(ctx, branch, o.force)
 	if err != nil {
 		return nil, newGitError(OpBranchDelete, err)
 	}
@@ -443,8 +457,8 @@ type FileStatus struct {
 // ChangedFiles returns files with uncommitted changes including staged,
 // unstaged, and untracked files. Status codes are the first 2 characters
 // from git status --porcelain output.
-func (g *GitRunner) ChangedFiles() ([]FileStatus, error) {
-	output, err := g.Run(GitCmdStatus, "--porcelain", "-uall")
+func (g *GitRunner) ChangedFiles(ctx context.Context) ([]FileStatus, error) {
+	output, err := g.Run(ctx, GitCmdStatus, "--porcelain", "-uall")
 	if err != nil {
 		return nil, fmt.Errorf("failed to check git status: %w", err)
 	}
@@ -467,8 +481,8 @@ func (g *GitRunner) ChangedFiles() ([]FileStatus, error) {
 }
 
 // HasChanges checks if there are any uncommitted changes (staged, unstaged, or untracked).
-func (g *GitRunner) HasChanges() (bool, error) {
-	files, err := g.ChangedFiles()
+func (g *GitRunner) HasChanges(ctx context.Context) (bool, error) {
+	files, err := g.ChangedFiles(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -488,16 +502,16 @@ func (g *GitRunner) HasChanges() (bool, error) {
 // "stash create" does not support -u/--include-untracked option (git limitation).
 // It can only stash tracked file changes, not untracked files.
 // See: https://git-scm.com/docs/git-stash
-func (g *GitRunner) StashPush(message string, pathspecs ...string) (string, error) {
+func (g *GitRunner) StashPush(ctx context.Context, message string, pathspecs ...string) (string, error) {
 	args := []string{GitCmdStash, GitStashPush, "-u", "-m", message}
 	if len(pathspecs) > 0 {
 		args = append(args, "--")
 		args = append(args, pathspecs...)
 	}
-	if _, err := g.Run(args...); err != nil {
+	if _, err := g.Run(ctx, args...); err != nil {
 		return "", err
 	}
-	out, err := g.Run(GitCmdRevParse, "stash@{0}")
+	out, err := g.Run(ctx, GitCmdRevParse, "stash@{0}")
 	if err != nil {
 		return "", err
 	}
@@ -505,28 +519,28 @@ func (g *GitRunner) StashPush(message string, pathspecs ...string) (string, erro
 }
 
 // StashApplyByHash applies the stash with the given hash without dropping it.
-func (g *GitRunner) StashApplyByHash(hash string) ([]byte, error) {
-	return g.Run(GitCmdStash, GitStashApply, hash)
+func (g *GitRunner) StashApplyByHash(ctx context.Context, hash string) ([]byte, error) {
+	return g.Run(ctx, GitCmdStash, GitStashApply, hash)
 }
 
 // StashPopByHash applies and drops the stash with the given hash.
-func (g *GitRunner) StashPopByHash(hash string) ([]byte, error) {
-	if _, err := g.StashApplyByHash(hash); err != nil {
+func (g *GitRunner) StashPopByHash(ctx context.Context, hash string) ([]byte, error) {
+	if _, err := g.StashApplyByHash(ctx, hash); err != nil {
 		return nil, err
 	}
-	return g.StashDropByHash(hash)
+	return g.StashDropByHash(ctx, hash)
 }
 
 // StashDropByHash drops the stash with the given hash.
-func (g *GitRunner) StashDropByHash(hash string) ([]byte, error) {
-	out, err := g.Run(GitCmdStash, GitStashList, "--format=%gd %H")
+func (g *GitRunner) StashDropByHash(ctx context.Context, hash string) ([]byte, error) {
+	out, err := g.Run(ctx, GitCmdStash, GitStashList, "--format=%gd %H")
 	if err != nil {
 		return nil, err
 	}
 	for line := range strings.SplitSeq(string(out), "\n") {
 		if strings.HasSuffix(line, hash) {
 			ref := strings.Fields(line)[0]
-			return g.Run(GitCmdStash, GitStashDrop, ref)
+			return g.Run(ctx, GitCmdStash, GitStashDrop, ref)
 		}
 	}
 	return nil, fmt.Errorf("stash not found: %s", hash)
@@ -534,25 +548,25 @@ func (g *GitRunner) StashDropByHash(hash string) ([]byte, error) {
 
 // private methods for git command execution
 
-func (g *GitRunner) worktreeAdd(path, branch string, o worktreeAddOptions) ([]byte, error) {
+func (g *GitRunner) worktreeAdd(ctx context.Context, path, branch string, o worktreeAddOptions) ([]byte, error) {
 	args := []string{GitCmdWorktree, GitWorktreeAdd}
 	args = append(args, o.lockArgs()...)
 	args = append(args, path, branch)
-	return g.Run(args...)
+	return g.Run(ctx, args...)
 }
 
-func (g *GitRunner) worktreeAddWithNewBranch(branch, path string, o worktreeAddOptions) ([]byte, error) {
+func (g *GitRunner) worktreeAddWithNewBranch(ctx context.Context, branch, path string, o worktreeAddOptions) ([]byte, error) {
 	args := []string{GitCmdWorktree, GitWorktreeAdd}
 	args = append(args, o.lockArgs()...)
 	args = append(args, "-b", branch, path)
-	return g.Run(args...)
+	return g.Run(ctx, args...)
 }
 
-func (g *GitRunner) worktreeListPorcelain() ([]byte, error) {
-	return g.Run(GitCmdWorktree, GitWorktreeList, "--porcelain")
+func (g *GitRunner) worktreeListPorcelain(ctx context.Context) ([]byte, error) {
+	return g.Run(ctx, GitCmdWorktree, GitWorktreeList, "--porcelain")
 }
 
-func (g *GitRunner) worktreeRemove(path string, forceLevel WorktreeForceLevel) ([]byte, error) {
+func (g *GitRunner) worktreeRemove(ctx context.Context, path string, forceLevel WorktreeForceLevel) ([]byte, error) {
 	args := []string{GitCmdWorktree, GitWorktreeRemove}
 	// git worktree remove:
 	// -f (once): remove unclean worktree
@@ -561,22 +575,22 @@ func (g *GitRunner) worktreeRemove(path string, forceLevel WorktreeForceLevel) (
 		args = append(args, "-f")
 	}
 	args = append(args, path)
-	return g.Run(args...)
+	return g.Run(ctx, args...)
 }
 
-func (g *GitRunner) branchDelete(branch string, force bool) ([]byte, error) {
+func (g *GitRunner) branchDelete(ctx context.Context, branch string, force bool) ([]byte, error) {
 	flag := "-d"
 	if force {
 		flag = "-D"
 	}
-	return g.Run(GitCmdBranch, flag, branch)
+	return g.Run(ctx, GitCmdBranch, flag, branch)
 }
 
 // IsBranchMerged checks if branch is merged into target.
 // First checks using git branch --merged (detects traditional merges).
 // If not found, falls back to checking if upstream is gone (squash/rebase merges).
-func (g *GitRunner) IsBranchMerged(branch, target string) (bool, error) {
-	out, err := g.Run(GitCmdBranch, "--merged", target, "--format=%(refname:short)")
+func (g *GitRunner) IsBranchMerged(ctx context.Context, branch, target string) (bool, error) {
+	out, err := g.Run(ctx, GitCmdBranch, "--merged", target, "--format=%(refname:short)")
 	if err != nil {
 		return false, fmt.Errorf("failed to check merged branches: %w", err)
 	}
@@ -587,15 +601,15 @@ func (g *GitRunner) IsBranchMerged(branch, target string) (bool, error) {
 	}
 
 	// Fallback: check if upstream branch is gone (deleted after merge)
-	return g.IsBranchUpstreamGone(branch)
+	return g.IsBranchUpstreamGone(ctx, branch)
 }
 
 // IsBranchUpstreamGone checks if the branch's upstream tracking branch is gone.
 // This indicates the remote branch was deleted, typically after a PR merge.
-func (g *GitRunner) IsBranchUpstreamGone(branch string) (bool, error) {
+func (g *GitRunner) IsBranchUpstreamGone(ctx context.Context, branch string) (bool, error) {
 	// git for-each-ref --format='%(upstream:track)' refs/heads/<branch>
 	// Returns "[gone]" if upstream was deleted
-	out, err := g.Run("for-each-ref", "--format=%(upstream:track)", "refs/heads/"+branch)
+	out, err := g.Run(ctx, "for-each-ref", "--format=%(upstream:track)", "refs/heads/"+branch)
 	if err != nil {
 		return false, fmt.Errorf("failed to check upstream status: %w", err)
 	}
@@ -603,8 +617,8 @@ func (g *GitRunner) IsBranchUpstreamGone(branch string) (bool, error) {
 }
 
 // WorktreePrune removes references to worktrees that no longer exist.
-func (g *GitRunner) WorktreePrune() ([]byte, error) {
-	out, err := g.Run(GitCmdWorktree, GitWorktreePrune)
+func (g *GitRunner) WorktreePrune(ctx context.Context) ([]byte, error) {
+	out, err := g.Run(ctx, GitCmdWorktree, GitWorktreePrune)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prune worktrees: %w", err)
 	}
@@ -650,8 +664,8 @@ type SubmoduleInfo struct {
 
 // SubmoduleStatus runs `git submodule status --recursive` and parses the output.
 // Returns a list of SubmoduleInfo for all submodules.
-func (g *GitRunner) SubmoduleStatus() ([]SubmoduleInfo, error) {
-	out, err := g.Run(GitCmdSubmodule, "status", "--recursive")
+func (g *GitRunner) SubmoduleStatus(ctx context.Context) ([]SubmoduleInfo, error) {
+	out, err := g.Run(ctx, GitCmdSubmodule, "status", "--recursive")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get submodule status: %w", err)
 	}
@@ -701,8 +715,8 @@ func (g *GitRunner) SubmoduleStatus() ([]SubmoduleInfo, error) {
 //   - SubmoduleCleanStatusNone: no initialized submodules
 //   - SubmoduleCleanStatusClean: submodules exist but are clean (safe to auto-force)
 //   - SubmoduleCleanStatusDirty: submodules have changes (requires user --force)
-func (g *GitRunner) CheckSubmoduleCleanStatus() (SubmoduleCleanStatus, error) {
-	submodules, err := g.SubmoduleStatus()
+func (g *GitRunner) CheckSubmoduleCleanStatus(ctx context.Context) (SubmoduleCleanStatus, error) {
+	submodules, err := g.SubmoduleStatus(ctx)
 	if err != nil {
 		return SubmoduleCleanStatusNone, err
 	}
@@ -723,7 +737,7 @@ func (g *GitRunner) CheckSubmoduleCleanStatus() (SubmoduleCleanStatus, error) {
 		// sm.Path is relative to the worktree, so we need to join it with g.Dir
 		smAbsPath := filepath.Join(g.Dir, sm.Path)
 		smRunner := g.InDir(smAbsPath)
-		hasChanges, err := smRunner.HasChanges()
+		hasChanges, err := smRunner.HasChanges(ctx)
 		if err != nil {
 			// If we can't check, assume dirty for safety
 			return SubmoduleCleanStatusDirty, nil
@@ -741,16 +755,16 @@ func (g *GitRunner) CheckSubmoduleCleanStatus() (SubmoduleCleanStatus, error) {
 
 // SubmoduleUpdate runs git submodule update --init --recursive.
 // Returns the number of initialized submodules.
-func (g *GitRunner) SubmoduleUpdate() (int, error) {
+func (g *GitRunner) SubmoduleUpdate(ctx context.Context) (int, error) {
 	args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
 
-	_, err := g.Run(args...)
+	_, err := g.Run(ctx, args...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to initialize submodules: %w", err)
 	}
 
 	// Count initialized submodules
-	submodules, err := g.SubmoduleStatus()
+	submodules, err := g.SubmoduleStatus(ctx)
 	if err != nil {
 		return 0, nil // Initialization succeeded, but count failed
 	}
