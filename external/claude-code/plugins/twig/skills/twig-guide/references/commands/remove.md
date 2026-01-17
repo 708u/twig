@@ -14,11 +14,11 @@ twig remove <branch>... [flags]
 
 ## Flags
 
-| Flag        | Short | Description                                       |
-|-------------|-------|---------------------------------------------------|
-| `--force`   | `-f`  | Force removal (can be specified twice, see below) |
-| `--check`   |       | Show removal eligibility without making changes   |
-| `--verbose` | `-v`  | Enable verbose output                             |
+| Flag        | Short | Description                                         |
+|-------------|-------|-----------------------------------------------------|
+| `--force`   | `-f`  | Force removal (can be specified twice, see below)   |
+| `--check`   |       | Show removal eligibility without making changes     |
+| `--verbose` | `-v`  | Enable verbose output (use `-vv` for debug logging) |
 
 ## Behavior
 
@@ -134,6 +134,28 @@ The status codes follow git status --porcelain format:
 | `M` | Modified (staged)    |
 | `A` | Added (staged)       |
 | `??` | Untracked            |
+
+### Debug Output
+
+With `-vv`, debug logging is enabled to trace internal operations:
+
+```txt
+twig remove feat/test -vv
+2026-01-18 12:34:56 [DEBUG] remove: checking branch=feat/test path=/path/to/feat/test prunable=false
+2026-01-18 12:34:56 [DEBUG] remove: check completed canRemove=true branch=feat/test
+2026-01-18 12:34:56 [DEBUG] remove: submodule check status=none effectiveForce=0 branch=feat/test
+2026-01-18 12:34:56 [DEBUG] remove: cleaned empty dirs count=1 branch=feat/test
+twig remove: feat/test
+```
+
+Debug logs show:
+
+- Branch checking details (path, prunable status)
+- Check result (canRemove, skip reasons)
+- Submodule status and effective force level
+- Empty directory cleanup count
+- Upstream gone detection
+- Prunable worktree handling
 
 ## Multiple Branches
 

@@ -165,6 +165,7 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		FS:     c.FS,
 		Git:    c.Git,
 		Config: c.Config,
+		Log:    NewNopLogger(),
 	}
 
 	// Analyze each worktree using RemoveCommand.Check

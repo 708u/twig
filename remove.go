@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
 )
@@ -60,6 +61,7 @@ type RemoveCommand struct {
 	FS     FileSystem
 	Git    *GitRunner
 	Config *Config
+	Log    *slog.Logger
 }
 
 // RemoveOptions configures the remove operation.
@@ -71,17 +73,24 @@ type RemoveOptions struct {
 }
 
 // NewRemoveCommand creates a RemoveCommand with explicit dependencies.
-func NewRemoveCommand(fs FileSystem, git *GitRunner, cfg *Config) *RemoveCommand {
+func NewRemoveCommand(fs FileSystem, git *GitRunner, cfg *Config, log *slog.Logger) *RemoveCommand {
+	if log == nil {
+		log = NewNopLogger()
+	}
 	return &RemoveCommand{
 		FS:     fs,
 		Git:    git,
 		Config: cfg,
+		Log:    log,
 	}
 }
 
 // NewDefaultRemoveCommand creates a RemoveCommand with production defaults.
-func NewDefaultRemoveCommand(cfg *Config) *RemoveCommand {
-	return NewRemoveCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir), cfg)
+func NewDefaultRemoveCommand(cfg *Config, log *slog.Logger) *RemoveCommand {
+	if log == nil {
+		log = NewNopLogger()
+	}
+	return NewRemoveCommand(osFS{}, NewGitRunnerWithLogger(cfg.WorktreeSourceDir, log), cfg, log)
 }
 
 // RemovedWorktree holds the result of a single worktree removal.
@@ -258,12 +267,20 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	result.SkipReason = checkResult.SkipReason
 	result.ChangedFiles = checkResult.ChangedFiles
 
+	c.Log.Debug("check completed",
+		"category", LogCategoryRemove,
+		"canRemove", checkResult.CanRemove,
+		"branch", branch)
+
 	if !checkResult.CanRemove {
 		return result, &SkipError{Reason: checkResult.SkipReason}
 	}
 
 	// Handle prunable worktree (directory already deleted externally)
 	if checkResult.Prunable {
+		c.Log.Debug("handling prunable worktree",
+			"category", LogCategoryRemove,
+			"branch", branch)
 		return c.removePrunable(ctx, branch, opts, result)
 	}
 
@@ -277,6 +294,11 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 			effectiveForce = WorktreeForceLevelUnclean
 		}
 	}
+	c.Log.Debug("submodule check",
+		"category", LogCategoryRemove,
+		"status", smStatus,
+		"effectiveForce", effectiveForce,
+		"branch", branch)
 
 	if opts.Check {
 		result.CleanedDirs = c.predictEmptyParentDirs(checkResult.WorktreePath)
@@ -295,6 +317,12 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	gitOutput = append(gitOutput, wtOut...)
 
 	result.CleanedDirs = c.cleanupEmptyParentDirs(checkResult.WorktreePath)
+	if len(result.CleanedDirs) > 0 {
+		c.Log.Debug("cleaned empty dirs",
+			"category", LogCategoryRemove,
+			"count", len(result.CleanedDirs),
+			"branch", branch)
+	}
 
 	var branchOpts []BranchDeleteOption
 	if opts.Force > WorktreeForceLevelNone {
@@ -303,6 +331,9 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 		// upstream gone (squash/rebase merge) requires -D since commits differ
 		// Run() reaches here only after Check() verified no uncommitted changes
 		if gone, goneErr := c.Git.IsBranchUpstreamGone(ctx, branch); goneErr == nil && gone {
+			c.Log.Debug("upstream gone, using force delete",
+				"category", LogCategoryRemove,
+				"branch", branch)
 			branchOpts = append(branchOpts, WithForceDelete())
 		}
 	}
@@ -323,6 +354,10 @@ func (c *RemoveCommand) removePrunable(ctx context.Context, branch string, opts 
 		return result, nil
 	}
 
+	c.Log.Debug("pruning stale worktree record",
+		"category", LogCategoryRemove,
+		"branch", branch)
+
 	// Prune stale worktree records
 	if _, err := c.Git.WorktreePrune(ctx); err != nil {
 		return result, fmt.Errorf("failed to prune worktrees: %w", err)
@@ -335,6 +370,9 @@ func (c *RemoveCommand) removePrunable(ctx context.Context, branch string, opts 
 	} else {
 		// upstream gone (squash/rebase merge) requires -D since commits differ
 		if gone, err := c.Git.IsBranchUpstreamGone(ctx, branch); err == nil && gone {
+			c.Log.Debug("prunable: upstream gone, using force delete",
+				"category", LogCategoryRemove,
+				"branch", branch)
 			branchOpts = append(branchOpts, WithForceDelete())
 		}
 	}
@@ -370,6 +408,9 @@ func (c *RemoveCommand) cleanupEmptyParentDirs(wtPath string) []string {
 		if err := c.FS.Remove(current); err != nil {
 			break
 		}
+		c.Log.Debug("removed empty dir",
+			"category", LogCategoryRemove,
+			"dir", current)
 		cleaned = append(cleaned, current)
 		current = filepath.Dir(current)
 	}
@@ -434,11 +475,21 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 	result.WorktreePath = wtInfo.Path
 	result.Prunable = wtInfo.Prunable
 
+	c.Log.Debug("checking",
+		"category", LogCategoryRemove,
+		"branch", branch,
+		"path", wtInfo.Path,
+		"prunable", wtInfo.Prunable)
+
 	if wtInfo.Prunable {
 		// Prunable branch: worktree directory was deleted externally
 		if reason := c.checkPrunableSkipReason(ctx, branch, opts.Target, opts.Force); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
+			c.Log.Debug("skip",
+				"category", LogCategoryRemove,
+				"reason", reason,
+				"branch", branch)
 			return result, nil
 		}
 	} else {
@@ -456,6 +507,10 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 		if reason := c.checkSkipReason(ctx, wt, opts.Cwd, opts.Target, opts.Force); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
+			c.Log.Debug("skip",
+				"category", LogCategoryRemove,
+				"reason", reason,
+				"branch", branch)
 			return result, nil
 		}
 	}
@@ -464,6 +519,12 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 	// CleanReason requires a target branch to determine merge status
 	if opts.Target != "" {
 		result.CleanReason = c.getCleanReason(ctx, branch, opts.Target)
+		if result.CleanReason != "" {
+			c.Log.Debug("clean reason",
+				"category", LogCategoryRemove,
+				"reason", result.CleanReason,
+				"branch", branch)
+		}
 	}
 	return result, nil
 }

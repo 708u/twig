@@ -96,4 +96,5 @@ const (
 	LogCategoryGit    = "git"
 	LogCategoryConfig = "config"
 	LogCategoryGlob   = "glob"
+	LogCategoryRemove = "remove"
 )

@@ -490,11 +490,18 @@ stop processing of remaining branches.`,
 			forceCount, _ := cmd.Flags().GetCount("force")
 			check, _ := cmd.Flags().GetBool("check")
 
+			// Create logger based on verbosity level
+			log := twig.NewNopLogger()
+			if verbosity >= 2 {
+				handler := twig.NewCLIHandler(cmd.ErrOrStderr(), twig.VerbosityToLevel(verbosity))
+				log = slog.New(handler)
+			}
+
 			var removeCmd RemoveCommander
 			if o.removeCommander != nil {
 				removeCmd = o.removeCommander
 			} else {
-				removeCmd = twig.NewDefaultRemoveCommand(cfg)
+				removeCmd = twig.NewDefaultRemoveCommand(cfg, log)
 			}
 			var result twig.RemoveResult
 

@@ -484,6 +484,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 				FS:     &testutil.MockFS{},
 				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: tt.config,
+				Log:    NewNopLogger(),
 			}
 
 			result, err := cmd.Run(t.Context(), tt.branch, tt.cwd, tt.opts)
@@ -598,6 +599,7 @@ func TestRemoveCommand_CleanupEmptyParentDirs(t *testing.T) {
 			cmd := &RemoveCommand{
 				FS:     mockFS,
 				Config: &Config{WorktreeDestBaseDir: tt.baseDir},
+				Log:    NewNopLogger(),
 			}
 
 			cleaned := cmd.cleanupEmptyParentDirs(tt.wtPath)
@@ -660,6 +662,7 @@ func TestRemoveCommand_PredictEmptyParentDirs(t *testing.T) {
 			cmd := &RemoveCommand{
 				FS:     mockFS,
 				Config: &Config{WorktreeDestBaseDir: tt.baseDir},
+				Log:    NewNopLogger(),
 			}
 
 			predicted := cmd.predictEmptyParentDirs(tt.wtPath)
@@ -1250,6 +1253,7 @@ func TestRemoveCommand_Check(t *testing.T) {
 				FS:     &testutil.MockFS{},
 				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: tt.config,
+				Log:    NewNopLogger(),
 			}
 
 			result, err := cmd.Check(t.Context(), tt.branch, tt.opts)
@@ -1461,6 +1465,7 @@ func TestRemoveCommand_UpstreamGoneUsesForceDelete(t *testing.T) {
 				FS:     &testutil.MockFS{},
 				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: &Config{WorktreeSourceDir: "/repo/main"},
+				Log:    NewNopLogger(),
 			}
 
 			_, err := cmd.Run(t.Context(), tt.branch, "/other/dir", RemoveOptions{})

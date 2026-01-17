@@ -38,6 +38,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
+			Log:    NewNopLogger(),
 		}
 
 		removeResult, err := cmd.Run(t.Context(), "feature/to-remove", mainDir, RemoveOptions{})
@@ -77,6 +78,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
+			Log:    NewNopLogger(),
 		}
 
 		removeResult, err := cmd.Run(t.Context(), "feature/dry-run-test", mainDir, RemoveOptions{Check: true})
@@ -121,6 +123,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// First, verify removal without --force fails with SkipError
@@ -168,6 +171,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Removal without --force should fail with SkipError
@@ -231,6 +235,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
+			Log:    NewNopLogger(),
 		}
 
 		_, err = cmd.Run(t.Context(), "feature/inside-test", wtPath, RemoveOptions{})
@@ -262,6 +267,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: result.Config,
+			Log:    NewNopLogger(),
 		}
 
 		_, err = cmd.Run(t.Context(), "orphan-branch", mainDir, RemoveOptions{})
@@ -295,6 +301,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Remove all worktrees
@@ -355,6 +362,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Try to remove both
@@ -419,6 +427,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		removeResult, err := cmd.Run(t.Context(), "feat/nested/very/deep", mainDir, RemoveOptions{})
@@ -470,6 +479,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Remove first worktree
@@ -528,6 +538,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		removeResult, err := cmd.Run(t.Context(), "feat/dry-cleanup", mainDir, RemoveOptions{Check: true})
@@ -593,6 +604,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		removeResult, err := cmd.Run(t.Context(), "feature/prunable-test", mainDir, RemoveOptions{})
@@ -639,6 +651,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		removeResult, err := cmd.Run(t.Context(), "feature/prunable-dry-run", mainDir, RemoveOptions{Check: true})
@@ -691,6 +704,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Remove with force option
@@ -749,6 +763,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Check should pass (clean submodule)
@@ -819,6 +834,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Test Check() returns ChangedFiles
@@ -902,6 +918,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Run with --force should succeed
@@ -966,6 +983,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Remove the upstream gone branch (should use -D internally)
@@ -1050,6 +1068,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Remove the prunable upstream gone branch (should use -D internally)
@@ -1124,6 +1143,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Remove the upstream gone branch (should use -D internally)
@@ -1197,6 +1217,7 @@ func TestRemoveCommand_Check_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		checkResult, err := cmd.Check(t.Context(), "feature/with-submodule", CheckOptions{
@@ -1264,6 +1285,7 @@ func TestRemoveCommand_Check_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		checkResult, err := cmd.Check(t.Context(), "feature/changed-files-test", CheckOptions{
