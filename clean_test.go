@@ -186,6 +186,60 @@ func TestCleanResult_Format(t *testing.T) {
 			wantStdout: "No worktrees to clean\n",
 			wantStderr: "",
 		},
+		// Verbose with changed files tests
+		{
+			name: "verbose_with_changed_files",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+					{
+						Branch:     "feat/wip",
+						Skipped:    true,
+						SkipReason: SkipHasChanges,
+						ChangedFiles: []FileStatus{
+							{Status: " M", Path: "src/main.go"},
+							{Status: "??", Path: "tmp/debug.log"},
+						},
+					},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/wip (has uncommitted changes)\n     M src/main.go\n    ?? tmp/debug.log\n",
+			wantStderr: "",
+		},
+		{
+			name: "verbose_with_dirty_submodule_changed_files",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{
+						Branch:     "feat/submod",
+						Skipped:    true,
+						SkipReason: SkipDirtySubmodule,
+						ChangedFiles: []FileStatus{
+							{Status: " M", Path: "submodule/file.go"},
+						},
+					},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "skip:\n  feat/submod (submodule has uncommitted changes)\n     M submodule/file.go\n\nNo worktrees to clean\n",
+			wantStderr: "",
+		},
+		{
+			name: "verbose_skip_reason_without_changed_files",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+					{Branch: "feat/locked", Skipped: true, SkipReason: SkipLocked},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/locked (locked)\n",
+			wantStderr: "",
+		},
 	}
 
 	for _, tt := range tests {

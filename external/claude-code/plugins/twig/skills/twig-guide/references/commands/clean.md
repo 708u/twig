@@ -16,7 +16,7 @@ twig clean [flags]
 | `--check`         |       | Show candidates without prompting               |
 | `--target`        |       | Target branch for merge check                   |
 | `--force`         | `-f`  | Force clean (can be specified twice, see below) |
-| `--verbose`       | `-v`  | Show skip reasons for skipped worktrees         |
+| `--verbose`       | `-v`  | Show skip reasons and uncommitted changes       |
 
 ## Behavior
 
@@ -139,6 +139,16 @@ skip:
 - Each item is indented with 2 spaces
 - A blank line separates groups
 
+With `--verbose`, worktrees skipped due to uncommitted changes show the
+list of changed files:
+
+```txt
+skip:
+  feat/wip (has uncommitted changes)
+     M src/main.go
+    ?? tmp/debug.log
+```
+
 Clean reasons:
 
 | Reason           | Description                                     |
@@ -160,13 +170,15 @@ Proceed? [y/N]: y
 twig clean: feature/old-branch
 twig clean: fix/completed
 
-# Show with skip reasons
+# Show with skip reasons and changed files
 twig clean -v
 clean:
   feature/old-branch (merged)
 
 skip:
   feature/active (has uncommitted changes)
+     M src/main.go
+    ?? tmp/debug.log
   feature/wip (not merged)
 
 Proceed? [y/N]:
