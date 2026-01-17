@@ -6,7 +6,7 @@ DATE    ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
 install:
-	go install ./cmd/twig
+	go install -ldflags "$(LDFLAGS)" ./cmd/twig
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o out/twig ./cmd/twig
