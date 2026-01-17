@@ -434,6 +434,42 @@ func TestRemoveCommand_Run(t *testing.T) {
 			wantErr:     true,
 			errContains: "failed to delete branch",
 		},
+		{
+			name:   "upstream_gone_uses_force_delete",
+			branch: "feature/squashed",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees:            []testutil.MockWorktree{{Path: "/repo/feature/squashed", Branch: "feature/squashed"}},
+					UpstreamGoneBranches: []string{"feature/squashed"},
+					CapturedArgs:         captured,
+				}
+			},
+			wantErr: false,
+		},
+		{
+			name:   "prunable_upstream_gone_uses_force_delete",
+			branch: "feature/prunable-squashed",
+			cwd:    "/other/dir",
+			opts:   RemoveOptions{},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func(t *testing.T, captured *[]string) *testutil.MockGitExecutor {
+				t.Helper()
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{{
+						Path:     "/repo/feature/prunable-squashed",
+						Branch:   "feature/prunable-squashed",
+						Prunable: true,
+					}},
+					UpstreamGoneBranches: []string{"feature/prunable-squashed"},
+					CapturedArgs:         captured,
+				}
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1381,6 +1417,60 @@ func TestRemoveResult_Format_VerboseChangedFilesOnError(t *testing.T) {
 			got := tt.result.Format(tt.opts)
 			if got.Stderr != tt.wantStderr {
 				t.Errorf("Stderr = %q, want %q", got.Stderr, tt.wantStderr)
+			}
+		})
+	}
+}
+
+func TestRemoveCommand_UpstreamGoneUsesForceDelete(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		branch   string
+		prunable bool
+	}{
+		{
+			name:     "normal_worktree",
+			branch:   "feature/squashed",
+			prunable: false,
+		},
+		{
+			name:     "prunable_worktree",
+			branch:   "feature/prunable-squashed",
+			prunable: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var captured []string
+			mockGit := &testutil.MockGitExecutor{
+				Worktrees: []testutil.MockWorktree{{
+					Path:     "/repo/" + tt.branch,
+					Branch:   tt.branch,
+					Prunable: tt.prunable,
+				}},
+				UpstreamGoneBranches: []string{tt.branch},
+				CapturedArgs:         &captured,
+			}
+
+			cmd := &RemoveCommand{
+				FS:     &testutil.MockFS{},
+				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
+				Config: &Config{WorktreeSourceDir: "/repo/main"},
+			}
+
+			_, err := cmd.Run(t.Context(), tt.branch, "/other/dir", RemoveOptions{})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			// Verify -D is used for branch deletion (upstream gone requires force delete)
+			if !slices.Contains(captured, "-D") {
+				t.Errorf("expected -D for upstream gone branch deletion, got: %v", captured)
 			}
 		})
 	}

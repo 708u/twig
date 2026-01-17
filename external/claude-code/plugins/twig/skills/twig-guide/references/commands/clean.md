@@ -77,6 +77,11 @@ Safety checks for prunable branches:
 Other checks (locked, changes, current directory) don't apply since
 the worktree no longer exists.
 
+### Upstream Gone Branches
+
+Branches whose remote tracking branch has been deleted are detected as
+"upstream gone" and cleaned without requiring `--force`.
+
 ### Force Option
 
 With `--force` (`-f`), some safety checks can be bypassed:
