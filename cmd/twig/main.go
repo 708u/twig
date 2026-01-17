@@ -336,7 +336,7 @@ Use --file with --sync or --carry to target specific files:
 			verbosity, _ := cmd.Flags().GetCount("verbose")
 
 			// Create logger based on verbosity level
-			var log *slog.Logger
+			log := twig.NewNopLogger()
 			if verbosity >= 2 {
 				handler := twig.NewCLIHandler(cmd.ErrOrStderr(), twig.VerbosityToLevel(verbosity))
 				log = slog.New(handler)
