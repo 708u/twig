@@ -2,7 +2,6 @@ package twig
 
 import (
 	"bytes"
-	"context"
 	"log/slog"
 	"testing"
 	"time"
@@ -53,7 +52,6 @@ func TestCLIHandler_Handle(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -64,7 +62,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 				record.AddAttrs(slog.String("category", tt.category))
 			}
 
-			if err := handler.Handle(ctx, record); err != nil {
+			if err := handler.Handle(t.Context(), record); err != nil {
 				t.Fatalf("Handle() error: %v", err)
 			}
 
@@ -114,11 +112,10 @@ func TestCLIHandler_Enabled(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewCLIHandler(nil, tt.handlerLevel)
-			got := handler.Enabled(ctx, tt.logLevel)
+			got := handler.Enabled(t.Context(), tt.logLevel)
 			if got != tt.want {
 				t.Errorf("Enabled() = %v, want %v", got, tt.want)
 			}
@@ -153,14 +150,13 @@ func TestCLIHandler_LevelFiltering(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			handler := NewCLIHandler(&buf, tt.handlerLevel)
 			logger := slog.New(handler)
 
-			logger.Log(ctx, tt.logLevel, "test message")
+			logger.Log(t.Context(), tt.logLevel, "test message")
 
 			hasOutput := buf.Len() > 0
 			if hasOutput != tt.wantOutput {
