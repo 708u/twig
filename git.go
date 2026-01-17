@@ -734,8 +734,7 @@ func (g *GitRunner) CheckSubmoduleCleanStatus() (SubmoduleCleanStatus, error) {
 // SubmoduleUpdate runs git submodule update --init --recursive.
 // Returns the number of initialized submodules.
 func (g *GitRunner) SubmoduleUpdate() (int, error) {
-	// Use -c protocol.file.allow=always to support local file:// submodule URLs
-	args := []string{"-c", "protocol.file.allow=always", GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
+	args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
 
 	_, err := g.Run(args...)
 	if err != nil {

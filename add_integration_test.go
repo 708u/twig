@@ -1693,10 +1693,17 @@ worktree_destination_base_dir = %q
 			t.Errorf("worktree list should contain feature/brand-new: %s", listOut)
 		}
 	})
+}
+
+// TestAddCommand_Submodules_Integration tests submodule initialization.
+// Not parallel: uses t.Setenv for file:// protocol in local submodule URLs.
+func TestAddCommand_Submodules_Integration(t *testing.T) {
+	// Allow file:// protocol for local submodule URLs in tests
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
 
 	t.Run("InitSubmodulesEnabled", func(t *testing.T) {
-		t.Parallel()
-
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
 		// Create a submodule repository
@@ -1714,7 +1721,7 @@ worktree_destination_base_dir = %q
 		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
 
 		// Add submodule to main repo
-		testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "mysub")
+		testutil.RunGit(t, mainDir, "submodule", "add", submoduleRepo, "mysub")
 		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
 
 		// Setup twig config with init_submodules enabled
@@ -1764,8 +1771,6 @@ init_submodules = true
 	})
 
 	t.Run("InitSubmodulesDisabled", func(t *testing.T) {
-		t.Parallel()
-
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
 		// Create a submodule repository
@@ -1783,7 +1788,7 @@ init_submodules = true
 		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
 
 		// Add submodule to main repo
-		testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "mysub")
+		testutil.RunGit(t, mainDir, "submodule", "add", submoduleRepo, "mysub")
 		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
 
 		// Setup twig config without init_submodules (default off)
@@ -1828,8 +1833,6 @@ init_submodules = true
 	})
 
 	t.Run("InitSubmodulesCLIOverridesConfig", func(t *testing.T) {
-		t.Parallel()
-
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
 		// Create a submodule repository
@@ -1847,7 +1850,7 @@ init_submodules = true
 		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
 
 		// Add submodule to main repo
-		testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "mysub")
+		testutil.RunGit(t, mainDir, "submodule", "add", submoduleRepo, "mysub")
 		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
 
 		// Setup twig config with init_submodules disabled
