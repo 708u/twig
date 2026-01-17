@@ -731,34 +731,11 @@ func (g *GitRunner) CheckSubmoduleCleanStatus() (SubmoduleCleanStatus, error) {
 	return SubmoduleCleanStatusClean, nil
 }
 
-type submoduleUpdateOptions struct {
-	depth int
-}
-
-// SubmoduleUpdateOption is a functional option for SubmoduleUpdate.
-type SubmoduleUpdateOption func(*submoduleUpdateOptions)
-
-// WithSubmoduleDepth sets the depth for shallow clone during submodule update.
-// depth=0 means full clone (no --depth flag).
-func WithSubmoduleDepth(depth int) SubmoduleUpdateOption {
-	return func(o *submoduleUpdateOptions) {
-		o.depth = depth
-	}
-}
-
 // SubmoduleUpdate runs git submodule update --init --recursive.
 // Returns the number of initialized submodules.
-func (g *GitRunner) SubmoduleUpdate(opts ...SubmoduleUpdateOption) (int, error) {
-	var o submoduleUpdateOptions
-	for _, opt := range opts {
-		opt(&o)
-	}
-
+func (g *GitRunner) SubmoduleUpdate() (int, error) {
 	// Use -c protocol.file.allow=always to support local file:// submodule URLs
 	args := []string{"-c", "protocol.file.allow=always", GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
-	if o.depth > 0 {
-		args = append(args, "--depth", fmt.Sprintf("%d", o.depth))
-	}
 
 	_, err := g.Run(args...)
 	if err != nil {

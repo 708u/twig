@@ -705,7 +705,7 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 		name                      string
 		branch                    string
 		config                    *Config
-		initSubmodules            *bool
+		initSubmodules            bool // true forces enable, false uses config
 		setupFS                   func(t *testing.T) *testutil.MockFS
 		setupGit                  func(t *testing.T, captured *[]string) *testutil.MockGitExecutor
 		wantSubmodulesInited      bool
@@ -714,10 +714,10 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 		wantSubmoduleInitError    bool
 	}{
 		{
-			name:           "init_submodules_enabled_with_submodules",
+			name:           "cli_flag_forces_enable",
 			branch:         "feature/submod",
 			config:         &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
-			initSubmodules: boolPtr(true),
+			initSubmodules: true,
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
 				return &testutil.MockFS{}
@@ -734,10 +734,10 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 			wantSubmoduleUpdateCalled: true,
 		},
 		{
-			name:           "init_submodules_enabled_no_submodules",
+			name:           "cli_flag_enabled_no_submodules",
 			branch:         "feature/no-submod",
 			config:         &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
-			initSubmodules: boolPtr(true),
+			initSubmodules: true,
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
 				return &testutil.MockFS{}
@@ -754,10 +754,10 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 			wantSubmoduleUpdateCalled: false,
 		},
 		{
-			name:           "init_submodules_disabled",
+			name:           "config_disabled_no_flag",
 			branch:         "feature/disabled",
-			config:         &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
-			initSubmodules: boolPtr(false),
+			config:         &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", InitSubmodules: boolPtr(false)},
+			initSubmodules: false, // Use config
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
 				return &testutil.MockFS{}
@@ -774,10 +774,10 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 			wantSubmoduleUpdateCalled: false,
 		},
 		{
-			name:           "init_submodules_from_config",
+			name:           "config_enabled_no_flag",
 			branch:         "feature/from-config",
 			config:         &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", InitSubmodules: boolPtr(true)},
-			initSubmodules: nil, // Use config
+			initSubmodules: false, // Use config
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
 				return &testutil.MockFS{}
@@ -794,10 +794,10 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 			wantSubmoduleUpdateCalled: true,
 		},
 		{
-			name:           "cli_flag_overrides_config",
-			branch:         "feature/override",
-			config:         &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree", InitSubmodules: boolPtr(true)},
-			initSubmodules: boolPtr(false), // CLI flag overrides config
+			name:           "default_disabled_no_config",
+			branch:         "feature/default",
+			config:         &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
+			initSubmodules: false, // Use config (nil = default false)
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
 				return &testutil.MockFS{}
@@ -814,10 +814,10 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 			wantSubmoduleUpdateCalled: false,
 		},
 		{
-			name:           "init_submodules_error_is_warning",
+			name:           "init_error_is_warning",
 			branch:         "feature/init-error",
 			config:         &Config{WorktreeSourceDir: "/repo/main", WorktreeDestBaseDir: "/repo/main-worktree"},
-			initSubmodules: boolPtr(true),
+			initSubmodules: true,
 			setupFS: func(t *testing.T) *testutil.MockFS {
 				t.Helper()
 				return &testutil.MockFS{}
@@ -858,23 +858,23 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if result.SubmodulesInited != tt.wantSubmodulesInited {
-				t.Errorf("SubmodulesInited = %v, want %v", result.SubmodulesInited, tt.wantSubmodulesInited)
+			if result.SubmoduleInit.Attempted != tt.wantSubmodulesInited {
+				t.Errorf("SubmoduleInit.Attempted = %v, want %v", result.SubmoduleInit.Attempted, tt.wantSubmodulesInited)
 			}
 
-			if result.SubmoduleCount != tt.wantSubmoduleCount {
-				t.Errorf("SubmoduleCount = %v, want %v", result.SubmoduleCount, tt.wantSubmoduleCount)
+			if result.SubmoduleInit.Count != tt.wantSubmoduleCount {
+				t.Errorf("SubmoduleInit.Count = %v, want %v", result.SubmoduleInit.Count, tt.wantSubmoduleCount)
 			}
 
 			if mockGit.SubmoduleUpdateCalled != tt.wantSubmoduleUpdateCalled {
 				t.Errorf("SubmoduleUpdateCalled = %v, want %v", mockGit.SubmoduleUpdateCalled, tt.wantSubmoduleUpdateCalled)
 			}
 
-			if tt.wantSubmoduleInitError && result.SubmoduleInitError == nil {
-				t.Error("expected SubmoduleInitError, got nil")
+			if tt.wantSubmoduleInitError && !result.SubmoduleInit.Skipped {
+				t.Error("expected SubmoduleInit.Skipped = true, got false")
 			}
-			if !tt.wantSubmoduleInitError && result.SubmoduleInitError != nil {
-				t.Errorf("unexpected SubmoduleInitError: %v", result.SubmoduleInitError)
+			if !tt.wantSubmoduleInitError && result.SubmoduleInit.Skipped {
+				t.Errorf("unexpected SubmoduleInit.Skipped: %s", result.SubmoduleInit.Reason)
 			}
 		})
 	}
@@ -887,11 +887,10 @@ func TestAddResult_Format_Submodules(t *testing.T) {
 		t.Parallel()
 
 		result := AddResult{
-			Branch:           "feature/test",
-			WorktreePath:     "/worktrees/feature/test",
-			Symlinks:         []SymlinkResult{},
-			SubmodulesInited: true,
-			SubmoduleCount:   2,
+			Branch:        "feature/test",
+			WorktreePath:  "/worktrees/feature/test",
+			Symlinks:      []SymlinkResult{},
+			SubmoduleInit: SubmoduleInitResult{Attempted: true, Count: 2},
 		}
 
 		got := result.Format(AddFormatOptions{})
@@ -906,11 +905,10 @@ func TestAddResult_Format_Submodules(t *testing.T) {
 		t.Parallel()
 
 		result := AddResult{
-			Branch:           "feature/test",
-			WorktreePath:     "/worktrees/feature/test",
-			Symlinks:         []SymlinkResult{},
-			SubmodulesInited: true,
-			SubmoduleCount:   3,
+			Branch:        "feature/test",
+			WorktreePath:  "/worktrees/feature/test",
+			Symlinks:      []SymlinkResult{},
+			SubmoduleInit: SubmoduleInitResult{Attempted: true, Count: 3},
 		}
 
 		got := result.Format(AddFormatOptions{Verbose: true})
@@ -925,11 +923,10 @@ func TestAddResult_Format_Submodules(t *testing.T) {
 		t.Parallel()
 
 		result := AddResult{
-			Branch:             "feature/test",
-			WorktreePath:       "/worktrees/feature/test",
-			Symlinks:           []SymlinkResult{},
-			SubmodulesInited:   true,
-			SubmoduleInitError: errors.New("failed to initialize submodules"),
+			Branch:        "feature/test",
+			WorktreePath:  "/worktrees/feature/test",
+			Symlinks:      []SymlinkResult{},
+			SubmoduleInit: SubmoduleInitResult{Attempted: true, Skipped: true, Reason: "failed to initialize submodules"},
 		}
 
 		got := result.Format(AddFormatOptions{})
@@ -946,11 +943,10 @@ func TestAddResult_Format_Submodules(t *testing.T) {
 		t.Parallel()
 
 		result := AddResult{
-			Branch:           "feature/test",
-			WorktreePath:     "/worktrees/feature/test",
-			Symlinks:         []SymlinkResult{},
-			SubmodulesInited: true,
-			SubmoduleCount:   0,
+			Branch:        "feature/test",
+			WorktreePath:  "/worktrees/feature/test",
+			Symlinks:      []SymlinkResult{},
+			SubmoduleInit: SubmoduleInitResult{Attempted: true, Count: 0},
 		}
 
 		got := result.Format(AddFormatOptions{})

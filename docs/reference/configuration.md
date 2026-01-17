@@ -67,24 +67,10 @@ init_submodules = true
 Default: `false` (disabled)
 
 When enabled, `git submodule update --init --recursive` is run after
-worktree creation. Can be overridden with CLI flags:
-`--init-submodules` or `--no-init-submodules`.
+worktree creation. The CLI flag `--init-submodules` forces enable regardless
+of this setting.
 
 See [add subcommand](commands/add.md#submodule-initialization) for details.
-
-### submodule_depth
-
-Depth for shallow cloning submodules during initialization.
-
-```toml
-submodule_depth = 1
-```
-
-Default: `0` (full clone)
-
-When set to a positive integer, passes `--depth <n>` to
-`git submodule update`. This reduces clone time and disk usage for
-large submodules.
 
 ## Merge Rules
 
@@ -97,7 +83,6 @@ When both files exist, settings are merged:
 | `symlinks`                      | Local overrides project | `[]`                           |
 | `extra_symlinks`                | Collected from both     | `[]`                           |
 | `init_submodules`               | Local overrides project | `false`                        |
-| `submodule_depth`               | Local overrides project | `0`                            |
 
 ## symlinks vs extra_symlinks
 
@@ -141,5 +126,4 @@ init_submodules = true
 # .twig/settings.local.toml
 default_source = "develop"
 extra_symlinks = [".claude", ".local-config"]
-submodule_depth = 1  # Use shallow clones locally
 ```

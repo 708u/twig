@@ -1864,10 +1864,9 @@ init_submodules = false
 			t.Fatal(err)
 		}
 
-		// CLI option enables init_submodules (overrides config)
-		initTrue := true
+		// CLI flag forces init_submodules (regardless of config)
 		cmd := NewDefaultAddCommand(result.Config, AddOptions{
-			InitSubmodules: &initTrue,
+			InitSubmodules: true,
 		})
 
 		addResult, err := cmd.Run("feature/cli-override")
