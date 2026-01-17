@@ -104,8 +104,8 @@ type RemoveResult struct {
 
 // HasErrors returns true if any errors occurred.
 func (r RemoveResult) HasErrors() bool {
-	for _, wt := range r.Removed {
-		if wt.Err != nil {
+	for i := range r.Removed {
+		if r.Removed[i].Err != nil {
 			return true
 		}
 	}
@@ -115,8 +115,8 @@ func (r RemoveResult) HasErrors() bool {
 // ErrorCount returns the number of failed removals.
 func (r RemoveResult) ErrorCount() int {
 	count := 0
-	for _, wt := range r.Removed {
-		if wt.Err != nil {
+	for i := range r.Removed {
+		if r.Removed[i].Err != nil {
 			count++
 		}
 	}

@@ -72,12 +72,12 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 
 	// Show removal results (execution completed)
 	if !r.Check && len(r.Removed) > 0 {
-		for _, wt := range r.Removed {
-			if wt.Err != nil {
-				fmt.Fprintf(&stderr, "error: %s: %v\n", wt.Branch, wt.Err)
+		for i := range r.Removed {
+			if r.Removed[i].Err != nil {
+				fmt.Fprintf(&stderr, "error: %s: %v\n", r.Removed[i].Branch, r.Removed[i].Err)
 				continue
 			}
-			fmt.Fprintf(&stdout, "twig clean: %s\n", wt.Branch)
+			fmt.Fprintf(&stdout, "twig clean: %s\n", r.Removed[i].Branch)
 		}
 		return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	}
