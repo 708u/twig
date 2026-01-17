@@ -440,9 +440,10 @@ type FileStatus struct {
 	Path   string
 }
 
-// ChangedFilesWithStatus returns files with their status codes.
-// Status codes are the first 2 characters from git status --porcelain output.
-func (g *GitRunner) ChangedFilesWithStatus() ([]FileStatus, error) {
+// ChangedFiles returns files with uncommitted changes including staged,
+// unstaged, and untracked files. Status codes are the first 2 characters
+// from git status --porcelain output.
+func (g *GitRunner) ChangedFiles() ([]FileStatus, error) {
 	output, err := g.Run(GitCmdStatus, "--porcelain", "-uall")
 	if err != nil {
 		return nil, fmt.Errorf("failed to check git status: %w", err)
@@ -463,20 +464,6 @@ func (g *GitRunner) ChangedFilesWithStatus() ([]FileStatus, error) {
 		files = append(files, FileStatus{Status: status, Path: path})
 	}
 	return files, nil
-}
-
-// ChangedFiles returns a list of files with uncommitted changes
-// including staged, unstaged, and untracked files.
-func (g *GitRunner) ChangedFiles() ([]string, error) {
-	files, err := g.ChangedFilesWithStatus()
-	if err != nil {
-		return nil, err
-	}
-	paths := make([]string, len(files))
-	for i, f := range files {
-		paths[i] = f.Path
-	}
-	return paths, nil
 }
 
 // HasChanges checks if there are any uncommitted changes (staged, unstaged, or untracked).

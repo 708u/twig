@@ -438,7 +438,7 @@ func (c *RemoveCommand) Check(branch string, opts CheckOptions) (CheckResult, er
 			Detached: wtInfo.Detached,
 		}
 		// Get changed files for verbose output (low cost, useful for all cases)
-		if changedFiles, err := c.Git.InDir(wtInfo.Path).ChangedFilesWithStatus(); err == nil {
+		if changedFiles, err := c.Git.InDir(wtInfo.Path).ChangedFiles(); err == nil {
 			result.ChangedFiles = changedFiles
 		}
 		if reason := c.checkSkipReason(wt, opts.Cwd, opts.Target, opts.Force); reason != "" {

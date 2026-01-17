@@ -7,7 +7,7 @@ import (
 	"github.com/708u/twig/internal/testutil"
 )
 
-func TestGitRunner_ChangedFilesWithStatus(t *testing.T) {
+func TestGitRunner_ChangedFiles(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -68,7 +68,7 @@ func TestGitRunner_ChangedFilesWithStatus(t *testing.T) {
 			}
 			runner := &GitRunner{Executor: mockGit}
 
-			got, err := runner.ChangedFilesWithStatus()
+			got, err := runner.ChangedFiles()
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

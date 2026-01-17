@@ -548,8 +548,8 @@ stop processing of remaining branches.`,
 		// Filter by prefix
 		var completions []string
 		for _, file := range files {
-			if strings.HasPrefix(file, toComplete) {
-				completions = append(completions, file)
+			if strings.HasPrefix(file.Path, toComplete) {
+				completions = append(completions, file.Path)
 			}
 		}
 
