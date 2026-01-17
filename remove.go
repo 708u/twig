@@ -124,10 +124,11 @@ func (r RemoveResult) ErrorCount() int {
 // Format formats the RemoveResult for display.
 func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 	var stdout, stderr strings.Builder
+	errOut := NewIndentWriter(&stderr, "  ")
 
 	for _, wt := range r.Removed {
 		if wt.Err != nil {
-			formatRemoveError(&stderr, wt.Branch, wt.Err, opts.Verbose)
+			formatRemoveError(errOut, wt.Branch, wt.Err, opts.Verbose)
 			continue
 		}
 		formatted := wt.Format(opts)
@@ -140,19 +141,21 @@ func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 
 // formatRemoveError formats an error from the remove operation.
 // It shows a short error message, and optionally the detailed git error.
-func formatRemoveError(w *strings.Builder, branch string, err error, verbose bool) {
+// The git detail line uses 7-space alignment to align with "error: " prefix.
+func formatRemoveError(w *IndentWriter, branch string, err error, verbose bool) {
 	var skipErr *SkipError
 	var gitErr *GitError
 
 	// Format error message
 	switch {
 	case errors.As(err, &gitErr):
-		fmt.Fprintf(w, "error: %s: failed to %s\n", branch, gitErr.Op)
+		w.Writef("error: %s: failed to %s", branch, gitErr.Op)
 		if verbose && gitErr.Stderr != "" {
-			fmt.Fprintf(w, "       git: %s\n", gitErr.Stderr)
+			// 7 spaces align with "error: " prefix
+			w.Writef("       git: %s", gitErr.Stderr)
 		}
 	default:
-		fmt.Fprintf(w, "error: %s: %v\n", branch, err)
+		w.Writef("error: %s: %v", branch, err)
 	}
 
 	// Format hint based on error type
@@ -174,42 +177,43 @@ func formatRemoveError(w *strings.Builder, branch string, err error, verbose boo
 		}
 	}
 	if hint != "" {
-		fmt.Fprintf(w, "hint: %s\n", hint)
+		w.Writef("hint: %s", hint)
 	}
 }
 
 // Format formats the RemovedWorktree for display.
 func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 	var stdout strings.Builder
+	out := NewIndentWriter(&stdout, "  ")
 
 	if r.Check {
 		if r.Pruned {
-			fmt.Fprintf(&stdout, "Would prune stale worktree record\n")
+			out.Writeln("Would prune stale worktree record")
 		} else if r.WorktreePath != "" {
-			fmt.Fprintf(&stdout, "Would remove worktree: %s\n", r.WorktreePath)
+			out.Writef("Would remove worktree: %s", r.WorktreePath)
 		}
-		fmt.Fprintf(&stdout, "Would delete branch: %s\n", r.Branch)
+		out.Writef("Would delete branch: %s", r.Branch)
 		for _, dir := range r.CleanedDirs {
-			fmt.Fprintf(&stdout, "Would remove empty directory: %s\n", dir)
+			out.Writef("Would remove empty directory: %s", dir)
 		}
 		return FormatResult{Stdout: stdout.String()}
 	}
 
 	if opts.Verbose {
 		if len(r.GitOutput) > 0 {
-			stdout.Write(r.GitOutput)
+			out.WriteRaw(r.GitOutput)
 		}
 		if r.Pruned {
-			fmt.Fprintf(&stdout, "Pruned stale worktree and deleted branch: %s\n", r.Branch)
+			out.Writef("Pruned stale worktree and deleted branch: %s", r.Branch)
 		} else {
-			fmt.Fprintf(&stdout, "Removed worktree and branch: %s\n", r.Branch)
+			out.Writef("Removed worktree and branch: %s", r.Branch)
 		}
 		for _, dir := range r.CleanedDirs {
-			fmt.Fprintf(&stdout, "Removed empty directory: %s\n", dir)
+			out.Writef("Removed empty directory: %s", dir)
 		}
 	}
 
-	fmt.Fprintf(&stdout, "twig remove: %s\n", r.Branch)
+	out.Writef("twig remove: %s", r.Branch)
 
 	return FormatResult{Stdout: stdout.String()}
 }

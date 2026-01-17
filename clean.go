@@ -69,15 +69,17 @@ func (r CleanResult) CleanableCount() int {
 // Format formats the CleanResult for display.
 func (r CleanResult) Format(opts FormatOptions) FormatResult {
 	var stdout, stderr strings.Builder
+	out := NewIndentWriter(&stdout, "  ")
+	errOut := NewIndentWriter(&stderr, "  ")
 
 	// Show removal results (execution completed)
 	if !r.Check && len(r.Removed) > 0 {
 		for _, wt := range r.Removed {
 			if wt.Err != nil {
-				fmt.Fprintf(&stderr, "error: %s: %v\n", wt.Branch, wt.Err)
+				errOut.Writef("error: %s: %v", wt.Branch, wt.Err)
 				continue
 			}
-			fmt.Fprintf(&stdout, "twig clean: %s\n", wt.Branch)
+			out.Writef("twig clean: %s", wt.Branch)
 		}
 		return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	}
@@ -95,33 +97,39 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 	// No cleanable candidates
 	if len(cleanable) == 0 {
 		if opts.Verbose && len(skipped) > 0 {
-			fmt.Fprintln(&stdout, "skip:")
+			out.Writeln("skip:")
+			out.Indent()
 			for _, c := range skipped {
-				fmt.Fprintf(&stdout, "  %s (%s)\n", c.Branch, c.SkipReason)
+				out.Writef("%s (%s)", c.Branch, c.SkipReason)
 			}
-			fmt.Fprintln(&stdout)
+			out.Dedent()
+			out.Blankln()
 		}
-		fmt.Fprintln(&stdout, "No worktrees to clean")
+		out.Writeln("No worktrees to clean")
 		return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	}
 
 	// Output cleanable candidates with group header and reasons
-	fmt.Fprintln(&stdout, "clean:")
+	out.Writeln("clean:")
+	out.Indent()
 	for _, c := range cleanable {
 		reason := string(c.CleanReason)
 		if c.Prunable {
 			reason = "prunable, " + reason
 		}
-		fmt.Fprintf(&stdout, "  %s (%s)\n", c.Branch, reason)
+		out.Writef("%s (%s)", c.Branch, reason)
 	}
+	out.Dedent()
 
 	// Output skipped candidates with group header (verbose only)
 	if opts.Verbose && len(skipped) > 0 {
-		fmt.Fprintln(&stdout)
-		fmt.Fprintln(&stdout, "skip:")
+		out.Blankln()
+		out.Writeln("skip:")
+		out.Indent()
 		for _, c := range skipped {
-			fmt.Fprintf(&stdout, "  %s (%s)\n", c.Branch, c.SkipReason)
+			out.Writef("%s (%s)", c.Branch, c.SkipReason)
 		}
+		out.Dedent()
 	}
 
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
