@@ -209,9 +209,10 @@ func (g *GitRunner) WorktreeAdd(ctx context.Context, path, branch string, opts .
 func (g *GitRunner) LocalBranchExists(ctx context.Context, branch string) (bool, error) {
 	_, err := g.Run(ctx, GitCmdRevParse, "--verify", RefsHeadsPrefix+branch)
 	if err != nil {
-		// Exit code 1 means branch doesn't exist (normal case)
+		// git rev-parse returns exit code 128 for non-existent refs
 		var exitErr interface{ ExitCode() int }
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		if errors.As(err, &exitErr) {
+			// ExitError means git ran but ref doesn't exist
 			return false, nil
 		}
 		// Other errors (context canceled, etc.)
