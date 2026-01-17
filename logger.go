@@ -181,6 +181,8 @@ func GenerateCommandID() string {
 func GenerateCommandIDWithLength(byteLen int) string {
 	b := make([]byte, byteLen)
 	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failure is extremely rare (system-level issue).
+		// Return empty to skip cmd_id in log output.
 		return ""
 	}
 	return hex.EncodeToString(b)
