@@ -43,7 +43,7 @@ type RemoveCommander interface {
 
 // InitCommander defines the interface for init operations.
 type InitCommander interface {
-	Run(dir string, opts twig.InitOptions) (twig.InitResult, error)
+	Run(ctx context.Context, dir string, opts twig.InitOptions) (twig.InitResult, error)
 }
 
 type options struct {
@@ -614,7 +614,7 @@ stop processing of remaining branches.`,
 			} else {
 				initCommand = twig.NewDefaultInitCommand()
 			}
-			result, err := initCommand.Run(cwd, twig.InitOptions{Force: force})
+			result, err := initCommand.Run(cmd.Context(), cwd, twig.InitOptions{Force: force})
 			if err != nil {
 				return err
 			}

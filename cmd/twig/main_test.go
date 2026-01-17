@@ -433,7 +433,7 @@ type mockInitCommander struct {
 	calledOpts twig.InitOptions
 }
 
-func (m *mockInitCommander) Run(dir string, opts twig.InitOptions) (twig.InitResult, error) {
+func (m *mockInitCommander) Run(ctx context.Context, dir string, opts twig.InitOptions) (twig.InitResult, error) {
 	m.calledDir = dir
 	m.calledOpts = opts
 	return m.result, m.err
