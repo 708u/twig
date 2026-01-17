@@ -134,9 +134,20 @@ func TestCleanCommand_Integration(t *testing.T) {
 		wtPath := filepath.Join(repoDir, "feature", "with-changes")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/with-changes", wtPath)
 
-		// Create uncommitted changes
+		// Create uncommitted changes (untracked file)
 		testFile := filepath.Join(wtPath, "uncommitted.txt")
 		if err := os.WriteFile(testFile, []byte("uncommitted"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create a modified file (staged)
+		existingFile := filepath.Join(wtPath, "modified.txt")
+		if err := os.WriteFile(existingFile, []byte("original"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "modified.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add file")
+		if err := os.WriteFile(existingFile, []byte("modified"), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -166,6 +177,29 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		if result.Candidates[0].SkipReason != SkipHasChanges {
 			t.Errorf("skip reason should be %s, got %s", SkipHasChanges, result.Candidates[0].SkipReason)
+		}
+
+		// Verify ChangedFiles is populated
+		if len(result.Candidates[0].ChangedFiles) == 0 {
+			t.Fatal("expected ChangedFiles to be populated")
+		}
+
+		// Check for expected files in ChangedFiles
+		foundUntracked := false
+		foundModified := false
+		for _, f := range result.Candidates[0].ChangedFiles {
+			if f.Path == "uncommitted.txt" {
+				foundUntracked = true
+			}
+			if f.Path == "modified.txt" {
+				foundModified = true
+			}
+		}
+		if !foundUntracked {
+			t.Error("expected untracked file in ChangedFiles")
+		}
+		if !foundModified {
+			t.Error("expected modified file in ChangedFiles")
 		}
 	})
 
