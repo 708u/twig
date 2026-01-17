@@ -25,8 +25,8 @@ func TestListCommand_Integration(t *testing.T) {
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/a", wtPathA)
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/b", wtPathB)
 
-		cmd := NewDefaultListCommand(mainDir)
-		result, err := cmd.Run()
+		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
+		result, err := cmd.Run(t.Context())
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -58,8 +58,8 @@ func TestListCommand_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t)
 
-		cmd := NewDefaultListCommand(mainDir)
-		result, err := cmd.Run()
+		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
+		result, err := cmd.Run(t.Context())
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -86,8 +86,8 @@ func TestListCommand_Integration(t *testing.T) {
 		wtPath := filepath.Join(repoDir, "feature", "test")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/test", wtPath)
 
-		cmd := NewDefaultListCommand(mainDir)
-		result, err := cmd.Run()
+		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
+		result, err := cmd.Run(t.Context())
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -121,8 +121,8 @@ func TestListCommand_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t)
 
-		cmd := NewDefaultListCommand(mainDir)
-		result, err := cmd.Run()
+		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
+		result, err := cmd.Run(t.Context())
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -145,8 +145,8 @@ func TestListCommand_Integration(t *testing.T) {
 		wtPath := filepath.Join(repoDir, "feature", "quiet-test")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/quiet-test", wtPath)
 
-		cmd := NewDefaultListCommand(mainDir)
-		result, err := cmd.Run()
+		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
+		result, err := cmd.Run(t.Context())
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}

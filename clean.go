@@ -1,6 +1,7 @@
 package twig
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -142,19 +143,19 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 
 // Run analyzes worktrees and optionally removes them.
 // cwd is the current working directory (absolute path) passed from CLI layer.
-func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
+func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (CleanResult, error) {
 	var result CleanResult
 	result.Check = opts.Check
 
 	// Resolve target branch
-	target, err := c.resolveTarget(opts.Target)
+	target, err := c.resolveTarget(ctx, opts.Target)
 	if err != nil {
 		return result, err
 	}
 	result.TargetBranch = target
 
 	// Get all worktrees
-	worktrees, err := c.Git.WorktreeList()
+	worktrees, err := c.Git.WorktreeList(ctx)
 	if err != nil {
 		return result, fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -184,7 +185,7 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 			continue
 		}
 
-		checkResult, err := removeCmd.Check(wt.Branch, CheckOptions{
+		checkResult, err := removeCmd.Check(ctx, wt.Branch, CheckOptions{
 			Force:  opts.Force,
 			Target: target,
 			Cwd:    cwd,
@@ -218,7 +219,7 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 			continue
 		}
 
-		wt, err := removeCmd.Run(candidate.Branch, cwd, RemoveOptions{
+		wt, err := removeCmd.Run(ctx, candidate.Branch, cwd, RemoveOptions{
 			Force: opts.Force,
 			Check: false,
 		})
@@ -239,13 +240,13 @@ func (c *CleanCommand) Run(cwd string, opts CleanOptions) (CleanResult, error) {
 
 // resolveTarget resolves the target branch for merge checking.
 // If target is specified, use it. Otherwise, auto-detect from first non-bare worktree.
-func (c *CleanCommand) resolveTarget(target string) (string, error) {
+func (c *CleanCommand) resolveTarget(ctx context.Context, target string) (string, error) {
 	if target != "" {
 		return target, nil
 	}
 
 	// Find first non-bare worktree (usually main)
-	worktrees, err := c.Git.WorktreeList()
+	worktrees, err := c.Git.WorktreeList(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to list worktrees: %w", err)
 	}

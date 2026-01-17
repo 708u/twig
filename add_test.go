@@ -443,14 +443,14 @@ func TestAddCommand_Run(t *testing.T) {
 
 			cmd := &AddCommand{
 				FS:           mockFS,
-				Git:          &GitRunner{Executor: mockGit},
+				Git:          &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config:       tt.config,
 				Sync:         tt.sync,
 				CarryFrom:    tt.carryFrom,
 				FilePatterns: tt.filePatterns,
 			}
 
-			result, err := cmd.Run(tt.branch)
+			result, err := cmd.Run(t.Context(), tt.branch)
 
 			if tt.wantErr {
 				if err == nil {
@@ -565,13 +565,13 @@ func TestAddCommand_Run_Lock(t *testing.T) {
 
 			cmd := &AddCommand{
 				FS:         mockFS,
-				Git:        &GitRunner{Executor: mockGit},
+				Git:        &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config:     tt.config,
 				Lock:       tt.lock,
 				LockReason: tt.lockReason,
 			}
 
-			_, err := cmd.Run(tt.branch)
+			_, err := cmd.Run(t.Context(), tt.branch)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -848,12 +848,12 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 
 			cmd := &AddCommand{
 				FS:             mockFS,
-				Git:            &GitRunner{Executor: mockGit},
+				Git:            &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config:         tt.config,
 				InitSubmodules: tt.initSubmodules,
 			}
 
-			result, err := cmd.Run(tt.branch)
+			result, err := cmd.Run(t.Context(), tt.branch)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

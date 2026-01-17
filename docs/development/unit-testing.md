@@ -53,3 +53,15 @@ func DoSomething(fs FileSystem, path string) error {
     // use fs.Stat(), fs.Symlink(), etc.
 }
 ```
+
+## Using context.Context in tests
+
+Prefer `t.Context()` (Go 1.21+) over `context.Background()` for tests that
+require a context. `t.Context()` returns a context that is canceled when the
+test completes, enabling proper cleanup and timeout handling.
+
+Use `context.Background()` only when `t.Context()` is not available:
+
+- Helper functions without access to `*testing.T`
+- Benchmark functions (`*testing.B` lacks `Context()`)
+- Table-driven tests where context needs to outlive subtests

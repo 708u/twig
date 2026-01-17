@@ -1,6 +1,7 @@
 package twig
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 )
@@ -62,7 +63,7 @@ func NewDefaultInitCommand() *InitCommand {
 }
 
 // Run executes the init command.
-func (c *InitCommand) Run(dir string, opts InitOptions) (InitResult, error) {
+func (c *InitCommand) Run(ctx context.Context, dir string, opts InitOptions) (InitResult, error) {
 	configDirPath := filepath.Join(dir, configDir)
 	settingsPath := filepath.Join(configDirPath, configFileName)
 

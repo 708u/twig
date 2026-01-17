@@ -526,11 +526,11 @@ func TestCleanCommand_Run(t *testing.T) {
 
 			cmd := &CleanCommand{
 				FS:     &testutil.MockFS{},
-				Git:    &GitRunner{Executor: mockGit},
+				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: tt.config,
 			}
 
-			result, err := cmd.Run(tt.cwd, tt.opts)
+			result, err := cmd.Run(t.Context(), tt.cwd, tt.opts)
 
 			if tt.wantErr {
 				if err == nil {
@@ -607,11 +607,11 @@ func TestCleanCommand_ResolveTarget(t *testing.T) {
 			}
 
 			cmd := &CleanCommand{
-				Git:    &GitRunner{Executor: mockGit},
+				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: tt.config,
 			}
 
-			got, err := cmd.resolveTarget(tt.target)
+			got, err := cmd.resolveTarget(t.Context(), tt.target)
 
 			if tt.wantErr {
 				if err == nil {

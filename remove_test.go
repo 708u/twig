@@ -446,11 +446,11 @@ func TestRemoveCommand_Run(t *testing.T) {
 
 			cmd := &RemoveCommand{
 				FS:     &testutil.MockFS{},
-				Git:    &GitRunner{Executor: mockGit},
+				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: tt.config,
 			}
 
-			result, err := cmd.Run(tt.branch, tt.cwd, tt.opts)
+			result, err := cmd.Run(t.Context(), tt.branch, tt.cwd, tt.opts)
 
 			if tt.wantErr {
 				if err == nil {
@@ -1212,11 +1212,11 @@ func TestRemoveCommand_Check(t *testing.T) {
 
 			cmd := &RemoveCommand{
 				FS:     &testutil.MockFS{},
-				Git:    &GitRunner{Executor: mockGit},
+				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: tt.config,
 			}
 
-			result, err := cmd.Check(tt.branch, tt.opts)
+			result, err := cmd.Check(t.Context(), tt.branch, tt.opts)
 
 			if tt.wantErr {
 				if err == nil {

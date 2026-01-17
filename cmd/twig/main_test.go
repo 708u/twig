@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -149,10 +150,11 @@ func TestResolveCarryFrom(t *testing.T) {
 				git = &twig.GitRunner{
 					Executor: &testutil.MockGitExecutor{Worktrees: tt.worktrees},
 					Dir:      "/mock",
+					Log:      twig.NewNopLogger(),
 				}
 			}
 
-			got, err := resolveCarryFrom(tt.carryValue, tt.originalCwd, git)
+			got, err := resolveCarryFrom(t.Context(), tt.carryValue, tt.originalCwd, git)
 			if tt.wantErr != "" {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -178,7 +180,7 @@ type mockCleanCommander struct {
 	err    error
 }
 
-func (m *mockCleanCommander) Run(cwd string, opts twig.CleanOptions) (twig.CleanResult, error) {
+func (m *mockCleanCommander) Run(ctx context.Context, cwd string, opts twig.CleanOptions) (twig.CleanResult, error) {
 	return m.result, m.err
 }
 
@@ -286,7 +288,7 @@ type mockAddCommander struct {
 	calledName string
 }
 
-func (m *mockAddCommander) Run(name string) (twig.AddResult, error) {
+func (m *mockAddCommander) Run(ctx context.Context, name string) (twig.AddResult, error) {
 	m.calledName = name
 	return m.result, m.err
 }
@@ -297,7 +299,7 @@ type mockListCommander struct {
 	err    error
 }
 
-func (m *mockListCommander) Run() (twig.ListResult, error) {
+func (m *mockListCommander) Run(ctx context.Context) (twig.ListResult, error) {
 	return m.result, m.err
 }
 
@@ -413,7 +415,7 @@ type removeResult struct {
 	err error
 }
 
-func (m *mockRemoveCommander) Run(branch, cwd string, opts twig.RemoveOptions) (twig.RemovedWorktree, error) {
+func (m *mockRemoveCommander) Run(ctx context.Context, branch, cwd string, opts twig.RemoveOptions) (twig.RemovedWorktree, error) {
 	m.calls = append(m.calls, removeCall{branch, cwd, opts})
 	if m.idx < len(m.results) {
 		r := m.results[m.idx]
@@ -431,7 +433,7 @@ type mockInitCommander struct {
 	calledOpts twig.InitOptions
 }
 
-func (m *mockInitCommander) Run(dir string, opts twig.InitOptions) (twig.InitResult, error) {
+func (m *mockInitCommander) Run(ctx context.Context, dir string, opts twig.InitOptions) (twig.InitResult, error) {
 	m.calledDir = dir
 	m.calledOpts = opts
 	return m.result, m.err

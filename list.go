@@ -2,7 +2,9 @@ package twig
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"text/tabwriter"
 )
@@ -10,18 +12,23 @@ import (
 // ListCommand lists all worktrees.
 type ListCommand struct {
 	Git *GitRunner
+	Log *slog.Logger
 }
 
 // NewListCommand creates a ListCommand with explicit dependencies (for testing).
-func NewListCommand(git *GitRunner) *ListCommand {
+func NewListCommand(git *GitRunner, log *slog.Logger) *ListCommand {
+	if log == nil {
+		log = NewNopLogger()
+	}
 	return &ListCommand{
 		Git: git,
+		Log: log,
 	}
 }
 
 // NewDefaultListCommand creates a ListCommand with production defaults.
-func NewDefaultListCommand(dir string) *ListCommand {
-	return NewListCommand(NewGitRunner(dir))
+func NewDefaultListCommand(dir string, log *slog.Logger) *ListCommand {
+	return NewListCommand(NewGitRunnerWithLogger(dir, log), log)
 }
 
 // ListResult holds the result of a list operation.
@@ -91,8 +98,8 @@ func (w Worktree) formatStatus() string {
 }
 
 // Run lists all worktrees.
-func (c *ListCommand) Run() (ListResult, error) {
-	worktrees, err := c.Git.WorktreeList()
+func (c *ListCommand) Run(ctx context.Context) (ListResult, error) {
+	worktrees, err := c.Git.WorktreeList(ctx)
 	if err != nil {
 		return ListResult{}, err
 	}
