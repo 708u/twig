@@ -755,14 +755,3 @@ func (g *GitRunner) SubmoduleUpdate() (int, error) {
 	}
 	return count, nil
 }
-
-// HasSubmodules checks if the repository has any submodules defined.
-// Returns true if .gitmodules exists and contains submodule entries.
-func (g *GitRunner) HasSubmodules() (bool, error) {
-	submodules, err := g.SubmoduleStatus()
-	if err != nil {
-		// If submodule status fails, assume no submodules
-		return false, nil
-	}
-	return len(submodules) > 0, nil
-}

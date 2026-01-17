@@ -751,7 +751,7 @@ func TestAddCommand_Run_InitSubmodules(t *testing.T) {
 			},
 			wantSubmodulesInited:      false,
 			wantSubmoduleCount:        0,
-			wantSubmoduleUpdateCalled: false,
+			wantSubmoduleUpdateCalled: true, // SubmoduleUpdate is always called when enabled
 		},
 		{
 			name:           "config_disabled_no_flag",

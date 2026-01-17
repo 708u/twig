@@ -102,10 +102,8 @@ func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
 }
 
 func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
-	// Skip git options that come before the command
-	// -C <dir>: directory specification
-	// -c <key=value>: config option
-	for len(args) >= 2 && (args[0] == "-C" || args[0] == "-c") {
+	// Skip -C <dir> option that comes before the command
+	for len(args) >= 2 && args[0] == "-C" {
 		args = args[2:]
 	}
 
@@ -314,8 +312,7 @@ func (m *MockGitExecutor) handleForEachRef(args []string) ([]byte, error) {
 	}
 
 	// Handle refs/remotes/*/<branch> for remote branch detection
-	if strings.HasPrefix(ref, "refs/remotes/*/") {
-		branch := strings.TrimPrefix(ref, "refs/remotes/*/")
+	if branch, ok := strings.CutPrefix(ref, "refs/remotes/*/"); ok {
 		var results []string
 		for remote, branches := range m.RemoteBranches {
 			if slices.Contains(branches, branch) {
