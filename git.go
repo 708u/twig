@@ -205,17 +205,12 @@ func (g *GitRunner) WorktreeAdd(ctx context.Context, path, branch string, opts .
 	return g.worktreeAdd(ctx, path, branch, o)
 }
 
-// exitCoder is an interface for errors that have an exit code.
-type exitCoder interface {
-	ExitCode() int
-}
-
 // LocalBranchExists checks if a branch exists in the local repository.
 func (g *GitRunner) LocalBranchExists(ctx context.Context, branch string) (bool, error) {
 	_, err := g.Run(ctx, GitCmdRevParse, "--verify", RefsHeadsPrefix+branch)
 	if err != nil {
 		// Exit code 1 means branch doesn't exist (normal case)
-		var exitErr exitCoder
+		var exitErr interface{ ExitCode() int }
 		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 			return false, nil
 		}

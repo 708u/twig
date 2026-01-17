@@ -2,7 +2,6 @@ package testutil
 
 import (
 	"context"
-	"os"
 	"slices"
 	"strings"
 )
@@ -18,11 +17,6 @@ func (e *MockExitError) Error() string {
 
 func (e *MockExitError) ExitCode() int {
 	return e.Code
-}
-
-// Satisfy os.ProcessState interface requirement
-func (e *MockExitError) ProcessState() *os.ProcessState {
-	return nil
 }
 
 // MockWorktree represents a worktree entry for testing.
