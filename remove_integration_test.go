@@ -917,6 +917,160 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			t.Errorf("worktree should be removed: %s", wtPath)
 		}
 	})
+
+	t.Run("RemovesUpstreamGoneBranchWithForceDelete", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a bare remote repository
+		remoteDir := filepath.Join(repoDir, "remote.git")
+		testutil.RunGit(t, repoDir, "init", "--bare", remoteDir)
+
+		// Add remote to main
+		testutil.RunGit(t, mainDir, "remote", "add", "origin", remoteDir)
+		testutil.RunGit(t, mainDir, "push", "-u", "origin", "main")
+
+		// Create a feature branch worktree
+		wtPath := filepath.Join(repoDir, "feature", "squash-remove")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/squash-remove", wtPath)
+
+		// Make commits on the feature branch
+		testFile := filepath.Join(wtPath, "squash.txt")
+		if err := os.WriteFile(testFile, []byte("squash content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "squash.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add squash file")
+
+		// Push to remote
+		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/squash-remove")
+
+		// Simulate squash merge on main (different commit hash than feature branch)
+		mainFile := filepath.Join(mainDir, "squash.txt")
+		if err := os.WriteFile(mainFile, []byte("squash content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add squash (#1)")
+
+		// Delete remote branch (as GitHub does after squash merge)
+		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/squash-remove")
+		testutil.RunGit(t, mainDir, "fetch", "--prune")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Remove the upstream gone branch (should use -D internally)
+		removeResult, err := cmd.Run(t.Context(), "feature/squash-remove", mainDir, RemoveOptions{})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Worktree should be removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+
+		// Branch should be deleted (requires -D since not traditionally merged)
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/squash-remove")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+
+		// Verify result
+		if removeResult.Branch != "feature/squash-remove" {
+			t.Errorf("result.Branch = %q, want %q", removeResult.Branch, "feature/squash-remove")
+		}
+	})
+
+	t.Run("RemovesPrunableUpstreamGoneBranchWithForceDelete", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a bare remote repository
+		remoteDir := filepath.Join(repoDir, "remote.git")
+		testutil.RunGit(t, repoDir, "init", "--bare", remoteDir)
+
+		// Add remote to main
+		testutil.RunGit(t, mainDir, "remote", "add", "origin", remoteDir)
+		testutil.RunGit(t, mainDir, "push", "-u", "origin", "main")
+
+		// Create a feature branch worktree
+		wtPath := filepath.Join(repoDir, "feature", "prunable-squash")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/prunable-squash", wtPath)
+
+		// Make commits on the feature branch
+		testFile := filepath.Join(wtPath, "prunable.txt")
+		if err := os.WriteFile(testFile, []byte("prunable content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "prunable.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add prunable file")
+
+		// Push to remote
+		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/prunable-squash")
+
+		// Simulate squash merge on main
+		mainFile := filepath.Join(mainDir, "prunable.txt")
+		if err := os.WriteFile(mainFile, []byte("prunable content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add prunable (#2)")
+
+		// Delete remote branch
+		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/prunable-squash")
+		testutil.RunGit(t, mainDir, "fetch", "--prune")
+
+		// Delete worktree directory externally (simulate rm -rf)
+		if err := os.RemoveAll(wtPath); err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify worktree is now prunable
+		out := testutil.RunGit(t, mainDir, "worktree", "list", "--porcelain")
+		if !strings.Contains(out, "prunable") {
+			t.Fatalf("worktree should be prunable: %s", out)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Remove the prunable upstream gone branch (should use -D internally)
+		removeResult, err := cmd.Run(t.Context(), "feature/prunable-squash", mainDir, RemoveOptions{})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Branch should be deleted (requires -D since not traditionally merged)
+		out = testutil.RunGit(t, mainDir, "branch", "--list", "feature/prunable-squash")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+
+		// Verify result indicates prunable
+		if !removeResult.Pruned {
+			t.Error("result.Pruned should be true")
+		}
+	})
 }
 
 func TestRemoveCommand_Check_Integration(t *testing.T) {
