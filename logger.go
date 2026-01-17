@@ -172,7 +172,8 @@ const (
 
 // GenerateCommandID generates a random command ID for log grouping.
 // Returns an 8-character hex string (e.g., "a1b2c3d4").
-func GenerateCommandID() string {
+// Can be replaced in tests for deterministic output.
+var GenerateCommandID = func() string {
 	return GenerateCommandIDWithLength(DefaultCommandIDBytes)
 }
 
