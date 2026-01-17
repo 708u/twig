@@ -8,6 +8,8 @@ import (
 )
 
 func TestCLIHandler_Handle(t *testing.T) {
+	t.Parallel()
+
 	fixedTime := time.Date(2026, 1, 17, 12, 34, 56, 0, time.UTC)
 
 	tests := []struct {
@@ -54,6 +56,8 @@ func TestCLIHandler_Handle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			var buf bytes.Buffer
 			handler := NewCLIHandler(&buf, tt.level)
 
@@ -74,6 +78,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 }
 
 func TestCLIHandler_Enabled(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		handlerLevel slog.Level
@@ -114,6 +119,8 @@ func TestCLIHandler_Enabled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			handler := NewCLIHandler(nil, tt.handlerLevel)
 			got := handler.Enabled(t.Context(), tt.logLevel)
 			if got != tt.want {
@@ -124,6 +131,7 @@ func TestCLIHandler_Enabled(t *testing.T) {
 }
 
 func TestCLIHandler_LevelFiltering(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		handlerLevel slog.Level
@@ -152,6 +160,8 @@ func TestCLIHandler_LevelFiltering(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			var buf bytes.Buffer
 			handler := NewCLIHandler(&buf, tt.handlerLevel)
 			logger := slog.New(handler)
@@ -167,6 +177,7 @@ func TestCLIHandler_LevelFiltering(t *testing.T) {
 }
 
 func TestVerbosityToLevel(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		verbosity int
 		want      slog.Level
@@ -186,6 +197,8 @@ func TestVerbosityToLevel(t *testing.T) {
 }
 
 func TestNewNopLogger(t *testing.T) {
+	t.Parallel()
+
 	logger := NewNopLogger()
 	if logger == nil {
 		t.Fatal("NewNopLogger() returned nil")
