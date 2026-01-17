@@ -918,7 +918,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("RemovesUpstreamGoneBranchWithForceDelete", func(t *testing.T) {
+	t.Run("RemovesUpstreamGoneBranchWithoutForce", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -991,7 +991,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("RemovesPrunableUpstreamGoneBranchWithForceDelete", func(t *testing.T) {
+	t.Run("RemovesPrunableUpstreamGoneBranchWithoutForce", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
