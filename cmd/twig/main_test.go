@@ -180,7 +180,7 @@ type mockCleanCommander struct {
 	err    error
 }
 
-func (m *mockCleanCommander) Run(_ context.Context, cwd string, opts twig.CleanOptions) (twig.CleanResult, error) {
+func (m *mockCleanCommander) Run(ctx context.Context, cwd string, opts twig.CleanOptions) (twig.CleanResult, error) {
 	return m.result, m.err
 }
 
@@ -288,7 +288,7 @@ type mockAddCommander struct {
 	calledName string
 }
 
-func (m *mockAddCommander) Run(_ context.Context, name string) (twig.AddResult, error) {
+func (m *mockAddCommander) Run(ctx context.Context, name string) (twig.AddResult, error) {
 	m.calledName = name
 	return m.result, m.err
 }
@@ -299,7 +299,7 @@ type mockListCommander struct {
 	err    error
 }
 
-func (m *mockListCommander) Run(_ context.Context) (twig.ListResult, error) {
+func (m *mockListCommander) Run(ctx context.Context) (twig.ListResult, error) {
 	return m.result, m.err
 }
 
@@ -415,7 +415,7 @@ type removeResult struct {
 	err error
 }
 
-func (m *mockRemoveCommander) Run(_ context.Context, branch, cwd string, opts twig.RemoveOptions) (twig.RemovedWorktree, error) {
+func (m *mockRemoveCommander) Run(ctx context.Context, branch, cwd string, opts twig.RemoveOptions) (twig.RemovedWorktree, error) {
 	m.calls = append(m.calls, removeCall{branch, cwd, opts})
 	if m.idx < len(m.results) {
 		r := m.results[m.idx]
