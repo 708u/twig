@@ -79,15 +79,8 @@ the worktree no longer exists.
 
 ### Upstream Gone Branches
 
-Branches whose remote tracking branch has been deleted (e.g., after squash
-or rebase merge on GitHub) are detected as "upstream gone" and included
-as cleanup candidates.
-
-These branches are handled automatically without requiring `--force`:
-
-- Detection: `git branch -vv` shows `[origin/branch: gone]`
-- Deletion: Uses `-D` flag internally (commits differ from target branch)
-- Works for both normal worktrees and prunable branches
+Branches whose remote tracking branch has been deleted are detected as
+"upstream gone" and cleaned without requiring `--force`.
 
 ### Force Option
 

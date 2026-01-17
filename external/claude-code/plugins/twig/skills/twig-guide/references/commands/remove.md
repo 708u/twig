@@ -70,23 +70,8 @@ For prunable worktrees:
 
 ### Upstream Gone Branches
 
-When a branch's remote tracking branch has been deleted (e.g., after a squash
-or rebase merge on GitHub), the branch is considered "upstream gone". These
-branches require `-D` instead of `-d` for deletion because their commits
-differ from the target branch.
-
-twig handles this automatically:
-
-```bash
-# After squash merge on GitHub, remote branch is deleted
-# Local branch shows "gone" in git branch -vv
-
-# twig remove works without --force
-twig remove feat/squashed
-```
-
-This applies to both normal and prunable worktrees. The upstream gone status
-is detected automatically and the appropriate deletion flag is used.
+Branches whose remote tracking branch has been deleted are detected as
+"upstream gone" and removed without requiring `--force`.
 
 ### Empty Directory Cleanup
 
