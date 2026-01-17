@@ -78,7 +78,7 @@ func TestGitRunner_ChangedFiles(t *testing.T) {
 			}
 			runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
 
-			got, err := runner.ChangedFiles()
+			got, err := runner.ChangedFiles(t.Context())
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -134,7 +134,7 @@ func TestGitRunner_IsBranchUpstreamGone(t *testing.T) {
 			}
 			runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
 
-			got, err := runner.IsBranchUpstreamGone(tt.branch)
+			got, err := runner.IsBranchUpstreamGone(t.Context(), tt.branch)
 
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -210,7 +210,7 @@ func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 			}
 			runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
 
-			got, err := runner.IsBranchMerged(tt.branch, tt.target)
+			got, err := runner.IsBranchMerged(t.Context(), tt.branch, tt.target)
 
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)

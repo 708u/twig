@@ -37,7 +37,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		}
 
 		addCmd := twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
-		_, err = addCmd.Run("feat/a")
+		_, err = addCmd.Run(t.Context(), "feat/a")
 		if err != nil {
 			t.Fatalf("failed to create feat/a worktree: %v", err)
 		}
@@ -47,7 +47,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		// Now simulate --source main from feat/a worktree
 		// The PreRunE logic: resolve main branch to its worktree path, then reload config
 		git := twig.NewGitRunner(featAPath)
-		mainWT, err := git.WorktreeFindByBranch("main")
+		mainWT, err := git.WorktreeFindByBranch(t.Context(), "main")
 		if err != nil {
 			t.Fatalf("failed to find main worktree: %v", err)
 		}
@@ -60,7 +60,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 
 		// Create feat/b from main's config
 		addCmd = twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
-		addResult, err := addCmd.Run("feat/b")
+		addResult, err := addCmd.Run(t.Context(), "feat/b")
 		if err != nil {
 			t.Fatalf("failed to create feat/b worktree: %v", err)
 		}
@@ -105,7 +105,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		// Simulate -C pointing to mainDir and --source pointing to main
 		// This should work: -C sets working directory, --source sets source branch
 		git := twig.NewGitRunner(mainDir)
-		sourceWT, err := git.WorktreeFindByBranch("main")
+		sourceWT, err := git.WorktreeFindByBranch(t.Context(), "main")
 		if err != nil {
 			t.Fatalf("failed to find main worktree: %v", err)
 		}
@@ -118,7 +118,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 
 		// Create worktree using the resolved config
 		addCmd := twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
-		addResult, err := addCmd.Run("feat/coexist")
+		addResult, err := addCmd.Run(t.Context(), "feat/coexist")
 		if err != nil {
 			t.Fatalf("failed to create worktree: %v", err)
 		}
@@ -141,7 +141,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
 		git := twig.NewGitRunner(mainDir)
-		_, err := git.WorktreeFindByBranch("nonexistent")
+		_, err := git.WorktreeFindByBranch(t.Context(), "nonexistent")
 		if err == nil {
 			t.Fatal("expected error for nonexistent branch")
 		}
@@ -159,7 +159,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		testutil.RunGit(t, mainDir, "branch", "orphan-branch")
 
 		git := twig.NewGitRunner(mainDir)
-		_, err := git.WorktreeFindByBranch("orphan-branch")
+		_, err := git.WorktreeFindByBranch(t.Context(), "orphan-branch")
 		if err == nil {
 			t.Fatal("expected error for branch without worktree")
 		}
@@ -195,7 +195,7 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 		}
 
 		addCmd := twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
-		_, err = addCmd.Run("feat/a")
+		_, err = addCmd.Run(t.Context(), "feat/a")
 		if err != nil {
 			t.Fatalf("failed to create feat/a worktree: %v", err)
 		}
@@ -222,7 +222,7 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 		// When default_source is applied, config should be reloaded from main
 		// Simulate the PreRunE logic
 		git := twig.NewGitRunner(featAPath)
-		mainWT, err := git.WorktreeFindByBranch(resultFeatA.Config.DefaultSource)
+		mainWT, err := git.WorktreeFindByBranch(t.Context(), resultFeatA.Config.DefaultSource)
 		if err != nil {
 			t.Fatalf("failed to find worktree for default_source: %v", err)
 		}
@@ -235,7 +235,7 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 
 		// Create feat/b using main's config
 		addCmd = twig.NewDefaultAddCommand(resultMain.Config, twig.AddOptions{})
-		_, err = addCmd.Run("feat/b")
+		_, err = addCmd.Run(t.Context(), "feat/b")
 		if err != nil {
 			t.Fatalf("failed to create feat/b worktree: %v", err)
 		}

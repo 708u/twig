@@ -40,7 +40,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/to-remove", mainDir, RemoveOptions{})
+		removeResult, err := cmd.Run(t.Context(), "feature/to-remove", mainDir, RemoveOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -79,7 +79,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/dry-run-test", mainDir, RemoveOptions{Check: true})
+		removeResult, err := cmd.Run(t.Context(), "feature/dry-run-test", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -124,7 +124,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// First, verify removal without --force fails with SkipError
-		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{})
+		_, err = cmd.Run(t.Context(), "feature/force-test", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for uncommitted changes without --force")
 		}
@@ -138,7 +138,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Now verify -f (WorktreeForceLevelUnclean) succeeds for uncommitted changes
-		_, err = cmd.Run("feature/force-test", mainDir, RemoveOptions{Force: WorktreeForceLevelUnclean})
+		_, err = cmd.Run(t.Context(), "feature/force-test", mainDir, RemoveOptions{Force: WorktreeForceLevelUnclean})
 		if err != nil {
 			t.Fatalf("Run with force failed: %v", err)
 		}
@@ -171,7 +171,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Removal without --force should fail with SkipError
-		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{})
+		_, err = cmd.Run(t.Context(), "feature/locked-test", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for locked worktree without --force")
 		}
@@ -191,13 +191,13 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Verify -f (WorktreeForceLevelUnclean) still fails for locked worktree
-		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{Force: WorktreeForceLevelUnclean})
+		_, err = cmd.Run(t.Context(), "feature/locked-test", mainDir, RemoveOptions{Force: WorktreeForceLevelUnclean})
 		if err == nil {
 			t.Fatal("expected error for locked worktree with single -f")
 		}
 
 		// Now verify -ff (WorktreeForceLevelLocked) removes the locked worktree
-		_, err = cmd.Run("feature/locked-test", mainDir, RemoveOptions{Force: WorktreeForceLevelLocked})
+		_, err = cmd.Run(t.Context(), "feature/locked-test", mainDir, RemoveOptions{Force: WorktreeForceLevelLocked})
 		if err != nil {
 			t.Fatalf("force remove of locked worktree with -ff failed: %v", err)
 		}
@@ -233,7 +233,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("feature/inside-test", wtPath, RemoveOptions{})
+		_, err = cmd.Run(t.Context(), "feature/inside-test", wtPath, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error when inside worktree, got nil")
 		}
@@ -264,7 +264,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: result.Config,
 		}
 
-		_, err = cmd.Run("orphan-branch", mainDir, RemoveOptions{})
+		_, err = cmd.Run(t.Context(), "orphan-branch", mainDir, RemoveOptions{})
 		if err == nil {
 			t.Fatal("expected error for branch not in worktree, got nil")
 		}
@@ -300,7 +300,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		// Remove all worktrees
 		var removeResult RemoveResult
 		for _, branch := range branches {
-			wt, err := cmd.Run(branch, mainDir, RemoveOptions{})
+			wt, err := cmd.Run(t.Context(), branch, mainDir, RemoveOptions{})
 			if err != nil {
 				wt.Branch = branch
 				wt.Err = err
@@ -360,7 +360,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		// Try to remove both
 		var removeResult RemoveResult
 		for _, branch := range []string{validBranch, invalidBranch} {
-			wt, err := cmd.Run(branch, mainDir, RemoveOptions{})
+			wt, err := cmd.Run(t.Context(), branch, mainDir, RemoveOptions{})
 			if err != nil {
 				wt.Branch = branch
 				wt.Err = err
@@ -421,7 +421,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feat/nested/very/deep", mainDir, RemoveOptions{})
+		removeResult, err := cmd.Run(t.Context(), "feat/nested/very/deep", mainDir, RemoveOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -473,7 +473,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Remove first worktree
-		removeResult, err := cmd.Run("feat/test1", mainDir, RemoveOptions{})
+		removeResult, err := cmd.Run(t.Context(), "feat/test1", mainDir, RemoveOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -494,7 +494,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Now remove second worktree
-		removeResult, err = cmd.Run("feat/test2", mainDir, RemoveOptions{})
+		removeResult, err = cmd.Run(t.Context(), "feat/test2", mainDir, RemoveOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -530,7 +530,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feat/dry-cleanup", mainDir, RemoveOptions{Check: true})
+		removeResult, err := cmd.Run(t.Context(), "feat/dry-cleanup", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -595,7 +595,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/prunable-test", mainDir, RemoveOptions{})
+		removeResult, err := cmd.Run(t.Context(), "feature/prunable-test", mainDir, RemoveOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -641,7 +641,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		removeResult, err := cmd.Run("feature/prunable-dry-run", mainDir, RemoveOptions{Check: true})
+		removeResult, err := cmd.Run(t.Context(), "feature/prunable-dry-run", mainDir, RemoveOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -694,7 +694,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Remove with force option
-		removeResult, err := cmd.Run("feature/prunable-force", mainDir, RemoveOptions{
+		removeResult, err := cmd.Run(t.Context(), "feature/prunable-force", mainDir, RemoveOptions{
 			Force: WorktreeForceLevelUnclean,
 		})
 		if err != nil {
@@ -752,7 +752,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Check should pass (clean submodule)
-		checkResult, err := cmd.Check("feature/clean-submodule", CheckOptions{
+		checkResult, err := cmd.Check(t.Context(), "feature/clean-submodule", CheckOptions{
 			Cwd: mainDir,
 		})
 		if err != nil {
@@ -764,7 +764,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Run with Force to delete unmerged branch (auto-force handles worktree removal)
-		_, err = cmd.Run("feature/clean-submodule", mainDir, RemoveOptions{
+		_, err = cmd.Run(t.Context(), "feature/clean-submodule", mainDir, RemoveOptions{
 			Force: WorktreeForceLevelUnclean,
 		})
 		if err != nil {
@@ -780,6 +780,85 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/clean-submodule")
 		if strings.TrimSpace(out) != "" {
 			t.Errorf("branch should be deleted, got: %s", out)
+		}
+	})
+
+	t.Run("CheckReturnsChangedFiles", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		wtPath := filepath.Join(repoDir, "feature", "changed-files-test")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/changed-files-test", wtPath)
+
+		// Create a tracked file and commit it
+		trackedFile := filepath.Join(wtPath, "tracked.txt")
+		if err := os.WriteFile(trackedFile, []byte("initial content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "tracked.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add tracked file")
+
+		// Modify the tracked file to create " M" status
+		if err := os.WriteFile(trackedFile, []byte("modified content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create untracked file for "??" status
+		untrackedFile := filepath.Join(wtPath, "untracked.txt")
+		if err := os.WriteFile(untrackedFile, []byte("new content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Test Check() returns ChangedFiles
+		checkResult, err := cmd.Check(t.Context(), "feature/changed-files-test", CheckOptions{
+			Cwd: mainDir,
+		})
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+
+		if len(checkResult.ChangedFiles) == 0 {
+			t.Fatal("expected ChangedFiles to be populated")
+		}
+
+		// Verify specific files are in the list
+		var foundUntracked, foundModified bool
+		for _, f := range checkResult.ChangedFiles {
+			if f.Path == "untracked.txt" && f.Status == "??" {
+				foundUntracked = true
+			}
+			if f.Path == "tracked.txt" && strings.Contains(f.Status, "M") {
+				foundModified = true
+			}
+		}
+		if !foundUntracked {
+			t.Error("expected untracked file in ChangedFiles")
+		}
+		if !foundModified {
+			t.Error("expected modified file in ChangedFiles")
+		}
+
+		// Test Run() also returns ChangedFiles in result
+		removeResult, err := cmd.Run(t.Context(), "feature/changed-files-test", mainDir, RemoveOptions{})
+		if err == nil {
+			t.Fatal("expected error for uncommitted changes")
+		}
+
+		// Even on error, ChangedFiles should be populated
+		if len(removeResult.ChangedFiles) == 0 {
+			t.Error("expected ChangedFiles to be populated in RemovedWorktree")
 		}
 	})
 
@@ -826,7 +905,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// Run with --force should succeed
-		_, err = cmd.Run("feature/force-submodule", mainDir, RemoveOptions{
+		_, err = cmd.Run(t.Context(), "feature/force-submodule", mainDir, RemoveOptions{
 			Force: WorktreeForceLevelUnclean,
 		})
 		if err != nil {
@@ -836,6 +915,160 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		// Verify worktree is removed
 		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
 			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+	})
+}
+
+func TestRemoveCommand_Check_Integration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("SkipsDirtySubmodule", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule repository
+		submoduleRepo := filepath.Join(repoDir, "submodule-repo")
+		if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "init")
+		testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+		if err := os.WriteFile(filepath.Join(submoduleRepo, "file.txt"), []byte("content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "add", ".")
+		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+
+		// Create worktree and add submodule
+		wtPath := filepath.Join(repoDir, "feature", "with-submodule")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/with-submodule", wtPath)
+		testutil.RunGit(t, wtPath, "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "sub")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add submodule")
+
+		// Make submodule dirty by advancing its commit (+ prefix = modified commit)
+		submodulePath := filepath.Join(wtPath, "sub")
+		if err := os.WriteFile(filepath.Join(submodulePath, "new.txt"), []byte("new"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submodulePath, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submodulePath, "config", "user.name", "Test")
+		testutil.RunGit(t, submodulePath, "add", ".")
+		testutil.RunGit(t, submodulePath, "commit", "-m", "advance submodule")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		checkResult, err := cmd.Check(t.Context(), "feature/with-submodule", CheckOptions{
+			Cwd: mainDir,
+		})
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+
+		if checkResult.CanRemove {
+			t.Error("CanRemove should be false for dirty submodule")
+		}
+		if checkResult.SkipReason != SkipDirtySubmodule {
+			t.Errorf("SkipReason = %v, want %v", checkResult.SkipReason, SkipDirtySubmodule)
+		}
+
+		// Run should also fail with SkipError
+		_, err = cmd.Run(t.Context(), "feature/with-submodule", mainDir, RemoveOptions{})
+		if err == nil {
+			t.Fatal("expected error for dirty submodule")
+		}
+
+		var skipErr *SkipError
+		if !errors.As(err, &skipErr) {
+			t.Fatalf("expected SkipError, got %T: %v", err, err)
+		}
+		if skipErr.Reason != SkipDirtySubmodule {
+			t.Errorf("SkipError.Reason = %v, want %v", skipErr.Reason, SkipDirtySubmodule)
+		}
+	})
+
+	t.Run("ReturnsChangedFiles", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		wtPath := filepath.Join(repoDir, "feature", "changed-files-test")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/changed-files-test", wtPath)
+
+		// Create a tracked file and commit it
+		trackedFile := filepath.Join(wtPath, "tracked.txt")
+		if err := os.WriteFile(trackedFile, []byte("initial content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "tracked.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add tracked file")
+
+		// Modify the tracked file to create " M" status
+		if err := os.WriteFile(trackedFile, []byte("modified content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create untracked file for "??" status
+		untrackedFile := filepath.Join(wtPath, "untracked.txt")
+		if err := os.WriteFile(untrackedFile, []byte("new content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		checkResult, err := cmd.Check(t.Context(), "feature/changed-files-test", CheckOptions{
+			Cwd: mainDir,
+		})
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+
+		if len(checkResult.ChangedFiles) == 0 {
+			t.Fatal("expected ChangedFiles to be populated")
+		}
+
+		var foundUntracked, foundModified bool
+		for _, f := range checkResult.ChangedFiles {
+			if f.Path == "untracked.txt" && f.Status == "??" {
+				foundUntracked = true
+			}
+			if f.Path == "tracked.txt" && strings.Contains(f.Status, "M") {
+				foundModified = true
+			}
+		}
+		if !foundUntracked {
+			t.Error("expected untracked file in ChangedFiles")
+		}
+		if !foundModified {
+			t.Error("expected modified file in ChangedFiles")
+		}
+
+		removeResult, err := cmd.Run(t.Context(), "feature/changed-files-test", mainDir, RemoveOptions{})
+		if err == nil {
+			t.Fatal("expected error for uncommitted changes")
+		}
+
+		if len(removeResult.ChangedFiles) == 0 {
+			t.Error("expected ChangedFiles to be populated in RemovedWorktree")
 		}
 	})
 }

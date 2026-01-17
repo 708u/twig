@@ -2,6 +2,7 @@ package twig
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -97,8 +98,8 @@ func (w Worktree) formatStatus() string {
 }
 
 // Run lists all worktrees.
-func (c *ListCommand) Run() (ListResult, error) {
-	worktrees, err := c.Git.WorktreeList()
+func (c *ListCommand) Run(ctx context.Context) (ListResult, error) {
+	worktrees, err := c.Git.WorktreeList(ctx)
 	if err != nil {
 		return ListResult{}, err
 	}

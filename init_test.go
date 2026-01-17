@@ -90,7 +90,7 @@ func TestInitCommand_Run(t *testing.T) {
 			mockFS := tt.setupFS()
 			cmd := NewInitCommand(mockFS)
 
-			result, err := cmd.Run("/test", tt.opts)
+			result, err := cmd.Run(t.Context(), "/test", tt.opts)
 
 			if tt.wantErr {
 				if err == nil {

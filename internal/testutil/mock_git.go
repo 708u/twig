@@ -1,10 +1,23 @@
 package testutil
 
 import (
-	"errors"
+	"context"
 	"slices"
 	"strings"
 )
+
+// MockExitError simulates exec.ExitError for testing.
+type MockExitError struct {
+	Code int
+}
+
+func (e *MockExitError) Error() string {
+	return "exit status " + string(rune('0'+e.Code))
+}
+
+func (e *MockExitError) ExitCode() int {
+	return e.Code
+}
 
 // MockWorktree represents a worktree entry for testing.
 type MockWorktree struct {
@@ -22,7 +35,7 @@ type MockWorktree struct {
 // MockGitExecutor is a mock implementation of twig.GitExecutor for testing.
 type MockGitExecutor struct {
 	// RunFunc overrides the default behavior if set.
-	RunFunc func(args ...string) ([]byte, error)
+	RunFunc func(ctx context.Context, args ...string) ([]byte, error)
 
 	// ExistingBranches is a list of branches that exist locally.
 	ExistingBranches []string
@@ -98,9 +111,9 @@ type MockGitExecutor struct {
 	SubmoduleUpdateArgs []string
 }
 
-func (m *MockGitExecutor) Run(args ...string) ([]byte, error) {
+func (m *MockGitExecutor) Run(ctx context.Context, args ...string) ([]byte, error) {
 	if m.RunFunc != nil {
-		return m.RunFunc(args...)
+		return m.RunFunc(ctx, args...)
 	}
 	return m.defaultRun(args...)
 }
@@ -176,7 +189,7 @@ func (m *MockGitExecutor) handleRevParse(args []string) ([]byte, error) {
 			return nil, nil
 		}
 	}
-	return nil, errors.New("not found")
+	return nil, &MockExitError{Code: 1}
 }
 
 func (m *MockGitExecutor) handleWorktreeList() ([]byte, error) {

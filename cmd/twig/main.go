@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -22,27 +23,27 @@ var (
 
 // AddCommander is the interface for AddCommand execution.
 type AddCommander interface {
-	Run(name string) (twig.AddResult, error)
+	Run(ctx context.Context, name string) (twig.AddResult, error)
 }
 
 // CleanCommander defines the interface for clean operations.
 type CleanCommander interface {
-	Run(cwd string, opts twig.CleanOptions) (twig.CleanResult, error)
+	Run(ctx context.Context, cwd string, opts twig.CleanOptions) (twig.CleanResult, error)
 }
 
 // ListCommander defines the interface for list operations.
 type ListCommander interface {
-	Run() (twig.ListResult, error)
+	Run(ctx context.Context) (twig.ListResult, error)
 }
 
 // RemoveCommander defines the interface for remove operations.
 type RemoveCommander interface {
-	Run(branch string, cwd string, opts twig.RemoveOptions) (twig.RemovedWorktree, error)
+	Run(ctx context.Context, branch string, cwd string, opts twig.RemoveOptions) (twig.RemovedWorktree, error)
 }
 
 // InitCommander defines the interface for init operations.
 type InitCommander interface {
-	Run(dir string, opts twig.InitOptions) (twig.InitResult, error)
+	Run(ctx context.Context, dir string, opts twig.InitOptions) (twig.InitResult, error)
 }
 
 type options struct {
@@ -95,14 +96,14 @@ func WithInitCommander(cmd InitCommander) Option {
 const carryFromCurrent = "<current>"
 
 // resolveCarryFrom resolves the --carry flag value to a worktree path.
-func resolveCarryFrom(carryValue, originalCwd string, git *twig.GitRunner) (string, error) {
+func resolveCarryFrom(ctx context.Context, carryValue, originalCwd string, git *twig.GitRunner) (string, error) {
 	switch carryValue {
 	case carryFromCurrent:
 		return originalCwd, nil
 	case "":
 		return "", fmt.Errorf("carry value cannot be empty")
 	default:
-		wt, err := git.WorktreeFindByBranch(carryValue)
+		wt, err := git.WorktreeFindByBranch(ctx, carryValue)
 		if err != nil {
 			return "", fmt.Errorf("failed to find worktree for branch %q: %w", carryValue, err)
 		}
@@ -216,7 +217,7 @@ Use --file with --sync or --carry to target specific files:
 				return nil, cobra.ShellCompDirectiveError
 			}
 			git := twig.NewGitRunner(dir)
-			branches, err := git.BranchList()
+			branches, err := git.BranchList(cmd.Context())
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
@@ -243,7 +244,7 @@ Use --file with --sync or --carry to target specific files:
 
 			// Resolve branch to worktree path
 			git := twig.NewGitRunner(cwd)
-			sourceWT, err := git.WorktreeFindByBranch(source)
+			sourceWT, err := git.WorktreeFindByBranch(cmd.Context(), source)
 			if err != nil {
 				return fmt.Errorf("failed to find worktree for branch %q: %w", source, err)
 			}
@@ -291,7 +292,7 @@ Use --file with --sync or --carry to target specific files:
 				carryValue, _ := cmd.Flags().GetString("carry")
 				git := twig.NewGitRunner(cwd)
 				var err error
-				carryFrom, err = resolveCarryFrom(carryValue, originalCwd, git)
+				carryFrom, err = resolveCarryFrom(cmd.Context(), carryValue, originalCwd, git)
 				if err != nil {
 					return err
 				}
@@ -310,7 +311,7 @@ Use --file with --sync or --carry to target specific files:
 					InitSubmodules: initSubmodules,
 				})
 			}
-			result, err := addCmd.Run(args[0])
+			result, err := addCmd.Run(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
@@ -348,7 +349,7 @@ Use --file with --sync or --carry to target specific files:
 			} else {
 				listCmd = twig.NewDefaultListCommand(cwd, log)
 			}
-			result, err := listCmd.Run()
+			result, err := listCmd.Run(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -391,7 +392,7 @@ Safety checks (all must pass):
 			}
 
 			// First pass: analyze candidates (always in check mode first)
-			result, err := cleanCmd.Run(cwd, twig.CleanOptions{
+			result, err := cleanCmd.Run(cmd.Context(), cwd, twig.CleanOptions{
 				Check:   true,
 				Target:  target,
 				Verbose: verbose,
@@ -433,7 +434,7 @@ Safety checks (all must pass):
 			}
 
 			// Second pass: execute removal
-			result, err = cleanCmd.Run(cwd, twig.CleanOptions{
+			result, err = cleanCmd.Run(cmd.Context(), cwd, twig.CleanOptions{
 				Check:   false,
 				Target:  target,
 				Verbose: verbose,
@@ -470,7 +471,7 @@ stop processing of remaining branches.`,
 				return nil, cobra.ShellCompDirectiveError
 			}
 			git := twig.NewGitRunner(dir)
-			branches, err := git.WorktreeListBranches()
+			branches, err := git.WorktreeListBranches(cmd.Context())
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
@@ -498,7 +499,7 @@ stop processing of remaining branches.`,
 			var result twig.RemoveResult
 
 			for _, branch := range args {
-				wt, err := removeCmd.Run(branch, cwd, twig.RemoveOptions{
+				wt, err := removeCmd.Run(cmd.Context(), branch, cwd, twig.RemoveOptions{
 					Force: twig.WorktreeForceLevel(forceCount),
 					Check: check,
 				})
@@ -542,17 +543,18 @@ stop processing of remaining branches.`,
 			return nil, cobra.ShellCompDirectiveError
 		}
 
+		ctx := cmd.Context()
 		// If --source is specified, resolve to that worktree
 		if source, _ := cmd.Flags().GetString("source"); source != "" {
 			git := twig.NewGitRunner(dir)
-			if sourceWT, findErr := git.WorktreeFindByBranch(source); findErr == nil {
+			if sourceWT, findErr := git.WorktreeFindByBranch(ctx, source); findErr == nil {
 				dir = sourceWT.Path
 			}
 		}
 
 		// Get changed files from the target directory
 		git := twig.NewGitRunner(dir)
-		files, err := git.ChangedFiles()
+		files, err := git.ChangedFiles(ctx)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}
@@ -612,7 +614,7 @@ stop processing of remaining branches.`,
 			} else {
 				initCommand = twig.NewDefaultInitCommand()
 			}
-			result, err := initCommand.Run(cwd, twig.InitOptions{Force: force})
+			result, err := initCommand.Run(cmd.Context(), cwd, twig.InitOptions{Force: force})
 			if err != nil {
 				return err
 			}

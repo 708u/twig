@@ -47,7 +47,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Run in default mode (dry-run equivalent)
-		result, err := cmd.Run(mainDir, CleanOptions{})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -105,7 +105,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -151,7 +151,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		result, err := cmd.Run(mainDir, CleanOptions{Verbose: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Verbose: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -211,7 +211,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		result, err := cmd.Run(mainDir, CleanOptions{Verbose: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Verbose: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -251,7 +251,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		result, err := cmd.Run(mainDir, CleanOptions{Verbose: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Verbose: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -289,7 +289,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Run with cwd inside the worktree
-		result, err := cmd.Run(wtPath, CleanOptions{Verbose: true})
+		result, err := cmd.Run(t.Context(), wtPath, CleanOptions{Verbose: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -328,7 +328,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Run with --yes
-		result, err := cmd.Run(mainDir, CleanOptions{Yes: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Yes: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -392,7 +392,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Check against develop (should find feature as merged)
-		result, err := cmd.Run(mainDir, CleanOptions{Target: "develop"})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Target: "develop"})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -429,7 +429,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		result, err := cmd.Run(mainDir, CleanOptions{})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -472,7 +472,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Run with --yes
-		result, err := cmd.Run(mainDir, CleanOptions{Yes: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Yes: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -520,7 +520,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Run with --check
-		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -567,7 +567,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Without force, should skip
-		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -576,7 +576,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// With -f, should not skip
-		result, err = cmd.Run(mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelUnclean})
+		result, err = cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelUnclean})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -585,7 +585,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Execute with -f
-		result, err = cmd.Run(mainDir, CleanOptions{Force: WorktreeForceLevelUnclean})
+		result, err = cmd.Run(t.Context(), mainDir, CleanOptions{Force: WorktreeForceLevelUnclean})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -636,7 +636,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Without force, both should be skipped
-		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -647,7 +647,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// With -f, both should not be skipped
-		result, err = cmd.Run(mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelUnclean})
+		result, err = cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelUnclean})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -658,7 +658,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Execute with -f
-		result, err = cmd.Run(mainDir, CleanOptions{Force: WorktreeForceLevelUnclean})
+		result, err = cmd.Run(t.Context(), mainDir, CleanOptions{Force: WorktreeForceLevelUnclean})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -698,7 +698,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Without force, should skip
-		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -707,7 +707,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// With -f, should still skip (need -ff)
-		result, err = cmd.Run(mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelUnclean})
+		result, err = cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelUnclean})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -716,7 +716,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// With -ff, should not skip
-		result, err = cmd.Run(mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelLocked})
+		result, err = cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Force: WorktreeForceLevelLocked})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -725,7 +725,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Execute with -ff
-		result, err = cmd.Run(mainDir, CleanOptions{Force: WorktreeForceLevelLocked})
+		result, err = cmd.Run(t.Context(), mainDir, CleanOptions{Force: WorktreeForceLevelLocked})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -756,7 +756,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Even with -ff, should skip current directory
-		result, err := cmd.Run(wtPath, CleanOptions{Check: true, Force: WorktreeForceLevelLocked})
+		result, err := cmd.Run(t.Context(), wtPath, CleanOptions{Check: true, Force: WorktreeForceLevelLocked})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -832,7 +832,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -917,7 +917,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			Config: cfgResult.Config,
 		}
 
-		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -963,7 +963,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Check mode should detect prunable branch
-		result, err := cmd.Run(mainDir, CleanOptions{Check: true})
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}

@@ -65,7 +65,7 @@ func TestListCommand_Run(t *testing.T) {
 				Git: &GitRunner{Executor: mock, Log: NewNopLogger()},
 			}
 
-			result, err := cmd.Run()
+			result, err := cmd.Run(t.Context())
 
 			if tt.wantErr {
 				if err == nil {
@@ -114,7 +114,7 @@ func TestNewListCommand_NilLogger(t *testing.T) {
 	}
 
 	// Should be able to run without panic
-	_, err := cmd.Run()
+	_, err := cmd.Run(t.Context())
 	if err != nil {
 		t.Errorf("Run() error = %v", err)
 	}
