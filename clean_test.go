@@ -472,7 +472,7 @@ func TestCleanCommand_Run(t *testing.T) {
 
 			cmd := &CleanCommand{
 				FS:     &testutil.MockFS{},
-				Git:    &GitRunner{Executor: mockGit},
+				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: tt.config,
 			}
 
@@ -553,7 +553,7 @@ func TestCleanCommand_ResolveTarget(t *testing.T) {
 			}
 
 			cmd := &CleanCommand{
-				Git:    &GitRunner{Executor: mockGit},
+				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: tt.config,
 			}
 

@@ -446,7 +446,7 @@ func TestRemoveCommand_Run(t *testing.T) {
 
 			cmd := &RemoveCommand{
 				FS:     &testutil.MockFS{},
-				Git:    &GitRunner{Executor: mockGit},
+				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: tt.config,
 			}
 
@@ -1212,7 +1212,7 @@ func TestRemoveCommand_Check(t *testing.T) {
 
 			cmd := &RemoveCommand{
 				FS:     &testutil.MockFS{},
-				Git:    &GitRunner{Executor: mockGit},
+				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: tt.config,
 			}
 
