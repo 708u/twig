@@ -805,21 +805,16 @@ func TestCleanCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/squashed")
 
-		// Simulate squash merge on main (combine all commits into one)
-		mainFile1 := filepath.Join(mainDir, "feature1.txt")
-		mainFile2 := filepath.Join(mainDir, "feature2.txt")
-		if err := os.WriteFile(mainFile1, []byte("feature content 1"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(mainFile2, []byte("feature content 2"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		testutil.RunGit(t, mainDir, "add", ".")
+		// Simulate squash merge: merge to main and push to remote
+		testutil.RunGit(t, mainDir, "merge", "--squash", "feature/squashed")
 		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add features (#1)")
+		testutil.RunGit(t, mainDir, "push", "origin", "main")
 
-		// Delete remote branch (as GitHub does after squash merge)
+		// Remote branch is deleted after merge
 		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/squashed")
-		testutil.RunGit(t, mainDir, "fetch", "--prune")
+
+		// User fetches from remote (upstream gone)
+		testutil.RunGit(t, wtPath, "fetch", "--prune")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -887,24 +882,15 @@ func TestCleanCommand_Integration(t *testing.T) {
 		// Push to remote
 		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/rebased")
 
-		// Simulate rebase merge on main (apply commits one by one)
-		mainFile1 := filepath.Join(mainDir, "rebased1.txt")
-		if err := os.WriteFile(mainFile1, []byte("rebased content 1"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		testutil.RunGit(t, mainDir, "add", "rebased1.txt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add rebased file 1")
+		// Simulate rebase merge: cherry-pick creates new commit hashes and push to remote
+		testutil.RunGit(t, mainDir, "cherry-pick", "feature/rebased~1..feature/rebased")
+		testutil.RunGit(t, mainDir, "push", "origin", "main")
 
-		mainFile2 := filepath.Join(mainDir, "rebased2.txt")
-		if err := os.WriteFile(mainFile2, []byte("rebased content 2"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		testutil.RunGit(t, mainDir, "add", "rebased2.txt")
-		testutil.RunGit(t, mainDir, "commit", "-m", "add rebased file 2")
-
-		// Delete remote branch (as GitHub does after rebase merge)
+		// Remote branch is deleted after merge
 		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/rebased")
-		testutil.RunGit(t, mainDir, "fetch", "--prune")
+
+		// User fetches from remote (upstream gone)
+		testutil.RunGit(t, wtPath, "fetch", "--prune")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -986,4 +972,169 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("CleansSquashMergedBranches", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a bare remote repository
+		remoteDir := filepath.Join(repoDir, "remote.git")
+		testutil.RunGit(t, repoDir, "init", "--bare", remoteDir)
+
+		// Add remote to main
+		testutil.RunGit(t, mainDir, "remote", "add", "origin", remoteDir)
+		testutil.RunGit(t, mainDir, "push", "-u", "origin", "main")
+
+		// Create a feature branch worktree
+		wtPath := filepath.Join(repoDir, "feature", "squash-clean")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/squash-clean", wtPath)
+
+		// Make commits on the feature branch
+		testFile := filepath.Join(wtPath, "squash.txt")
+		if err := os.WriteFile(testFile, []byte("squash content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "squash.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add squash file")
+
+		// Push to remote
+		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/squash-clean")
+
+		// Simulate squash merge: merge to main and push to remote
+		testutil.RunGit(t, mainDir, "merge", "--squash", "feature/squash-clean")
+		testutil.RunGit(t, mainDir, "commit", "-m", "feat: add squash (#1)")
+		testutil.RunGit(t, mainDir, "push", "origin", "main")
+
+		// Remote branch is deleted after merge
+		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/squash-clean")
+
+		// User fetches from remote (upstream gone)
+		testutil.RunGit(t, wtPath, "fetch", "--prune")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Execute clean (not check mode) - this should actually delete the branch
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Yes: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Should have removed the worktree
+		if len(result.Removed) != 1 {
+			t.Errorf("expected 1 removed, got %d", len(result.Removed))
+		}
+
+		// Worktree should be removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+
+		// Branch should be deleted
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/squash-clean")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+
+		// Verify no errors occurred
+		for _, r := range result.Removed {
+			if r.Err != nil {
+				t.Errorf("removal error for %s: %v", r.Branch, r.Err)
+			}
+		}
+	})
+
+	t.Run("CleansRebaseMergedBranches", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a bare remote repository
+		remoteDir := filepath.Join(repoDir, "remote.git")
+		testutil.RunGit(t, repoDir, "init", "--bare", remoteDir)
+
+		// Add remote to main
+		testutil.RunGit(t, mainDir, "remote", "add", "origin", remoteDir)
+		testutil.RunGit(t, mainDir, "push", "-u", "origin", "main")
+
+		// Create a feature branch worktree
+		wtPath := filepath.Join(repoDir, "feature", "rebase-clean")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/rebase-clean", wtPath)
+
+		// Make commits on the feature branch
+		testFile1 := filepath.Join(wtPath, "rebase1.txt")
+		if err := os.WriteFile(testFile1, []byte("rebase content 1"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "rebase1.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add rebase file 1")
+
+		testFile2 := filepath.Join(wtPath, "rebase2.txt")
+		if err := os.WriteFile(testFile2, []byte("rebase content 2"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "rebase2.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add rebase file 2")
+
+		// Push to remote
+		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/rebase-clean")
+
+		// Simulate rebase merge: cherry-pick creates new commit hashes and push to remote
+		testutil.RunGit(t, mainDir, "cherry-pick", "feature/rebase-clean~1..feature/rebase-clean")
+		testutil.RunGit(t, mainDir, "push", "origin", "main")
+
+		// Remote branch is deleted after merge
+		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/rebase-clean")
+
+		// User fetches from remote (upstream gone)
+		testutil.RunGit(t, wtPath, "fetch", "--prune")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Execute clean (not check mode) - this should actually delete the branch
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Yes: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Should have removed the worktree
+		if len(result.Removed) != 1 {
+			t.Errorf("expected 1 removed, got %d", len(result.Removed))
+		}
+
+		// Worktree should be removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+
+		// Branch should be deleted
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/rebase-clean")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+
+		// Verify no errors occurred
+		for _, r := range result.Removed {
+			if r.Err != nil {
+				t.Errorf("removal error for %s: %v", r.Branch, r.Err)
+			}
+		}
+	})
 }

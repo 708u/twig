@@ -68,6 +68,11 @@ For prunable worktrees:
 - No cwd check is performed (directory doesn't exist)
 - `--check` shows "Would prune stale worktree record"
 
+### Upstream Gone Branches
+
+Branches whose remote tracking branch has been deleted are detected as
+"upstream gone" and removed without requiring `--force`.
+
 ### Empty Directory Cleanup
 
 After removing a worktree, twig automatically removes any empty parent
