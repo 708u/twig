@@ -1042,4 +1042,87 @@ func TestCleanCommand_Integration(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("CleansRebaseMergedBranches", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a bare remote repository
+		remoteDir := filepath.Join(repoDir, "remote.git")
+		testutil.RunGit(t, repoDir, "init", "--bare", remoteDir)
+
+		// Add remote to main
+		testutil.RunGit(t, mainDir, "remote", "add", "origin", remoteDir)
+		testutil.RunGit(t, mainDir, "push", "-u", "origin", "main")
+
+		// Create a feature branch worktree
+		wtPath := filepath.Join(repoDir, "feature", "rebase-clean")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/rebase-clean", wtPath)
+
+		// Make commits on the feature branch
+		testFile1 := filepath.Join(wtPath, "rebase1.txt")
+		if err := os.WriteFile(testFile1, []byte("rebase content 1"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "rebase1.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add rebase file 1")
+
+		testFile2 := filepath.Join(wtPath, "rebase2.txt")
+		if err := os.WriteFile(testFile2, []byte("rebase content 2"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "rebase2.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add rebase file 2")
+
+		// Push to remote
+		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/rebase-clean")
+
+		// Rebase merge to main (cherry-pick creates new commit hashes)
+		testutil.RunGit(t, mainDir, "cherry-pick", "feature/rebase-clean~1..feature/rebase-clean")
+
+		// Delete remote branch (as GitHub does after rebase merge)
+		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/rebase-clean")
+		testutil.RunGit(t, mainDir, "fetch", "--prune")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+		}
+
+		// Execute clean (not check mode) - this should actually delete the branch
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Yes: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Should have removed the worktree
+		if len(result.Removed) != 1 {
+			t.Errorf("expected 1 removed, got %d", len(result.Removed))
+		}
+
+		// Worktree should be removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+
+		// Branch should be deleted
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/rebase-clean")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+
+		// Verify no errors occurred
+		for _, r := range result.Removed {
+			if r.Err != nil {
+				t.Errorf("removal error for %s: %v", r.Branch, r.Err)
+			}
+		}
+	})
 }
