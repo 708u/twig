@@ -169,23 +169,52 @@ func runGit(t *testing.T, dir string, args ...string) string {
 Git submodules require special handling in integration tests due to security
 restrictions introduced in Git 2.38+.
 
-### Why `-c protocol.file.allow=always` is Required
+### Why `protocol.file.allow=always` is Required
 
 Git 2.38 introduced security restrictions that block local `file://` protocol
 URLs by default. Since integration tests use local repositories as submodules,
-the `-c protocol.file.allow=always` option must be passed to:
+`protocol.file.allow=always` must be configured.
 
-- `git submodule add` when adding a submodule
-- `git submodule update` when initializing submodules
-
-Without this option, tests fail on GitHub Actions and other CI environments
-with errors like:
+Without this configuration, tests fail on GitHub Actions and other CI
+environments with errors like:
 
 ```txt
 fatal: transport 'file' not allowed
 ```
 
-### Setup Pattern
+### Configuration Approaches
+
+Choose based on whether **production code** executes submodule commands:
+
+#### When production code runs submodule commands (e.g., `submodule update`)
+
+Use `t.Setenv` to propagate config to child processes:
+
+```go
+// At the start of the test function (before any subtests)
+t.Setenv("GIT_CONFIG_COUNT", "1")
+t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+t.Setenv("GIT_CONFIG_VALUE_0", "always")
+```
+
+- Applies to all git commands including those run by production code
+- Requires sequential test execution (no `t.Parallel()`)
+
+#### When only test setup runs submodule commands
+
+Use `-c` flag directly on `testutil.RunGit` calls:
+
+```go
+testutil.RunGit(t, dir, "-c", "protocol.file.allow=always",
+    "submodule", "add", submoduleRepo, "mysub")
+```
+
+- Allows `t.Parallel()` for faster test execution
+- Only affects the specific git command
+
+### Setup Pattern: Using `-c` Flag
+
+For tests where only test setup runs submodule commands:
 
 ```go
 //go:build integration
@@ -201,31 +230,76 @@ import (
 func TestSubmoduleOperation_Integration(t *testing.T) {
     t.Parallel()
 
-    repoDir, mainDir := testutil.SetupTestRepo(t)
+    t.Run("WithSubmodule", func(t *testing.T) {
+        t.Parallel()
 
-    // Step 1: Create a submodule repository (separate git repo)
-    submoduleRepo := filepath.Join(repoDir, "submodule-repo")
-    if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
-        t.Fatal(err)
-    }
-    testutil.RunGit(t, submoduleRepo, "init")
-    testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
-    testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+        repoDir, mainDir := testutil.SetupTestRepo(t)
 
-    // Step 2: Add content and commit in submodule repo
-    subFile := filepath.Join(submoduleRepo, "file.txt")
-    if err := os.WriteFile(subFile, []byte("submodule content"), 0644); err != nil {
-        t.Fatal(err)
-    }
-    testutil.RunGit(t, submoduleRepo, "add", ".")
-    testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+        // Step 1: Create a submodule repository (separate git repo)
+        submoduleRepo := filepath.Join(repoDir, "submodule-repo")
+        if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+            t.Fatal(err)
+        }
+        testutil.RunGit(t, submoduleRepo, "init")
+        testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+        testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
 
-    // Step 3: Add submodule to main repo (MUST use -c protocol.file.allow=always)
-    testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always",
-        "submodule", "add", submoduleRepo, "mysub")
-    testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+        // Step 2: Add content and commit in submodule repo
+        subFile := filepath.Join(submoduleRepo, "file.txt")
+        if err := os.WriteFile(subFile, []byte("submodule content"), 0644); err != nil {
+            t.Fatal(err)
+        }
+        testutil.RunGit(t, submoduleRepo, "add", ".")
+        testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
 
-    // Now mainDir contains a submodule at "mysub"
+        // Step 3: Add submodule to main repo (use -c flag)
+        testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always",
+            "submodule", "add", submoduleRepo, "mysub")
+        testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+
+        // Now mainDir contains a submodule at "mysub"
+    })
+}
+```
+
+### Setup Pattern: Using `t.Setenv`
+
+For tests where production code runs submodule commands (e.g., `submodule update`):
+
+```go
+//go:build integration
+
+package twig
+
+import (
+    "os"
+    "path/filepath"
+    "testing"
+)
+
+// Not parallel: uses t.Setenv for file:// protocol in local submodule URLs.
+func TestSubmoduleInit_Integration(t *testing.T) {
+    // Allow file:// protocol for local submodule URLs in tests
+    t.Setenv("GIT_CONFIG_COUNT", "1")
+    t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+    t.Setenv("GIT_CONFIG_VALUE_0", "always")
+
+    t.Run("InitializesSubmodules", func(t *testing.T) {
+        repoDir, mainDir := testutil.SetupTestRepo(t)
+
+        // Setup submodule (same as above)
+        submoduleRepo := filepath.Join(repoDir, "submodule-repo")
+        // ... create submodule repo ...
+
+        // Add submodule (env var handles protocol)
+        testutil.RunGit(t, mainDir, "submodule", "add", submoduleRepo, "mysub")
+        testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+
+        // Production code runs submodule update (env var propagates)
+        cmd := NewCommand(mainDir)
+        result, err := cmd.Run()  // internally calls git submodule update
+        // ...
+    })
 }
 ```
 
@@ -252,15 +326,17 @@ testutil.RunGit(t, submodulePath, "commit", "-m", "advance")
 
 ### Key Points
 
-1. **Always use `-c protocol.file.allow=always`** for `submodule add` and
-   `submodule update` commands
+1. **Choose the right configuration approach** - use `t.Setenv` when production
+   code runs submodule commands, use `-c` flag when only test setup does
 2. **Submodule repo needs at least one commit** before it can be added
-3. **Configure user.email and user.name** in the submodule repo before committing
+3. **Configure user.email and user.name** in the submodule repo before
+   committing
 4. **Use `testutil.RunGit`** helper for consistent error handling
 
 ## Best Practices
 
-- Always use `t.Parallel()` for test isolation and performance
+- Use `t.Parallel()` for test isolation and performance (except when using
+  `t.Setenv` for submodule tests)
 - Use `t.TempDir()` for automatic cleanup
 - Use `t.Helper()` in helper functions for better error locations
 - Test both success and error paths
