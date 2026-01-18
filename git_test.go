@@ -154,6 +154,7 @@ func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 		name         string
 		branch       string
 		target       string
+		branchHEADs  map[string]string
 		merged       map[string][]string
 		upstreamGone []string
 		want         bool
@@ -162,6 +163,10 @@ func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 			name:   "traditional merge detected",
 			branch: "feat/merged",
 			target: "main",
+			branchHEADs: map[string]string{
+				"feat/merged": "commit123",
+				"main":        "commit456",
+			},
 			merged: map[string][]string{
 				"main": {"feat/merged"},
 			},
@@ -172,6 +177,10 @@ func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 			name:   "squash merge detected via upstream gone",
 			branch: "feat/squashed",
 			target: "main",
+			branchHEADs: map[string]string{
+				"feat/squashed": "commit123",
+				"main":          "commit456",
+			},
 			merged: map[string][]string{
 				"main": {}, // Not in --merged output
 			},
@@ -182,6 +191,10 @@ func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 			name:   "not merged at all",
 			branch: "feat/new",
 			target: "main",
+			branchHEADs: map[string]string{
+				"feat/new": "commit123",
+				"main":     "commit456",
+			},
 			merged: map[string][]string{
 				"main": {},
 			},
@@ -192,11 +205,29 @@ func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 			name:   "traditional merge takes precedence",
 			branch: "feat/both",
 			target: "main",
+			branchHEADs: map[string]string{
+				"feat/both": "commit123",
+				"main":      "commit456",
+			},
 			merged: map[string][]string{
 				"main": {"feat/both"},
 			},
 			upstreamGone: []string{"feat/both"},
 			want:         true,
+		},
+		{
+			name:   "same commit is not considered merged",
+			branch: "feat/new-branch",
+			target: "main",
+			branchHEADs: map[string]string{
+				"feat/new-branch": "same-commit-abc123",
+				"main":            "same-commit-abc123",
+			},
+			merged: map[string][]string{
+				"main": {"feat/new-branch"}, // git branch --merged would return this
+			},
+			upstreamGone: []string{},
+			want:         false, // but we should return false because same commit
 		},
 	}
 
@@ -207,6 +238,7 @@ func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 			mockGit := &testutil.MockGitExecutor{
 				MergedBranches:       tt.merged,
 				UpstreamGoneBranches: tt.upstreamGone,
+				BranchHEADs:          tt.branchHEADs,
 			}
 			runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
 

@@ -613,41 +613,89 @@ func (g *GitRunner) branchDelete(ctx context.Context, branch string, force bool)
 
 // IsBranchMerged checks if branch is merged into target.
 func (g *GitRunner) IsBranchMerged(ctx context.Context, branch, target string) (bool, error) {
-	merged, err := g.MergedBranches(ctx, target)
+	result, err := g.ClassifyBranchMergeStatus(ctx, target)
 	if err != nil {
 		return false, err
 	}
-	return merged[branch], nil
+	return result.Merged[branch], nil
 }
 
-// MergedBranches returns a map of branch names that are considered merged.
+// BranchMergeStatus holds the classification of branches by merge status.
+type BranchMergeStatus struct {
+	// Merged contains branches that are considered merged
+	// (via git branch --merged or upstream gone, excluding same-commit branches).
+	Merged map[string]bool
+	// SameCommit contains branches pointing to the same commit as target.
+	// These are excluded from Merged because they could be newly created or ff-merged.
+	SameCommit map[string]bool
+}
+
+// ClassifyBranchMergeStatus classifies branches by their merge status relative to target.
 // A branch is merged if it's in `git branch --merged <target>` or if its upstream is gone.
+// Branches pointing to the same commit as target are returned separately in SameCommit.
 // This is more efficient than calling IsBranchMerged for each branch individually.
-func (g *GitRunner) MergedBranches(ctx context.Context, target string) (map[string]bool, error) {
-	result := make(map[string]bool)
+func (g *GitRunner) ClassifyBranchMergeStatus(ctx context.Context, target string) (BranchMergeStatus, error) {
+	result := BranchMergeStatus{
+		Merged:     make(map[string]bool),
+		SameCommit: make(map[string]bool),
+	}
+
+	// Get all branch info in one call: name, commit hash, and upstream status
+	// Format: "branch-name <commit-hash> [gone]" or "branch-name <commit-hash>"
+	refOut, err := g.Run(ctx, GitCmdForEachRef, "--format=%(refname:short) %(objectname) %(upstream:track)", "refs/heads/")
+	if err != nil {
+		return result, fmt.Errorf("failed to get branch info: %w", err)
+	}
+
+	// Build branch->commit map and detect upstream gone
+	branchCommits := make(map[string]string)
+	for line := range strings.SplitSeq(strings.TrimSpace(string(refOut)), "\n") {
+		if line == "" {
+			continue
+		}
+		// Parse: "branch-name <commit> [gone]" or "branch-name <commit>"
+		parts := strings.SplitN(line, " ", 3)
+		if len(parts) < 2 {
+			continue
+		}
+		branch, commit := parts[0], parts[1]
+		branchCommits[branch] = commit
+
+		// Check for upstream gone (squash/rebase merges)
+		if len(parts) == 3 && parts[2] == "[gone]" {
+			result.Merged[branch] = true
+		}
+	}
+
+	// Get target commit for same-commit detection
+	targetCommit, ok := branchCommits[target]
+	if !ok {
+		// Target might be a remote ref or tag, fall back to rev-parse
+		var targetHead []byte
+		targetHead, err = g.Run(ctx, GitCmdRevParse, target)
+		if err != nil {
+			return result, fmt.Errorf("failed to get target HEAD: %w", err)
+		}
+		targetCommit = strings.TrimSpace(string(targetHead))
+	}
 
 	// Get traditionally merged branches
-	out, err := g.Run(ctx, GitCmdBranch, "--merged", target, "--format=%(refname:short)")
+	var out []byte
+	out, err = g.Run(ctx, GitCmdBranch, "--merged", target, "--format=%(refname:short)")
 	if err != nil {
-		return nil, fmt.Errorf("failed to check merged branches: %w", err)
+		return result, fmt.Errorf("failed to check merged branches: %w", err)
 	}
 	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		if line != "" {
-			result[line] = true
+		if line == "" {
+			continue
 		}
-	}
-
-	// Get branches with gone upstream (squash/rebase merges)
-	// Format: "branch-name [gone]" or "branch-name" (no upstream or tracking)
-	upstreamOut, err := g.Run(ctx, GitCmdForEachRef, "--format=%(refname:short) %(upstream:track)", "refs/heads/")
-	if err != nil {
-		// Non-fatal: return what we have from --merged
-		return result, nil
-	}
-	for line := range strings.SplitSeq(strings.TrimSpace(string(upstreamOut)), "\n") {
-		if branch, found := strings.CutSuffix(line, " [gone]"); found {
-			result[branch] = true
+		// Track branches pointing to the same commit as target separately
+		// (could be newly created or ff-merged - we can't distinguish)
+		if branchCommits[line] == targetCommit {
+			result.SameCommit[line] = true
+			continue
 		}
+		result.Merged[line] = true
 	}
 
 	return result, nil

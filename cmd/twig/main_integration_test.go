@@ -408,9 +408,20 @@ func TestCleanCommand_InteractiveConfirmation_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create a merged worktree (no commits = already merged)
+		// Create a worktree with a commit
 		wtPath := filepath.Join(repoDir, "feature", "interactive-y")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/interactive-y", wtPath)
+
+		// Make a commit on the branch
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/interactive-y", "feature/interactive-y")
 
 		// Create command with real implementation (no mock)
 		cmd := newRootCmd()
@@ -451,9 +462,20 @@ func TestCleanCommand_InteractiveConfirmation_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create a merged worktree (no commits = already merged)
+		// Create a worktree with a commit
 		wtPath := filepath.Join(repoDir, "feature", "interactive-n")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/interactive-n", wtPath)
+
+		// Make a commit on the branch
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/interactive-n", "feature/interactive-n")
 
 		// Create command with real implementation (no mock)
 		cmd := newRootCmd()
@@ -494,9 +516,20 @@ func TestCleanCommand_InteractiveConfirmation_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create a merged worktree (no commits = already merged)
+		// Create a worktree with a commit
 		wtPath := filepath.Join(repoDir, "feature", "interactive-yes")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/interactive-yes", wtPath)
+
+		// Make a commit on the branch
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/interactive-yes", "feature/interactive-yes")
 
 		// Create command with real implementation (no mock)
 		cmd := newRootCmd()
@@ -532,9 +565,20 @@ func TestCleanCommand_InteractiveConfirmation_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create a merged worktree (no commits = already merged)
+		// Create a worktree with a commit
 		wtPath := filepath.Join(repoDir, "feature", "interactive-empty")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/interactive-empty", wtPath)
+
+		// Make a commit on the branch
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/interactive-empty", "feature/interactive-empty")
 
 		// Create command with real implementation (no mock)
 		cmd := newRootCmd()

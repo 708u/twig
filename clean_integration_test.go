@@ -32,8 +32,8 @@ func TestCleanCommand_Integration(t *testing.T) {
 		testutil.RunGit(t, wtPath, "add", "test.txt")
 		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
 
-		// Merge the branch to main
-		testutil.RunGit(t, mainDir, "merge", "feature/merged")
+		// Merge the branch to main (use --no-ff to create a merge commit)
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/merged", "feature/merged")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -352,9 +352,20 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create a merged branch
+		// Create a worktree with a commit
 		wtPath := filepath.Join(repoDir, "feature", "to-clean")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/to-clean", wtPath)
+
+		// Make a commit on the branch
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/to-clean", "feature/to-clean")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -418,8 +429,16 @@ func TestCleanCommand_Integration(t *testing.T) {
 		featurePath := filepath.Join(repoDir, "feature", "from-develop")
 		testutil.RunGit(t, developPath, "worktree", "add", "-b", "feature/from-develop", featurePath)
 
+		// Make a commit on the feature branch
+		featureFile := filepath.Join(featurePath, "feature.txt")
+		if err := os.WriteFile(featureFile, []byte("feature"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, featurePath, "add", "feature.txt")
+		testutil.RunGit(t, featurePath, "commit", "-m", "feature commit")
+
 		// Merge feature to develop
-		testutil.RunGit(t, developPath, "merge", "feature/from-develop")
+		testutil.RunGit(t, developPath, "merge", "--no-ff", "-m", "Merge feature/from-develop", "feature/from-develop")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -488,17 +507,41 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create multiple merged worktrees
+		// Create multiple merged worktrees with commits
 		branches := []string{"feature/clean-a", "feature/clean-b"}
 		wtPaths := make([]string, len(branches))
 		for i, branch := range branches {
 			wtPaths[i] = filepath.Join(repoDir, "feature", fmt.Sprintf("clean-%c", 'a'+i))
 			testutil.RunGit(t, mainDir, "worktree", "add", "-b", branch, wtPaths[i])
+
+			// Make a commit on the branch
+			testFile := filepath.Join(wtPaths[i], fmt.Sprintf("test-%c.txt", 'a'+i))
+			if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			testutil.RunGit(t, wtPaths[i], "add", ".")
+			testutil.RunGit(t, wtPaths[i], "commit", "-m", fmt.Sprintf("commit %c", 'a'+i))
+
+			// Merge the branch to main
+			testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", fmt.Sprintf("Merge %s", branch), branch)
 		}
 
-		// Create a prunable branch (worktree deleted externally)
+		// Create a prunable branch with a commit (worktree deleted externally)
 		prunableWtPath := filepath.Join(repoDir, "feature", "clean-prunable")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/clean-prunable", prunableWtPath)
+
+		// Make a commit on the prunable branch
+		testFile := filepath.Join(prunableWtPath, "prunable.txt")
+		if err := os.WriteFile(testFile, []byte("prunable"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, prunableWtPath, "add", ".")
+		testutil.RunGit(t, prunableWtPath, "commit", "-m", "prunable commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/clean-prunable", "feature/clean-prunable")
+
+		// Delete the worktree directory externally
 		if err := os.RemoveAll(prunableWtPath); err != nil {
 			t.Fatal(err)
 		}
@@ -979,9 +1022,20 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create a worktree
+		// Create a worktree with a commit
 		wtPath := filepath.Join(repoDir, "feature", "prunable")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/prunable", wtPath)
+
+		// Make a commit on the branch
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/prunable", "feature/prunable")
 
 		// Manually delete the worktree directory (simulating rm -rf)
 		if err := os.RemoveAll(wtPath); err != nil {
@@ -1189,6 +1243,70 @@ func TestCleanCommand_Integration(t *testing.T) {
 			if r.Err != nil {
 				t.Errorf("removal error for %s: %v", r.Branch, r.Err)
 			}
+		}
+	})
+
+	// Known limitation: local-only fast-forward merges are not detected as merged.
+	// This is a tradeoff to prevent false positives on newly created branches.
+	// See: https://github.com/708u/twig/pull/104
+	t.Run("KnownLimitation_LocalFastForwardMergeNotDetected", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a worktree and make a commit
+		wtPath := filepath.Join(repoDir, "feature", "local-ff")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/local-ff", wtPath)
+
+		testFile := filepath.Join(wtPath, "feature.txt")
+		if err := os.WriteFile(testFile, []byte("feature content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "feature.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add feature")
+
+		// Fast-forward merge (no --no-ff)
+		// After this, main and feature/local-ff point to the same commit
+		testutil.RunGit(t, mainDir, "merge", "feature/local-ff")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Known limitation: the branch is skipped because it points to the same
+		// commit as main after fast-forward merge. We cannot distinguish this
+		// from a newly created branch that was never worked on.
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+
+		candidate := result.Candidates[0]
+		if candidate.Branch != "feature/local-ff" {
+			t.Errorf("expected branch feature/local-ff, got %s", candidate.Branch)
+		}
+
+		// This documents the limitation: the branch IS merged but is skipped
+		if !candidate.Skipped {
+			t.Error("known limitation: local ff merge should be skipped (same commit as target)")
+		}
+
+		// Skip reason should indicate same commit, not "not merged"
+		expectedReason := SkipReason("same commit as main")
+		if candidate.SkipReason != expectedReason {
+			t.Errorf("skip reason should be %q, got %q", expectedReason, candidate.SkipReason)
 		}
 	})
 }

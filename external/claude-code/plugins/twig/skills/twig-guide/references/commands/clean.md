@@ -82,6 +82,31 @@ the worktree no longer exists.
 Branches whose remote tracking branch has been deleted are detected as
 "upstream gone" and cleaned without requiring `--force`.
 
+### Merge Detection
+
+The clean command detects merged branches using:
+
+1. `git branch --merged` - traditional merge commits
+2. Upstream gone status - squash/rebase merges via PR
+
+**Limitation:** Local-only fast-forward merges are not detected. When a branch
+is fast-forward merged locally (without `--no-ff`), both the branch and target
+point to the same commit. This is indistinguishable from a newly created branch
+that was never worked on.
+
+| Merge Type              | Detection Method     | Detected |
+|-------------------------|----------------------|----------|
+| Merge commit (`--no-ff`)| `git branch --merged`| Yes      |
+| Squash merge (PR)       | Upstream gone        | Yes      |
+| Rebase merge (PR)       | Upstream gone        | Yes      |
+| Local fast-forward      | (none)               | No       |
+
+To clean local fast-forward merged branches, use `--force`:
+
+```bash
+twig clean -f --yes
+```
+
 ### Force Option
 
 With `--force` (`-f`), some safety checks can be bypassed:
@@ -130,6 +155,7 @@ clean:
 
 skip:
   feat/wip (not merged)
+  feat/new-branch (same commit as main)
   feat/active (has uncommitted changes)
   feat/submod (submodule has uncommitted changes)
 ```
@@ -156,6 +182,18 @@ Clean reasons:
 | `merged`         | Branch is merged to target branch               |
 | `upstream gone`  | Remote tracking branch was deleted              |
 | `prunable, ...`  | Worktree directory was deleted externally       |
+
+Skip reasons:
+
+| Reason                      | Description                                     |
+|-----------------------------|-------------------------------------------------|
+| `not merged`                | Branch has commits not in target branch         |
+| `same commit as <target>`   | Branch points to same commit as target          |
+| `has uncommitted changes`   | Worktree has modified or untracked files        |
+| `submodule has uncommitted changes` | Submodule has modified or untracked files |
+| `locked`                    | Worktree is locked                              |
+| `current directory`         | Cannot remove current working directory         |
+| `detached HEAD`             | Worktree has detached HEAD (no branch)          |
 
 ### Debug Output
 

@@ -529,6 +529,28 @@ func TestCleanCommand_Run(t *testing.T) {
 			wantCandidates: 2,
 			wantSkipped:    0,
 		},
+		{
+			name: "skips_new_branch_pointing_to_same_commit_as_target",
+			cwd:  "/other/dir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main", HEAD: "same-commit-abc123"},
+						{Path: "/repo/feat/new", Branch: "feat/new", HEAD: "same-commit-abc123"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/new"}, // git branch --merged returns this
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1, // feat/new should be skipped because same commit as main
+		},
 	}
 
 	for _, tt := range tests {
