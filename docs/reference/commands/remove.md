@@ -141,10 +141,10 @@ With `-vv`, debug logging is enabled to trace internal operations:
 
 ```txt
 twig remove feat/test -vv
-2026-01-18 12:34:56 [DEBUG] remove: checking branch=feat/test path=/path/to/feat/test prunable=false
-2026-01-18 12:34:56 [DEBUG] remove: check completed canRemove=true branch=feat/test
-2026-01-18 12:34:56 [DEBUG] remove: submodule check status=none effectiveForce=0 branch=feat/test
-2026-01-18 12:34:56 [DEBUG] remove: cleaned empty dirs count=1 branch=feat/test
+2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] remove: checking branch=feat/test path=/path/to/feat/test prunable=false
+2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] remove: check completed canRemove=true branch=feat/test
+2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] remove: submodule check status=none effectiveForce=0 branch=feat/test
+2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] remove: cleaned empty dirs count=1 branch=feat/test
 twig remove: feat/test
 ```
 

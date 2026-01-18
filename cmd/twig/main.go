@@ -510,7 +510,15 @@ stop processing of remaining branches.`,
 			log := twig.NewNopLogger()
 			if verbosity >= 2 {
 				handler := twig.NewCLIHandler(cmd.ErrOrStderr(), twig.VerbosityToLevel(verbosity))
-				log = slog.New(handler)
+				// Add command ID for log grouping
+				idGen := twig.GenerateCommandID
+				if o.commandIDGenerator != nil {
+					idGen = o.commandIDGenerator
+				}
+				handlerWithID := handler.WithAttrs([]slog.Attr{
+					twig.LogAttrKeyCmdID.Attr(idGen()),
+				})
+				log = slog.New(handlerWithID)
 			}
 
 			var removeCmd RemoveCommander
