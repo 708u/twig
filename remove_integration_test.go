@@ -36,7 +36,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: result.Config,
 			Log:    NewNopLogger(),
 		}
@@ -76,7 +76,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: result.Config,
 			Log:    NewNopLogger(),
 		}
@@ -121,7 +121,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: result.Config,
 			Log:    NewNopLogger(),
 		}
@@ -169,7 +169,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: result.Config,
 			Log:    NewNopLogger(),
 		}
@@ -233,7 +233,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: result.Config,
 			Log:    NewNopLogger(),
 		}
@@ -265,7 +265,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: result.Config,
 			Log:    NewNopLogger(),
 		}
@@ -299,7 +299,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -360,7 +360,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -425,7 +425,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -477,7 +477,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -536,7 +536,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -602,7 +602,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -649,7 +649,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -702,7 +702,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -761,7 +761,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -832,7 +832,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -916,7 +916,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -981,7 +981,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -1066,7 +1066,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -1141,7 +1141,7 @@ func TestRemoveCommand_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -1215,7 +1215,7 @@ func TestRemoveCommand_Check_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -1283,7 +1283,7 @@ func TestRemoveCommand_Check_Integration(t *testing.T) {
 
 		cmd := &RemoveCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, nil),
+			Git:    NewGitRunner(mainDir, NewNopLogger()),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
