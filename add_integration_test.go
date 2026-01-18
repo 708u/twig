@@ -31,7 +31,7 @@ func TestAddCommand_Integration(t *testing.T) {
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -105,7 +105,7 @@ func TestAddCommand_Integration(t *testing.T) {
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -140,7 +140,7 @@ func TestAddCommand_Integration(t *testing.T) {
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -169,7 +169,7 @@ func TestAddCommand_Integration(t *testing.T) {
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -233,7 +233,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -301,7 +301,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -371,7 +371,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -445,7 +445,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -524,7 +524,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -564,7 +564,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -637,7 +637,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -702,7 +702,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 			Sync:   true,
 		}
@@ -765,7 +765,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:        osFS{},
-			Git:       NewGitRunner(mainDir),
+			Git:       NewGitRunner(mainDir, nil),
 			Config:    result.Config,
 			CarryFrom: mainDir,
 		}
@@ -835,7 +835,7 @@ worktree_destination_base_dir = %q
 		// Carry from feature worktree, create new worktree based on main
 		cmd := &AddCommand{
 			FS:        osFS{},
-			Git:       NewGitRunner(mainDir),
+			Git:       NewGitRunner(mainDir, nil),
 			Config:    result.Config,
 			CarryFrom: featureWtPath, // Carry from different worktree
 		}
@@ -900,7 +900,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 			Sync:   true,
 		}
@@ -949,7 +949,7 @@ worktree_destination_base_dir = %q
 		// Sync only *.go files
 		cmd := &AddCommand{
 			FS:           osFS{},
-			Git:          NewGitRunner(mainDir),
+			Git:          NewGitRunner(mainDir, nil),
 			Config:       result.Config,
 			Sync:         true,
 			FilePatterns: []string{"*.go"},
@@ -1043,7 +1043,7 @@ worktree_destination_base_dir = %q
 		// Sync *.go and cmd/**
 		cmd := &AddCommand{
 			FS:           osFS{},
-			Git:          NewGitRunner(mainDir),
+			Git:          NewGitRunner(mainDir, nil),
 			Config:       result.Config,
 			Sync:         true,
 			FilePatterns: []string{"*.go", "cmd/**"},
@@ -1096,7 +1096,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -1136,7 +1136,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 			Lock:   true,
 		}
@@ -1165,7 +1165,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:         osFS{},
-			Git:        NewGitRunner(mainDir),
+			Git:        NewGitRunner(mainDir, nil),
 			Config:     result.Config,
 			Lock:       true,
 			LockReason: "USB drive work",
@@ -1210,7 +1210,7 @@ worktree_destination_base_dir = %q
 		// Carry only *.go files
 		cmd := &AddCommand{
 			FS:           osFS{},
-			Git:          NewGitRunner(mainDir),
+			Git:          NewGitRunner(mainDir, nil),
 			Config:       result.Config,
 			CarryFrom:    mainDir,
 			FilePatterns: []string{"*.go"},
@@ -1307,7 +1307,7 @@ worktree_destination_base_dir = %q
 		// Carry *.go and cmd/**
 		cmd := &AddCommand{
 			FS:           osFS{},
-			Git:          NewGitRunner(mainDir),
+			Git:          NewGitRunner(mainDir, nil),
 			Config:       result.Config,
 			CarryFrom:    mainDir,
 			FilePatterns: []string{"*.go", "cmd/**"},
@@ -1381,7 +1381,7 @@ worktree_destination_base_dir = %q
 		// Carry **/*.go - should match ALL Go files including root
 		cmd := &AddCommand{
 			FS:           osFS{},
-			Git:          NewGitRunner(mainDir),
+			Git:          NewGitRunner(mainDir, nil),
 			Config:       result.Config,
 			CarryFrom:    mainDir,
 			FilePatterns: []string{"**/*.go"},
@@ -1487,7 +1487,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -1585,7 +1585,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 
@@ -1666,7 +1666,7 @@ worktree_destination_base_dir = %q
 
 		cmd := &AddCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir),
+			Git:    NewGitRunner(mainDir, nil),
 			Config: result.Config,
 		}
 

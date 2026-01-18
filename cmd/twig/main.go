@@ -239,7 +239,7 @@ Use --file with --sync or --carry to target specific files:
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
-			git := twig.NewGitRunner(dir)
+			git := twig.NewGitRunner(dir, nil)
 			branches, err := git.BranchList(cmd.Context())
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
@@ -266,7 +266,7 @@ Use --file with --sync or --carry to target specific files:
 			}
 
 			// Resolve branch to worktree path
-			git := twig.NewGitRunner(cwd)
+			git := twig.NewGitRunner(cwd, nil)
 			sourceWT, err := git.WorktreeFindByBranch(cmd.Context(), source)
 			if err != nil {
 				return fmt.Errorf("failed to find worktree for branch %q: %w", source, err)
@@ -313,7 +313,7 @@ Use --file with --sync or --carry to target specific files:
 			var carryFrom string
 			if carryEnabled {
 				carryValue, _ := cmd.Flags().GetString("carry")
-				git := twig.NewGitRunner(cwd)
+				git := twig.NewGitRunner(cwd, nil)
 				var err error
 				carryFrom, err = resolveCarryFrom(cmd.Context(), carryValue, originalCwd, git)
 				if err != nil {
@@ -504,7 +504,7 @@ stop processing of remaining branches.`,
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
-			git := twig.NewGitRunner(dir)
+			git := twig.NewGitRunner(dir, nil)
 			branches, err := git.WorktreeListBranches(cmd.Context())
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
@@ -614,14 +614,14 @@ stop processing of remaining branches.`,
 		ctx := cmd.Context()
 		// If --source is specified, resolve to that worktree
 		if source, _ := cmd.Flags().GetString("source"); source != "" {
-			git := twig.NewGitRunner(dir)
+			git := twig.NewGitRunner(dir, nil)
 			if sourceWT, findErr := git.WorktreeFindByBranch(ctx, source); findErr == nil {
 				dir = sourceWT.Path
 			}
 		}
 
 		// Get changed files from the target directory
-		git := twig.NewGitRunner(dir)
+		git := twig.NewGitRunner(dir, nil)
 		files, err := git.ChangedFiles(ctx)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError

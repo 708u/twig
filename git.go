@@ -124,12 +124,8 @@ type GitRunner struct {
 }
 
 // NewGitRunner creates a new GitRunner with the default executor.
-func NewGitRunner(dir string) *GitRunner {
-	return NewGitRunnerWithLogger(dir, nil)
-}
-
-// NewGitRunnerWithLogger creates a new GitRunner with a custom logger.
-func NewGitRunnerWithLogger(dir string, log *slog.Logger) *GitRunner {
+// If log is nil, a nop logger is used.
+func NewGitRunner(dir string, log *slog.Logger) *GitRunner {
 	if log == nil {
 		log = NewNopLogger()
 	}

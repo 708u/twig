@@ -28,7 +28,7 @@ func NewListCommand(git *GitRunner, log *slog.Logger) *ListCommand {
 
 // NewDefaultListCommand creates a ListCommand with production defaults.
 func NewDefaultListCommand(dir string, log *slog.Logger) *ListCommand {
-	return NewListCommand(NewGitRunnerWithLogger(dir, log), log)
+	return NewListCommand(NewGitRunner(dir, log), log)
 }
 
 // ListResult holds the result of a list operation.

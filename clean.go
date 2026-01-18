@@ -42,7 +42,7 @@ func NewCleanCommand(fs FileSystem, git *GitRunner, cfg *Config, log *slog.Logge
 
 // NewDefaultCleanCommand creates a new CleanCommand with production dependencies.
 func NewDefaultCleanCommand(cfg *Config, log *slog.Logger) *CleanCommand {
-	return NewCleanCommand(osFS{}, NewGitRunnerWithLogger(cfg.WorktreeSourceDir, log), cfg, log)
+	return NewCleanCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir, log), cfg, log)
 }
 
 // CleanCandidate represents a worktree that can be cleaned.
