@@ -155,6 +155,7 @@ clean:
 
 skip:
   feat/wip (not merged)
+  feat/new-branch (same commit as main)
   feat/active (has uncommitted changes)
   feat/submod (submodule has uncommitted changes)
 ```
@@ -181,6 +182,18 @@ Clean reasons:
 | `merged`         | Branch is merged to target branch               |
 | `upstream gone`  | Remote tracking branch was deleted              |
 | `prunable, ...`  | Worktree directory was deleted externally       |
+
+Skip reasons:
+
+| Reason                      | Description                                     |
+|-----------------------------|-------------------------------------------------|
+| `not merged`                | Branch has commits not in target branch         |
+| `same commit as <target>`   | Branch points to same commit as target          |
+| `has uncommitted changes`   | Worktree has modified or untracked files        |
+| `submodule has uncommitted changes` | Submodule has modified or untracked files |
+| `locked`                    | Worktree is locked                              |
+| `current directory`         | Cannot remove current working directory         |
+| `detached HEAD`             | Worktree has detached HEAD (no branch)          |
 
 ### Debug Output
 

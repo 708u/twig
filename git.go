@@ -613,25 +613,38 @@ func (g *GitRunner) branchDelete(ctx context.Context, branch string, force bool)
 
 // IsBranchMerged checks if branch is merged into target.
 func (g *GitRunner) IsBranchMerged(ctx context.Context, branch, target string) (bool, error) {
-	merged, err := g.MergedBranches(ctx, target)
+	result, err := g.MergedBranches(ctx, target)
 	if err != nil {
 		return false, err
 	}
-	return merged[branch], nil
+	return result.Merged[branch], nil
 }
 
-// MergedBranches returns a map of branch names that are considered merged.
+// MergedBranchesResult holds the result of MergedBranches.
+type MergedBranchesResult struct {
+	// Merged contains branches that are considered merged
+	// (via git branch --merged or upstream gone, excluding same-commit branches).
+	Merged map[string]bool
+	// SameCommit contains branches pointing to the same commit as target.
+	// These are excluded from Merged because they could be newly created or ff-merged.
+	SameCommit map[string]bool
+}
+
+// MergedBranches returns branches that are considered merged and same-commit branches.
 // A branch is merged if it's in `git branch --merged <target>` or if its upstream is gone.
-// Branches pointing to the same commit as target are excluded (not considered merged).
+// Branches pointing to the same commit as target are returned separately in SameCommit.
 // This is more efficient than calling IsBranchMerged for each branch individually.
-func (g *GitRunner) MergedBranches(ctx context.Context, target string) (map[string]bool, error) {
-	result := make(map[string]bool)
+func (g *GitRunner) MergedBranches(ctx context.Context, target string) (MergedBranchesResult, error) {
+	result := MergedBranchesResult{
+		Merged:     make(map[string]bool),
+		SameCommit: make(map[string]bool),
+	}
 
 	// Get all branch info in one call: name, commit hash, and upstream status
 	// Format: "branch-name <commit-hash> [gone]" or "branch-name <commit-hash>"
 	refOut, err := g.Run(ctx, GitCmdForEachRef, "--format=%(refname:short) %(objectname) %(upstream:track)", "refs/heads/")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get branch info: %w", err)
+		return result, fmt.Errorf("failed to get branch info: %w", err)
 	}
 
 	// Build branch->commit map and detect upstream gone
@@ -650,18 +663,18 @@ func (g *GitRunner) MergedBranches(ctx context.Context, target string) (map[stri
 
 		// Check for upstream gone (squash/rebase merges)
 		if len(parts) == 3 && parts[2] == "[gone]" {
-			result[branch] = true
+			result.Merged[branch] = true
 		}
 	}
 
-	// Get target commit for same-commit exclusion
+	// Get target commit for same-commit detection
 	targetCommit, ok := branchCommits[target]
 	if !ok {
 		// Target might be a remote ref or tag, fall back to rev-parse
 		var targetHead []byte
 		targetHead, err = g.Run(ctx, GitCmdRevParse, target)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get target HEAD: %w", err)
+			return result, fmt.Errorf("failed to get target HEAD: %w", err)
 		}
 		targetCommit = strings.TrimSpace(string(targetHead))
 	}
@@ -670,18 +683,19 @@ func (g *GitRunner) MergedBranches(ctx context.Context, target string) (map[stri
 	var out []byte
 	out, err = g.Run(ctx, GitCmdBranch, "--merged", target, "--format=%(refname:short)")
 	if err != nil {
-		return nil, fmt.Errorf("failed to check merged branches: %w", err)
+		return result, fmt.Errorf("failed to check merged branches: %w", err)
 	}
 	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		if line == "" {
 			continue
 		}
-		// Exclude branches pointing to the same commit as target
-		// (likely newly created branches, not actually merged)
+		// Track branches pointing to the same commit as target separately
+		// (could be newly created or ff-merged - we can't distinguish)
 		if branchCommits[line] == targetCommit {
+			result.SameCommit[line] = true
 			continue
 		}
-		result[line] = true
+		result.Merged[line] = true
 	}
 
 	return result, nil

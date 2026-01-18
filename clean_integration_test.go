@@ -1303,8 +1303,10 @@ func TestCleanCommand_Integration(t *testing.T) {
 			t.Error("known limitation: local ff merge should be skipped (same commit as target)")
 		}
 
-		if candidate.SkipReason != SkipNotMerged {
-			t.Errorf("skip reason should be %s, got %s", SkipNotMerged, candidate.SkipReason)
+		// Skip reason should indicate same commit, not "not merged"
+		expectedReason := SkipReason("same commit as main")
+		if candidate.SkipReason != expectedReason {
+			t.Errorf("skip reason should be %q, got %q", expectedReason, candidate.SkipReason)
 		}
 	})
 }

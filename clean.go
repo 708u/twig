@@ -185,17 +185,18 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		"count", len(worktrees))
 
 	// Pre-fetch merged branches to avoid redundant git branch --merged calls
-	mergedBranches, err := c.Git.MergedBranches(ctx, target)
+	mergedResult, err := c.Git.MergedBranches(ctx, target)
 	if err != nil {
 		c.Log.DebugContext(ctx, "failed to fetch merged branches",
 			LogAttrKeyCategory.String(), LogCategoryClean,
 			"error", err.Error())
 		// Continue without cache - Check() will fall back to individual calls
-		mergedBranches = nil
+		mergedResult = MergedBranchesResult{}
 	} else {
 		c.Log.DebugContext(ctx, "merged branches fetched",
 			LogAttrKeyCategory.String(), LogCategoryClean,
-			"count", len(mergedBranches))
+			"mergedCount", len(mergedResult.Merged),
+			"sameCommitCount", len(mergedResult.SameCommit))
 	}
 
 	// RemoveCommand is used for both Check and Run
@@ -255,11 +256,11 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 				"branch", wt.Branch)
 
 			checkResult, err := removeCmd.Check(ctx, wt.Branch, CheckOptions{
-				Force:          opts.Force,
-				Target:         target,
-				Cwd:            cwd,
-				WorktreeInfo:   &wt,
-				MergedBranches: mergedBranches,
+				Force:        opts.Force,
+				Target:       target,
+				Cwd:          cwd,
+				WorktreeInfo: &wt,
+				MergedResult: mergedResult,
 			})
 			if err != nil {
 				c.Log.DebugContext(ctx, "check failed",
