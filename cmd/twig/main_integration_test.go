@@ -36,7 +36,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		addCmd := twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
+		addCmd := twig.NewDefaultAddCommand(result.Config, twig.NewNopLogger(), twig.AddOptions{})
 		_, err = addCmd.Run(t.Context(), "feat/a")
 		if err != nil {
 			t.Fatalf("failed to create feat/a worktree: %v", err)
@@ -59,7 +59,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		}
 
 		// Create feat/b from main's config
-		addCmd = twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
+		addCmd = twig.NewDefaultAddCommand(result.Config, twig.NewNopLogger(), twig.AddOptions{})
 		addResult, err := addCmd.Run(t.Context(), "feat/b")
 		if err != nil {
 			t.Fatalf("failed to create feat/b worktree: %v", err)
@@ -117,7 +117,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		}
 
 		// Create worktree using the resolved config
-		addCmd := twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
+		addCmd := twig.NewDefaultAddCommand(result.Config, twig.NewNopLogger(), twig.AddOptions{})
 		addResult, err := addCmd.Run(t.Context(), "feat/coexist")
 		if err != nil {
 			t.Fatalf("failed to create worktree: %v", err)
@@ -194,7 +194,7 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		addCmd := twig.NewDefaultAddCommand(result.Config, twig.AddOptions{})
+		addCmd := twig.NewDefaultAddCommand(result.Config, twig.NewNopLogger(), twig.AddOptions{})
 		_, err = addCmd.Run(t.Context(), "feat/a")
 		if err != nil {
 			t.Fatalf("failed to create feat/a worktree: %v", err)
@@ -234,7 +234,7 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 		}
 
 		// Create feat/b using main's config
-		addCmd = twig.NewDefaultAddCommand(resultMain.Config, twig.AddOptions{})
+		addCmd = twig.NewDefaultAddCommand(resultMain.Config, twig.NewNopLogger(), twig.AddOptions{})
 		_, err = addCmd.Run(t.Context(), "feat/b")
 		if err != nil {
 			t.Fatalf("failed to create feat/b worktree: %v", err)
