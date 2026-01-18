@@ -3,6 +3,7 @@ package twig
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 )
 
@@ -11,6 +12,7 @@ type CleanCommand struct {
 	FS     FileSystem
 	Git    *GitRunner
 	Config *Config
+	Log    *slog.Logger
 }
 
 // CleanOptions configures the clean operation.
@@ -24,17 +26,21 @@ type CleanOptions struct {
 
 // NewCleanCommand creates a new CleanCommand with explicit dependencies.
 // Use this for testing or when custom dependencies are needed.
-func NewCleanCommand(fs FileSystem, git *GitRunner, cfg *Config) *CleanCommand {
+func NewCleanCommand(fs FileSystem, git *GitRunner, cfg *Config, log *slog.Logger) *CleanCommand {
+	if log == nil {
+		log = NewNopLogger()
+	}
 	return &CleanCommand{
 		FS:     fs,
 		Git:    git,
 		Config: cfg,
+		Log:    log,
 	}
 }
 
 // NewDefaultCleanCommand creates a new CleanCommand with production dependencies.
-func NewDefaultCleanCommand(cfg *Config) *CleanCommand {
-	return NewCleanCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir), cfg)
+func NewDefaultCleanCommand(cfg *Config, log *slog.Logger) *CleanCommand {
+	return NewCleanCommand(osFS{}, NewGitRunnerWithLogger(cfg.WorktreeSourceDir, log), cfg, log)
 }
 
 // CleanCandidate represents a worktree that can be cleaned.
@@ -146,6 +152,12 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 // Run analyzes worktrees and optionally removes them.
 // cwd is the current working directory (absolute path) passed from CLI layer.
 func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (CleanResult, error) {
+	c.Log.DebugContext(ctx, "run started",
+		LogAttrKeyCategory.String(), LogCategoryClean,
+		"check", opts.Check,
+		"force", opts.Force,
+		"target", opts.Target)
+
 	var result CleanResult
 	result.Check = opts.Check
 
@@ -156,18 +168,26 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 	}
 	result.TargetBranch = target
 
+	c.Log.DebugContext(ctx, "target resolved",
+		LogAttrKeyCategory.String(), LogCategoryClean,
+		"target", target)
+
 	// Get all worktrees
 	worktrees, err := c.Git.WorktreeList(ctx)
 	if err != nil {
 		return result, fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
+	c.Log.DebugContext(ctx, "worktrees listed",
+		LogAttrKeyCategory.String(), LogCategoryClean,
+		"count", len(worktrees))
+
 	// RemoveCommand is used for both Check and Run
 	removeCmd := &RemoveCommand{
 		FS:     c.FS,
 		Git:    c.Git,
 		Config: c.Config,
-		Log:    NewNopLogger(),
+		Log:    c.Log,
 	}
 
 	// Analyze each worktree using RemoveCommand.Check
@@ -179,6 +199,9 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 
 		// Handle detached HEAD worktrees directly (they have no branch name)
 		if wt.Detached || wt.Branch == "" {
+			c.Log.DebugContext(ctx, "skipping detached worktree",
+				LogAttrKeyCategory.String(), LogCategoryClean,
+				"path", wt.Path)
 			result.Candidates = append(result.Candidates, CleanCandidate{
 				Branch:       wt.Branch,
 				WorktreePath: wt.Path,
@@ -188,12 +211,20 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			continue
 		}
 
+		c.Log.DebugContext(ctx, "checking worktree",
+			LogAttrKeyCategory.String(), LogCategoryClean,
+			"branch", wt.Branch)
+
 		checkResult, err := removeCmd.Check(ctx, wt.Branch, CheckOptions{
 			Force:  opts.Force,
 			Target: target,
 			Cwd:    cwd,
 		})
 		if err != nil {
+			c.Log.DebugContext(ctx, "check failed",
+				LogAttrKeyCategory.String(), LogCategoryClean,
+				"branch", wt.Branch,
+				"error", err.Error())
 			// Skip worktrees that fail to check (e.g., not in any worktree)
 			continue
 		}
@@ -207,11 +238,22 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			CleanReason:  checkResult.CleanReason,
 			ChangedFiles: checkResult.ChangedFiles,
 		}
+
+		c.Log.DebugContext(ctx, "check completed",
+			LogAttrKeyCategory.String(), LogCategoryClean,
+			"branch", wt.Branch,
+			"canRemove", checkResult.CanRemove,
+			"reason", string(checkResult.CleanReason),
+			"skipReason", string(checkResult.SkipReason))
+
 		result.Candidates = append(result.Candidates, candidate)
 	}
 
 	// If check mode, just return candidates (no execution)
 	if result.Check {
+		c.Log.DebugContext(ctx, "run completed (check mode)",
+			LogAttrKeyCategory.String(), LogCategoryClean,
+			"candidates", len(result.Candidates))
 		return result, nil
 	}
 
@@ -222,11 +264,19 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			continue
 		}
 
+		c.Log.DebugContext(ctx, "removing worktree",
+			LogAttrKeyCategory.String(), LogCategoryClean,
+			"branch", candidate.Branch)
+
 		wt, err := removeCmd.Run(ctx, candidate.Branch, cwd, RemoveOptions{
 			Force: opts.Force,
 			Check: false,
 		})
 		if err != nil {
+			c.Log.DebugContext(ctx, "removal failed",
+				LogAttrKeyCategory.String(), LogCategoryClean,
+				"branch", candidate.Branch,
+				"error", err.Error())
 			wt.Branch = candidate.Branch
 			wt.Err = err
 		}
@@ -237,6 +287,10 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			result.Pruned = true
 		}
 	}
+
+	c.Log.DebugContext(ctx, "run completed",
+		LogAttrKeyCategory.String(), LogCategoryClean,
+		"removed", len(result.Removed))
 
 	return result, nil
 }

@@ -10,13 +10,13 @@ twig clean [flags]
 
 ## Flags
 
-| Flag              | Short | Description                                     |
-|-------------------|-------|-------------------------------------------------|
-| `--yes`           | `-y`  | Execute removal without confirmation            |
-| `--check`         |       | Show candidates without prompting               |
-| `--target`        |       | Target branch for merge check                   |
-| `--force`         | `-f`  | Force clean (can be specified twice, see below) |
-| `--verbose`       | `-v`  | Show skip reasons and uncommitted changes       |
+| Flag              | Short | Description                                            |
+|-------------------|-------|--------------------------------------------------------|
+| `--yes`           | `-y`  | Execute removal without confirmation                   |
+| `--check`         |       | Show candidates without prompting                      |
+| `--target`        |       | Target branch for merge check                          |
+| `--force`         | `-f`  | Force clean (can be specified twice, see below)        |
+| `--verbose`       | `-v`  | Enable verbose output (use `-vv` for debug)            |
 
 ## Behavior
 
@@ -156,6 +156,18 @@ Clean reasons:
 | `merged`         | Branch is merged to target branch               |
 | `upstream gone`  | Remote tracking branch was deleted              |
 | `prunable, ...`  | Worktree directory was deleted externally       |
+
+### Debug Output
+
+With `-vv`, debug logging is enabled to trace internal operations:
+
+```txt
+twig clean --check -vv
+2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] clean: checking worktree branch=feat/old-branch
+2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] clean: check completed branch=feat/old-branch canRemove=true
+clean:
+  feat/old-branch (merged)
+```
 
 ## Examples
 

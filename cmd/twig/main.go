@@ -400,11 +400,26 @@ Safety checks (all must pass):
 			target, _ := cmd.Flags().GetString("target")
 			forceCount, _ := cmd.Flags().GetCount("force")
 
+			// Create logger based on verbosity level
+			log := twig.NewNopLogger()
+			if verbosity >= 2 {
+				handler := twig.NewCLIHandler(cmd.ErrOrStderr(), twig.VerbosityToLevel(verbosity))
+				// Add command ID for log grouping
+				idGen := twig.GenerateCommandID
+				if o.commandIDGenerator != nil {
+					idGen = o.commandIDGenerator
+				}
+				handlerWithID := handler.WithAttrs([]slog.Attr{
+					twig.LogAttrKeyCmdID.Attr(idGen()),
+				})
+				log = slog.New(handlerWithID)
+			}
+
 			var cleanCmd CleanCommander
 			if o.cleanCommander != nil {
 				cleanCmd = o.cleanCommander
 			} else {
-				cleanCmd = twig.NewDefaultCleanCommand(cfg)
+				cleanCmd = twig.NewDefaultCleanCommand(cfg, log)
 			}
 
 			// First pass: analyze candidates (always in check mode first)
