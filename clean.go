@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -296,13 +297,9 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 	wg.Wait()
 
 	// Sort candidates by original index to maintain consistent ordering
-	for i := range len(candidates) {
-		for j := i + 1; j < len(candidates); j++ {
-			if candidates[j].index < candidates[i].index {
-				candidates[i], candidates[j] = candidates[j], candidates[i]
-			}
-		}
-	}
+	slices.SortFunc(candidates, func(a, b indexedCandidate) int {
+		return a.index - b.index
+	})
 
 	// Extract candidates in order
 	for _, ic := range candidates {

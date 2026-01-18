@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/708u/twig"
@@ -398,10 +399,11 @@ func TestListCmd(t *testing.T) {
 }
 
 // mockRemoveCommander implements RemoveCommander for testing.
+// Thread-safe for parallel execution.
 type mockRemoveCommander struct {
+	mu      sync.Mutex
 	calls   []removeCall
-	results []removeResult
-	idx     int
+	results map[string]removeResult // keyed by branch name
 }
 
 type removeCall struct {
@@ -416,11 +418,14 @@ type removeResult struct {
 }
 
 func (m *mockRemoveCommander) Run(ctx context.Context, branch, cwd string, opts twig.RemoveOptions) (twig.RemovedWorktree, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.calls = append(m.calls, removeCall{branch, cwd, opts})
-	if m.idx < len(m.results) {
-		r := m.results[m.idx]
-		m.idx++
-		return r.wt, r.err
+	if m.results != nil {
+		if r, ok := m.results[branch]; ok {
+			return r.wt, r.err
+		}
 	}
 	return twig.RemovedWorktree{Branch: branch, WorktreePath: "/test/" + branch}, nil
 }
@@ -1031,15 +1036,15 @@ func TestRemoveCmd_OutputFormat(t *testing.T) {
 	tests := []struct {
 		name       string
 		args       []string
-		results    []removeResult
+		results    map[string]removeResult
 		wantStdout string
 		wantStderr string
 	}{
 		{
 			name: "success_output",
 			args: []string{"remove", "feat/a"},
-			results: []removeResult{
-				{wt: twig.RemovedWorktree{Branch: "feat/a", WorktreePath: "/test/feat/a"}},
+			results: map[string]removeResult{
+				"feat/a": {wt: twig.RemovedWorktree{Branch: "feat/a", WorktreePath: "/test/feat/a"}},
 			},
 			wantStdout: "",
 			wantStderr: "",
@@ -1047,8 +1052,8 @@ func TestRemoveCmd_OutputFormat(t *testing.T) {
 		{
 			name: "error_output",
 			args: []string{"remove", "feat/a"},
-			results: []removeResult{
-				{wt: twig.RemovedWorktree{}, err: errors.New("not found")},
+			results: map[string]removeResult{
+				"feat/a": {wt: twig.RemovedWorktree{}, err: errors.New("not found")},
 			},
 			wantStdout: "",
 			wantStderr: "error: feat/a: not found\n",
@@ -1102,11 +1107,15 @@ func TestRemoveCmd_MultipleBranches(t *testing.T) {
 		t.Fatalf("expected 3 calls, got %d", len(mock.calls))
 	}
 
-	branches := []string{mock.calls[0].branch, mock.calls[1].branch, mock.calls[2].branch}
-	expected := []string{"feat/a", "feat/b", "feat/c"}
-	for i, got := range branches {
-		if got != expected[i] {
-			t.Errorf("call[%d].branch = %q, want %q", i, got, expected[i])
+	// Check that all branches were called (order may vary due to parallel execution)
+	calledBranches := make(map[string]bool)
+	for _, call := range mock.calls {
+		calledBranches[call.branch] = true
+	}
+	expectedBranches := []string{"feat/a", "feat/b", "feat/c"}
+	for _, branch := range expectedBranches {
+		if !calledBranches[branch] {
+			t.Errorf("branch %q was not called", branch)
 		}
 	}
 
