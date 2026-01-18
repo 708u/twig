@@ -55,7 +55,7 @@ type CheckOptions struct {
 	Target       string             // Target branch for merged check (empty = skip merged check)
 	Cwd          string             // Current directory for cwd check
 	WorktreeInfo *Worktree          // Pre-fetched worktree info (skips WorktreeFindByBranch if set)
-	MergedResult BranchMergeStatus  // Pre-fetched branch merge status (skips IsBranchMerged if set)
+	MergeStatus  BranchMergeStatus  // Pre-fetched branch merge status (skips IsBranchMerged if set)
 }
 
 // RemoveCommand removes git worktrees with their associated branches.
@@ -503,7 +503,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 
 	if wtInfo.Prunable {
 		// Prunable branch: worktree directory was deleted externally
-		if reason := c.checkPrunableSkipReason(ctx, branch, opts.Target, opts.Force, opts.MergedResult); reason != "" {
+		if reason := c.checkPrunableSkipReason(ctx, branch, opts.Target, opts.Force, opts.MergeStatus); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
 			c.Log.DebugContext(ctx, "skip",
@@ -524,7 +524,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 		if changedFiles, err := c.Git.InDir(wtInfo.Path).ChangedFiles(ctx); err == nil {
 			result.ChangedFiles = changedFiles
 		}
-		if reason := c.checkSkipReason(ctx, wt, opts.Cwd, opts.Target, opts.Force, result.ChangedFiles, opts.MergedResult); reason != "" {
+		if reason := c.checkSkipReason(ctx, wt, opts.Cwd, opts.Target, opts.Force, result.ChangedFiles, opts.MergeStatus); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
 			c.Log.DebugContext(ctx, "skip",

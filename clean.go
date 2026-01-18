@@ -193,7 +193,7 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		// Continue without cache - Check() will fall back to individual calls
 		mergeStatus = BranchMergeStatus{}
 	} else {
-		c.Log.DebugContext(ctx, "merged branches fetched",
+		c.Log.DebugContext(ctx, "branch merge status classified",
 			LogAttrKeyCategory.String(), LogCategoryClean,
 			"mergedCount", len(mergeStatus.Merged),
 			"sameCommitCount", len(mergeStatus.SameCommit))
@@ -260,7 +260,7 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 				Target:       target,
 				Cwd:          cwd,
 				WorktreeInfo: &wt,
-				MergedResult: mergeStatus,
+				MergeStatus:  mergeStatus,
 			})
 			if err != nil {
 				c.Log.DebugContext(ctx, "check failed",
