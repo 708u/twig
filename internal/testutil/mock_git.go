@@ -322,10 +322,29 @@ func (m *MockGitExecutor) handleForEachRef(args []string) ([]byte, error) {
 		return nil, nil
 	}
 
-	ref := args[2]
+	format := ""
+	ref := ""
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "--format=") {
+			format = strings.TrimPrefix(arg, "--format=")
+		}
+		if i >= 2 && !strings.HasPrefix(arg, "--") {
+			ref = arg
+		}
+	}
 
-	// Handle refs/heads/<branch> for upstream tracking check
-	if branch, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+	// Handle refs/heads/ for MergedBranches (all branches with upstream status)
+	// Format: "%(refname:short) %(upstream:track)"
+	if ref == "refs/heads/" && strings.Contains(format, "%(upstream:track)") {
+		var lines []string
+		for _, branch := range m.UpstreamGoneBranches {
+			lines = append(lines, branch+" [gone]")
+		}
+		return []byte(strings.Join(lines, "\n") + "\n"), nil
+	}
+
+	// Handle refs/heads/<branch> for single branch upstream tracking check
+	if branch, ok := strings.CutPrefix(ref, "refs/heads/"); ok && branch != "" {
 		if slices.Contains(m.UpstreamGoneBranches, branch) {
 			return []byte("[gone]\n"), nil
 		}
