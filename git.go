@@ -600,21 +600,12 @@ func (g *GitRunner) branchDelete(ctx context.Context, branch string, force bool)
 }
 
 // IsBranchMerged checks if branch is merged into target.
-// First checks using git branch --merged (detects traditional merges).
-// If not found, falls back to checking if upstream is gone (squash/rebase merges).
 func (g *GitRunner) IsBranchMerged(ctx context.Context, branch, target string) (bool, error) {
-	out, err := g.Run(ctx, GitCmdBranch, "--merged", target, "--format=%(refname:short)")
+	merged, err := g.MergedBranches(ctx, target)
 	if err != nil {
-		return false, fmt.Errorf("failed to check merged branches: %w", err)
+		return false, err
 	}
-	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		if line == branch {
-			return true, nil
-		}
-	}
-
-	// Fallback: check if upstream branch is gone (deleted after merge)
-	return g.IsBranchUpstreamGone(ctx, branch)
+	return merged[branch], nil
 }
 
 // MergedBranches returns a map of branch names that are considered merged.
