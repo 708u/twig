@@ -93,8 +93,8 @@ func WithInitCommander(cmd InitCommander) Option {
 	}
 }
 
-// withCommandIDGenerator sets the command ID generator for testing.
-func withCommandIDGenerator(gen func() string) Option {
+// WithCommandIDGenerator sets the command ID generator for testing.
+func WithCommandIDGenerator(gen func() string) Option {
 	return func(o *options) {
 		o.commandIDGenerator = gen
 	}

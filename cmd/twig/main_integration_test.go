@@ -343,7 +343,7 @@ func TestListCommand_VerboseFlag_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t)
 
-		cmd := newRootCmd(withCommandIDGenerator(func() string { return "testid00" }))
+		cmd := newRootCmd(WithCommandIDGenerator(func() string { return "testid00" }))
 
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}
