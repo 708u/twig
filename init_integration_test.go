@@ -17,7 +17,7 @@ func TestInitCommand_Integration(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		cmd := NewDefaultInitCommand()
+		cmd := NewDefaultInitCommand(NewNopLogger())
 		result, err := cmd.Run(t.Context(), tmpDir, InitOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
@@ -45,7 +45,7 @@ func TestInitCommand_Integration(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		cmd := NewDefaultInitCommand()
+		cmd := NewDefaultInitCommand(NewNopLogger())
 		_, err := cmd.Run(t.Context(), tmpDir, InitOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
@@ -89,7 +89,7 @@ func TestInitCommand_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		cmd := NewDefaultInitCommand()
+		cmd := NewDefaultInitCommand(NewNopLogger())
 		result, err := cmd.Run(t.Context(), tmpDir, InitOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
@@ -125,7 +125,7 @@ func TestInitCommand_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		cmd := NewDefaultInitCommand()
+		cmd := NewDefaultInitCommand(NewNopLogger())
 		result, err := cmd.Run(t.Context(), tmpDir, InitOptions{Force: true})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
@@ -153,7 +153,7 @@ func TestInitCommand_Integration(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		cmd := NewDefaultInitCommand()
+		cmd := NewDefaultInitCommand(NewNopLogger())
 		result, err := cmd.Run(t.Context(), tmpDir, InitOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
@@ -183,7 +183,7 @@ func TestInitCommand_Integration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		cmd := NewDefaultInitCommand()
+		cmd := NewDefaultInitCommand(NewNopLogger())
 		result, err := cmd.Run(t.Context(), tmpDir, InitOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)

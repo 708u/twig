@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -145,6 +146,19 @@ func resolveDirectory(dirFlag, baseCwd string) (string, error) {
 	}
 
 	return resolved, nil
+}
+
+// createLogger creates a logger based on verbosity level.
+// Returns a nop logger for verbosity < 2, or a CLI handler logger for -vv.
+func createLogger(w io.Writer, verbosity int, idGen func() string) *slog.Logger {
+	if verbosity < 2 {
+		return twig.NewNopLogger()
+	}
+	handler := twig.NewCLIHandler(w, twig.VerbosityToLevel(verbosity))
+	handlerWithID := handler.WithAttrs([]slog.Attr{
+		twig.LogAttrKeyCmdID.Attr(idGen()),
+	})
+	return slog.New(handlerWithID)
 }
 
 func newRootCmd(opts ...Option) *cobra.Command {
@@ -306,11 +320,17 @@ Use --file with --sync or --carry to target specific files:
 				}
 			}
 
+			idGen := twig.GenerateCommandID
+			if o.commandIDGenerator != nil {
+				idGen = o.commandIDGenerator
+			}
+			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
+
 			var addCmd AddCommander
 			if o.addCommander != nil {
 				addCmd = o.addCommander
 			} else {
-				addCmd = twig.NewDefaultAddCommand(cfg, twig.AddOptions{
+				addCmd = twig.NewDefaultAddCommand(cfg, log, twig.AddOptions{
 					Sync:           sync,
 					CarryFrom:      carryFrom,
 					FilePatterns:   filePatterns,
@@ -344,20 +364,11 @@ Use --file with --sync or --carry to target specific files:
 			quiet, _ := cmd.Flags().GetBool("quiet")
 			verbosity, _ := cmd.Flags().GetCount("verbose")
 
-			// Create logger based on verbosity level
-			log := twig.NewNopLogger()
-			if verbosity >= 2 {
-				handler := twig.NewCLIHandler(cmd.ErrOrStderr(), twig.VerbosityToLevel(verbosity))
-				// Add command ID for log grouping
-				idGen := twig.GenerateCommandID
-				if o.commandIDGenerator != nil {
-					idGen = o.commandIDGenerator
-				}
-				handlerWithID := handler.WithAttrs([]slog.Attr{
-					twig.LogAttrKeyCmdID.Attr(idGen()),
-				})
-				log = slog.New(handlerWithID)
+			idGen := twig.GenerateCommandID
+			if o.commandIDGenerator != nil {
+				idGen = o.commandIDGenerator
 			}
+			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
 
 			var listCmd ListCommander
 			if o.listCommander != nil {
@@ -400,20 +411,11 @@ Safety checks (all must pass):
 			target, _ := cmd.Flags().GetString("target")
 			forceCount, _ := cmd.Flags().GetCount("force")
 
-			// Create logger based on verbosity level
-			log := twig.NewNopLogger()
-			if verbosity >= 2 {
-				handler := twig.NewCLIHandler(cmd.ErrOrStderr(), twig.VerbosityToLevel(verbosity))
-				// Add command ID for log grouping
-				idGen := twig.GenerateCommandID
-				if o.commandIDGenerator != nil {
-					idGen = o.commandIDGenerator
-				}
-				handlerWithID := handler.WithAttrs([]slog.Attr{
-					twig.LogAttrKeyCmdID.Attr(idGen()),
-				})
-				log = slog.New(handlerWithID)
+			idGen := twig.GenerateCommandID
+			if o.commandIDGenerator != nil {
+				idGen = o.commandIDGenerator
 			}
+			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
 
 			var cleanCmd CleanCommander
 			if o.cleanCommander != nil {
@@ -521,20 +523,11 @@ stop processing of remaining branches.`,
 			forceCount, _ := cmd.Flags().GetCount("force")
 			check, _ := cmd.Flags().GetBool("check")
 
-			// Create logger based on verbosity level
-			log := twig.NewNopLogger()
-			if verbosity >= 2 {
-				handler := twig.NewCLIHandler(cmd.ErrOrStderr(), twig.VerbosityToLevel(verbosity))
-				// Add command ID for log grouping
-				idGen := twig.GenerateCommandID
-				if o.commandIDGenerator != nil {
-					idGen = o.commandIDGenerator
-				}
-				handlerWithID := handler.WithAttrs([]slog.Attr{
-					twig.LogAttrKeyCmdID.Attr(idGen()),
-				})
-				log = slog.New(handlerWithID)
+			idGen := twig.GenerateCommandID
+			if o.commandIDGenerator != nil {
+				idGen = o.commandIDGenerator
 			}
+			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
 
 			var removeCmd RemoveCommander
 			if o.removeCommander != nil {
@@ -652,13 +645,20 @@ stop processing of remaining branches.`,
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			verbosity, _ := cmd.Flags().GetCount("verbose")
 			force, _ := cmd.Flags().GetBool("force")
+
+			idGen := twig.GenerateCommandID
+			if o.commandIDGenerator != nil {
+				idGen = o.commandIDGenerator
+			}
+			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
 
 			var initCommand InitCommander
 			if o.initCommander != nil {
 				initCommand = o.initCommander
 			} else {
-				initCommand = twig.NewDefaultInitCommand()
+				initCommand = twig.NewDefaultInitCommand(log)
 			}
 			result, err := initCommand.Run(cmd.Context(), cwd, twig.InitOptions{Force: force})
 			if err != nil {

@@ -1738,7 +1738,7 @@ init_submodules = true
 			t.Fatal(err)
 		}
 
-		cmd := NewDefaultAddCommand(result.Config, AddOptions{})
+		cmd := NewDefaultAddCommand(result.Config, NewNopLogger(), AddOptions{})
 
 		addResult, err := cmd.Run(t.Context(), "feature/with-submodule")
 		if err != nil {
@@ -1804,7 +1804,7 @@ init_submodules = true
 			t.Fatal(err)
 		}
 
-		cmd := NewDefaultAddCommand(result.Config, AddOptions{})
+		cmd := NewDefaultAddCommand(result.Config, NewNopLogger(), AddOptions{})
 
 		addResult, err := cmd.Run(t.Context(), "feature/no-submodule-init")
 		if err != nil {
@@ -1868,7 +1868,7 @@ init_submodules = false
 		}
 
 		// CLI flag forces init_submodules (regardless of config)
-		cmd := NewDefaultAddCommand(result.Config, AddOptions{
+		cmd := NewDefaultAddCommand(result.Config, NewNopLogger(), AddOptions{
 			InitSubmodules: true,
 		})
 

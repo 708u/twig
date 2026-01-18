@@ -3,6 +3,7 @@ package twig
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -13,6 +14,7 @@ type AddCommand struct {
 	FS             FileSystem
 	Git            *GitRunner
 	Config         *Config
+	Log            *slog.Logger
 	Sync           bool
 	CarryFrom      string
 	FilePatterns   []string
@@ -32,11 +34,15 @@ type AddOptions struct {
 }
 
 // NewAddCommand creates an AddCommand with explicit dependencies (for testing).
-func NewAddCommand(fs FileSystem, git *GitRunner, cfg *Config, opts AddOptions) *AddCommand {
+func NewAddCommand(fs FileSystem, git *GitRunner, cfg *Config, log *slog.Logger, opts AddOptions) *AddCommand {
+	if log == nil {
+		log = NewNopLogger()
+	}
 	return &AddCommand{
 		FS:             fs,
 		Git:            git,
 		Config:         cfg,
+		Log:            log,
 		Sync:           opts.Sync,
 		CarryFrom:      opts.CarryFrom,
 		FilePatterns:   opts.FilePatterns,
@@ -47,8 +53,8 @@ func NewAddCommand(fs FileSystem, git *GitRunner, cfg *Config, opts AddOptions) 
 }
 
 // NewDefaultAddCommand creates an AddCommand with production defaults.
-func NewDefaultAddCommand(cfg *Config, opts AddOptions) *AddCommand {
-	return NewAddCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir), cfg, opts)
+func NewDefaultAddCommand(cfg *Config, log *slog.Logger, opts AddOptions) *AddCommand {
+	return NewAddCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir), cfg, log, opts)
 }
 
 // SymlinkResult holds information about a symlink operation.

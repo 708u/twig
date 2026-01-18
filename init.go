@@ -3,6 +3,7 @@ package twig
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 )
 
@@ -28,7 +29,8 @@ symlinks = []
 
 // InitCommand initializes twig configuration in a directory.
 type InitCommand struct {
-	FS FileSystem
+	FS  FileSystem
+	Log *slog.Logger
 }
 
 // InitOptions holds options for the init command.
@@ -51,15 +53,19 @@ type InitFormatOptions struct {
 }
 
 // NewInitCommand creates an InitCommand with explicit dependencies (for testing).
-func NewInitCommand(fs FileSystem) *InitCommand {
+func NewInitCommand(fs FileSystem, log *slog.Logger) *InitCommand {
+	if log == nil {
+		log = NewNopLogger()
+	}
 	return &InitCommand{
-		FS: fs,
+		FS:  fs,
+		Log: log,
 	}
 }
 
 // NewDefaultInitCommand creates an InitCommand with production defaults.
-func NewDefaultInitCommand() *InitCommand {
-	return NewInitCommand(osFS{})
+func NewDefaultInitCommand(log *slog.Logger) *InitCommand {
+	return NewInitCommand(osFS{}, log)
 }
 
 // Run executes the init command.
