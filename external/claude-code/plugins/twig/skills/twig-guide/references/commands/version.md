@@ -14,24 +14,25 @@ twig --version
 - `twig version`: Displays version, commit hash, and build date
 - `twig --version`: Displays version only
 - Version is embedded at build time via ldflags
-- Local builds show "dev" as the version
+- Makefile builds show `<latest-tag>-dev` (e.g., `0.7.0-dev`)
+- Direct `go build` without ldflags shows `dev`
 
 ## Examples
 
 ```txt
 # Detailed output (subcommand)
 twig version
-version: v1.0.0
+version: 1.0.0
 commit:  abc1234
 date:    2025-01-06T12:00:00Z
 
 # Short output (flag)
 twig --version
-v1.0.0
+1.0.0
 
-# Local development build
+# Local development build (via Makefile)
 twig version
-version: dev
+version: 0.7.0-dev
 commit:  def5678
 date:    2025-01-06T10:30:00Z
 ```
