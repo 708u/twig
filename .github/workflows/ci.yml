@@ -48,6 +48,11 @@ jobs:
         with:
           version: v2.8.0
 
+      - name: Check format
+        run: |
+          golangci-lint fmt ./...
+          git diff --exit-code
+
   integration-test:
     needs: check-changes
     if: needs.check-changes.outputs.go == 'true'
