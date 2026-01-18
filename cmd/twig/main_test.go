@@ -1041,7 +1041,7 @@ func TestRemoveCmd_OutputFormat(t *testing.T) {
 			results: []removeResult{
 				{wt: twig.RemovedWorktree{Branch: "feat/a", WorktreePath: "/test/feat/a"}},
 			},
-			wantStdout: "twig remove: feat/a\n",
+			wantStdout: "",
 			wantStderr: "",
 		},
 		{
@@ -1110,12 +1110,9 @@ func TestRemoveCmd_MultipleBranches(t *testing.T) {
 		}
 	}
 
-	// Check output contains all branches
-	out := stdout.String()
-	for _, b := range expected {
-		if !strings.Contains(out, b) {
-			t.Errorf("output should contain %q", b)
-		}
+	// Success output is silent by default
+	if stdout.String() != "" {
+		t.Errorf("stdout should be empty on success, got %q", stdout.String())
 	}
 }
 

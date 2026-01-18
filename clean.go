@@ -79,7 +79,9 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 				fmt.Fprintf(&stderr, "error: %s: %v\n", r.Removed[i].Branch, r.Removed[i].Err)
 				continue
 			}
-			fmt.Fprintf(&stdout, "twig clean: %s\n", r.Removed[i].Branch)
+			if opts.Verbose {
+				fmt.Fprintf(&stdout, "Removed worktree and branch: %s\n", r.Removed[i].Branch)
+			}
 		}
 		return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	}

@@ -131,7 +131,20 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: false,
 			},
 			opts:       FormatOptions{},
-			wantStdout: "twig clean: feat/a\ntwig clean: feat/b\n",
+			wantStdout: "",
+			wantStderr: "",
+		},
+		{
+			name: "execution_results_verbose",
+			result: CleanResult{
+				Removed: []RemovedWorktree{
+					{Branch: "feat/a"},
+					{Branch: "feat/b"},
+				},
+				Check: false,
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "Removed worktree and branch: feat/a\nRemoved worktree and branch: feat/b\n",
 			wantStderr: "",
 		},
 		// Prunable branch tests
