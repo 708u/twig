@@ -135,6 +135,20 @@ The status codes follow git status --porcelain format:
 | `A` | Added (staged)       |
 | `??` | Untracked            |
 
+### Output Modes
+
+By default, successful removal produces no output (silent mode).
+Use `--verbose` to see detailed output:
+
+```txt
+# Default: silent on success
+twig remove feat/test
+
+# Verbose: shows what was removed
+twig remove feat/test -v
+Removed worktree and branch: feat/test
+```
+
 ### Debug Output
 
 With `-vv`, debug logging is enabled to trace internal operations:
@@ -144,7 +158,7 @@ With `-vv`, debug logging is enabled to trace internal operations:
 twig remove feat/test -vv
 2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] remove: checking branch=feat/test path=/path/to/feat/test
 2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] remove: check completed canRemove=true branch=feat/test
-twig remove: feat/test
+Removed worktree and branch: feat/test
 ```
 
 ## Multiple Branches

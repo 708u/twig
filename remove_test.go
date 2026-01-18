@@ -82,7 +82,7 @@ func TestRemoveResult_Format(t *testing.T) {
 				Removed: []RemovedWorktree{{Branch: "feature/a", WorktreePath: "/repo/feature/a"}},
 			},
 			opts:       FormatOptions{},
-			wantStdout: "twig remove: feature/a\n",
+			wantStdout: "",
 			wantStderr: "",
 		},
 		{
@@ -94,7 +94,7 @@ func TestRemoveResult_Format(t *testing.T) {
 				},
 			},
 			opts:       FormatOptions{},
-			wantStdout: "twig remove: feature/a\ntwig remove: feature/b\n",
+			wantStdout: "",
 			wantStderr: "",
 		},
 		{
@@ -115,7 +115,7 @@ func TestRemoveResult_Format(t *testing.T) {
 				},
 			},
 			opts:       FormatOptions{},
-			wantStdout: "twig remove: feature/a\n",
+			wantStdout: "",
 			wantStderr: "error: feature/b: failed\n",
 		},
 		{
@@ -133,7 +133,7 @@ func TestRemoveResult_Format(t *testing.T) {
 				Removed: []RemovedWorktree{{Branch: "feature/deleted", WorktreePath: "/repo/feature/deleted", Pruned: true}},
 			},
 			opts:       FormatOptions{},
-			wantStdout: "twig remove: feature/deleted\n",
+			wantStdout: "",
 			wantStderr: "",
 		},
 		{
@@ -151,7 +151,7 @@ func TestRemoveResult_Format(t *testing.T) {
 				Removed: []RemovedWorktree{{Branch: "feature/deleted", WorktreePath: "/repo/feature/deleted", Pruned: true}},
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "Pruned stale worktree and deleted branch: feature/deleted\ntwig remove: feature/deleted\n",
+			wantStdout: "Pruned stale worktree and deleted branch: feature/deleted\n",
 			wantStderr: "",
 		},
 	}
@@ -706,8 +706,7 @@ func TestRemovedWorktree_Format_WithCleanedDirs(t *testing.T) {
 			},
 			opts: FormatOptions{Verbose: true},
 			wantStdout: "Removed worktree and branch: feat/test\n" +
-				"Removed empty directory: /base/feat\n" +
-				"twig remove: feat/test\n",
+				"Removed empty directory: /base/feat\n",
 		},
 		{
 			name: "normal_with_cleaned_dirs_not_shown",
@@ -718,7 +717,7 @@ func TestRemovedWorktree_Format_WithCleanedDirs(t *testing.T) {
 				Check:        false,
 			},
 			opts:       FormatOptions{Verbose: false},
-			wantStdout: "twig remove: feat/test\n",
+			wantStdout: "",
 		},
 	}
 
