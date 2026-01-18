@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"text/tabwriter"
 
 	"github.com/708u/twig"
@@ -529,24 +530,64 @@ stop processing of remaining branches.`,
 			}
 			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
 
-			var removeCmd RemoveCommander
-			if o.removeCommander != nil {
-				removeCmd = o.removeCommander
-			} else {
-				removeCmd = twig.NewDefaultRemoveCommand(cfg, log)
+			opts := twig.RemoveOptions{
+				Force: twig.WorktreeForceLevel(forceCount),
+				Check: check,
 			}
+
 			var result twig.RemoveResult
 
-			for _, branch := range args {
-				wt, err := removeCmd.Run(cmd.Context(), branch, cwd, twig.RemoveOptions{
-					Force: twig.WorktreeForceLevel(forceCount),
-					Check: check,
-				})
-				if err != nil {
-					wt.Branch = branch
-					wt.Err = err
+			// If custom commander is set (for testing), use sequential execution
+			if o.removeCommander != nil {
+				for _, branch := range args {
+					wt, err := o.removeCommander.Run(cmd.Context(), branch, cwd, opts)
+					if err != nil {
+						wt.Branch = branch
+						wt.Err = err
+					}
+					result.Removed = append(result.Removed, wt)
 				}
-				result.Removed = append(result.Removed, wt)
+			} else {
+				// Parallel execution with goroutines for production
+				removeCmd := twig.NewDefaultRemoveCommand(cfg, log)
+
+				type indexedResult struct {
+					index int
+					wt    twig.RemovedWorktree
+				}
+
+				var wg sync.WaitGroup
+				var mu sync.Mutex
+				results := make([]indexedResult, 0, len(args))
+
+				for i, branch := range args {
+					wg.Add(1)
+					go func(idx int, branch string) {
+						defer wg.Done()
+						wt, err := removeCmd.Run(cmd.Context(), branch, cwd, opts)
+						if err != nil {
+							wt.Branch = branch
+							wt.Err = err
+						}
+						mu.Lock()
+						results = append(results, indexedResult{index: idx, wt: wt})
+						mu.Unlock()
+					}(i, branch)
+				}
+				wg.Wait()
+
+				// Sort by original index to maintain consistent ordering
+				for i := range len(results) {
+					for j := i + 1; j < len(results); j++ {
+						if results[j].index < results[i].index {
+							results[i], results[j] = results[j], results[i]
+						}
+					}
+				}
+
+				for i := range results {
+					result.Removed = append(result.Removed, results[i].wt)
+				}
 			}
 
 			formatted := result.Format(twig.FormatOptions{Verbose: verbose})
