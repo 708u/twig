@@ -184,14 +184,14 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		LogAttrKeyCategory.String(), LogCategoryClean,
 		"count", len(worktrees))
 
-	// Pre-fetch merged branches to avoid redundant git branch --merged calls
-	mergedResult, err := c.Git.MergedBranches(ctx, target)
+	// Pre-fetch branch merge status to avoid redundant git branch --merged calls
+	mergedResult, err := c.Git.ClassifyBranchMergeStatus(ctx, target)
 	if err != nil {
-		c.Log.DebugContext(ctx, "failed to fetch merged branches",
+		c.Log.DebugContext(ctx, "failed to classify branch merge status",
 			LogAttrKeyCategory.String(), LogCategoryClean,
 			"error", err.Error())
 		// Continue without cache - Check() will fall back to individual calls
-		mergedResult = MergedBranchesResult{}
+		mergedResult = BranchMergeStatus{}
 	} else {
 		c.Log.DebugContext(ctx, "merged branches fetched",
 			LogAttrKeyCategory.String(), LogCategoryClean,

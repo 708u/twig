@@ -613,15 +613,15 @@ func (g *GitRunner) branchDelete(ctx context.Context, branch string, force bool)
 
 // IsBranchMerged checks if branch is merged into target.
 func (g *GitRunner) IsBranchMerged(ctx context.Context, branch, target string) (bool, error) {
-	result, err := g.MergedBranches(ctx, target)
+	result, err := g.ClassifyBranchMergeStatus(ctx, target)
 	if err != nil {
 		return false, err
 	}
 	return result.Merged[branch], nil
 }
 
-// MergedBranchesResult holds the result of MergedBranches.
-type MergedBranchesResult struct {
+// BranchMergeStatus holds the classification of branches by merge status.
+type BranchMergeStatus struct {
 	// Merged contains branches that are considered merged
 	// (via git branch --merged or upstream gone, excluding same-commit branches).
 	Merged map[string]bool
@@ -630,12 +630,12 @@ type MergedBranchesResult struct {
 	SameCommit map[string]bool
 }
 
-// MergedBranches returns branches that are considered merged and same-commit branches.
+// ClassifyBranchMergeStatus classifies branches by their merge status relative to target.
 // A branch is merged if it's in `git branch --merged <target>` or if its upstream is gone.
 // Branches pointing to the same commit as target are returned separately in SameCommit.
 // This is more efficient than calling IsBranchMerged for each branch individually.
-func (g *GitRunner) MergedBranches(ctx context.Context, target string) (MergedBranchesResult, error) {
-	result := MergedBranchesResult{
+func (g *GitRunner) ClassifyBranchMergeStatus(ctx context.Context, target string) (BranchMergeStatus, error) {
+	result := BranchMergeStatus{
 		Merged:     make(map[string]bool),
 		SameCommit: make(map[string]bool),
 	}
