@@ -617,6 +617,39 @@ func (g *GitRunner) IsBranchMerged(ctx context.Context, branch, target string) (
 	return g.IsBranchUpstreamGone(ctx, branch)
 }
 
+// MergedBranches returns a map of branch names that are considered merged.
+// A branch is merged if it's in `git branch --merged <target>` or if its upstream is gone.
+// This is more efficient than calling IsBranchMerged for each branch individually.
+func (g *GitRunner) MergedBranches(ctx context.Context, target string) (map[string]bool, error) {
+	result := make(map[string]bool)
+
+	// Get traditionally merged branches
+	out, err := g.Run(ctx, GitCmdBranch, "--merged", target, "--format=%(refname:short)")
+	if err != nil {
+		return nil, fmt.Errorf("failed to check merged branches: %w", err)
+	}
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			result[line] = true
+		}
+	}
+
+	// Get branches with gone upstream (squash/rebase merges)
+	// Format: "branch-name [gone]" or "branch-name" (no upstream or tracking)
+	upstreamOut, err := g.Run(ctx, GitCmdForEachRef, "--format=%(refname:short) %(upstream:track)", "refs/heads/")
+	if err != nil {
+		// Non-fatal: return what we have from --merged
+		return result, nil
+	}
+	for line := range strings.SplitSeq(strings.TrimSpace(string(upstreamOut)), "\n") {
+		if branch, found := strings.CutSuffix(line, " [gone]"); found {
+			result[branch] = true
+		}
+	}
+
+	return result, nil
+}
+
 // IsBranchUpstreamGone checks if the branch's upstream tracking branch is gone.
 // This indicates the remote branch was deleted, typically after a PR merge.
 func (g *GitRunner) IsBranchUpstreamGone(ctx context.Context, branch string) (bool, error) {
