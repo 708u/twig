@@ -244,6 +244,12 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 // Run removes the worktree and branch for the given branch name.
 // cwd is used to prevent removal when inside the target worktree.
 func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts RemoveOptions) (RemovedWorktree, error) {
+	c.Log.Debug("run started",
+		"category", LogCategoryRemove,
+		"branch", branch,
+		"check", opts.Check,
+		"force", opts.Force)
+
 	var result RemovedWorktree
 	result.Branch = branch
 	result.Check = opts.Check
@@ -341,6 +347,11 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	gitOutput = append(gitOutput, brOut...)
 
 	result.GitOutput = gitOutput
+
+	c.Log.Debug("run completed",
+		"category", LogCategoryRemove,
+		"branch", branch)
+
 	return result, nil
 }
 
@@ -379,6 +390,11 @@ func (c *RemoveCommand) removePrunable(ctx context.Context, branch string, opts 
 		return result, err
 	}
 	result.GitOutput = brOut
+
+	c.Log.Debug("run completed",
+		"category", LogCategoryRemove,
+		"branch", branch,
+		"prunable", true)
 
 	return result, nil
 }
