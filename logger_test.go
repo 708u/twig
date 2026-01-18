@@ -26,7 +26,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 			logLevel: slog.LevelDebug,
 			message:  "checking branch",
 			category: "debug",
-			want:     "2026-01-17 12:34:56 [DEBUG] debug: checking branch\n",
+			want:     "2026-01-17 12:34:56.000 [DEBUG] debug: checking branch\n",
 		},
 		{
 			name:     "debug level with git category",
@@ -34,7 +34,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 			logLevel: slog.LevelDebug,
 			message:  "worktree add -b feat/new",
 			category: "git",
-			want:     "2026-01-17 12:34:56 [DEBUG] git: worktree add -b feat/new\n",
+			want:     "2026-01-17 12:34:56.000 [DEBUG] git: worktree add -b feat/new\n",
 		},
 		{
 			name:     "info level without category",
@@ -42,7 +42,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 			logLevel: slog.LevelInfo,
 			message:  "operation complete",
 			category: "",
-			want:     "2026-01-17 12:34:56 [INFO] operation complete\n",
+			want:     "2026-01-17 12:34:56.000 [INFO] operation complete\n",
 		},
 		{
 			name:     "warn level without category",
@@ -50,7 +50,7 @@ func TestCLIHandler_Handle(t *testing.T) {
 			logLevel: slog.LevelWarn,
 			message:  "something happened",
 			category: "",
-			want:     "2026-01-17 12:34:56 [WARN] something happened\n",
+			want:     "2026-01-17 12:34:56.000 [WARN] something happened\n",
 		},
 	}
 
@@ -226,13 +226,13 @@ func TestCLIHandler_WithAttrs(t *testing.T) {
 			name:    "with category attr",
 			attrs:   []slog.Attr{LogAttrKeyCategory.Attr("git")},
 			message: "test message",
-			want:    "2026-01-17 12:34:56 [DEBUG] git: test message\n",
+			want:    "2026-01-17 12:34:56.000 [DEBUG] git: test message\n",
 		},
 		{
 			name:    "with cmd_id attr",
 			attrs:   []slog.Attr{LogAttrKeyCmdID.Attr("a1b2c3d4")},
 			message: "test message",
-			want:    "2026-01-17 12:34:56 [DEBUG] [a1b2c3d4] test message\n",
+			want:    "2026-01-17 12:34:56.000 [DEBUG] [a1b2c3d4] test message\n",
 		},
 		{
 			name: "with both cmd_id and category",
@@ -241,7 +241,7 @@ func TestCLIHandler_WithAttrs(t *testing.T) {
 				LogAttrKeyCategory.Attr("git"),
 			},
 			message: "test message",
-			want:    "2026-01-17 12:34:56 [DEBUG] [a1b2c3d4] git: test message\n",
+			want:    "2026-01-17 12:34:56.000 [DEBUG] [a1b2c3d4] git: test message\n",
 		},
 	}
 
@@ -284,7 +284,7 @@ func TestCLIHandler_WithAttrs_Chained(t *testing.T) {
 		t.Fatalf("Handle() error: %v", err)
 	}
 
-	want := "2026-01-17 12:34:56 [DEBUG] [a1b2c3d4] git: test message\n"
+	want := "2026-01-17 12:34:56.000 [DEBUG] [a1b2c3d4] git: test message\n"
 	if got := buf.String(); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -307,7 +307,7 @@ func TestCLIHandler_RecordAttrsOverrideHandlerAttrs(t *testing.T) {
 		t.Fatalf("Handle() error: %v", err)
 	}
 
-	want := "2026-01-17 12:34:56 [DEBUG] git: test message\n"
+	want := "2026-01-17 12:34:56.000 [DEBUG] git: test message\n"
 	if got := buf.String(); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
