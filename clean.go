@@ -314,33 +314,64 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		return result, nil
 	}
 
-	// Execute removal for cleanable candidates
+	// Execute removal for cleanable candidates (parallel execution)
 	// Pass the same force level since RemoveCommand.Check already validated conditions
+	type indexedRemoved struct {
+		index int
+		wt    RemovedWorktree
+	}
+
+	var (
+		removeWg      sync.WaitGroup
+		removeMu      sync.Mutex
+		removedResult []indexedRemoved
+	)
+
+	removeIndex := 0
 	for _, candidate := range result.Candidates {
 		if candidate.Skipped {
 			continue
 		}
 
-		c.Log.DebugContext(ctx, "removing worktree",
-			LogAttrKeyCategory.String(), LogCategoryClean,
-			"branch", candidate.Branch)
+		removeWg.Add(1)
+		go func(idx int, candidate CleanCandidate) {
+			defer removeWg.Done()
 
-		wt, err := removeCmd.Run(ctx, candidate.Branch, cwd, RemoveOptions{
-			Force: opts.Force,
-			Check: false,
-		})
-		if err != nil {
-			c.Log.DebugContext(ctx, "removal failed",
+			c.Log.DebugContext(ctx, "removing worktree",
 				LogAttrKeyCategory.String(), LogCategoryClean,
-				"branch", candidate.Branch,
-				"error", err.Error())
-			wt.Branch = candidate.Branch
-			wt.Err = err
-		}
-		result.Removed = append(result.Removed, wt)
+				"branch", candidate.Branch)
 
-		// Track if any prunable branches were processed
-		if wt.Pruned {
+			wt, err := removeCmd.Run(ctx, candidate.Branch, cwd, RemoveOptions{
+				Force: opts.Force,
+				Check: false,
+			})
+			if err != nil {
+				c.Log.DebugContext(ctx, "removal failed",
+					LogAttrKeyCategory.String(), LogCategoryClean,
+					"branch", candidate.Branch,
+					"error", err.Error())
+				wt.Branch = candidate.Branch
+				wt.Err = err
+			}
+
+			removeMu.Lock()
+			removedResult = append(removedResult, indexedRemoved{index: idx, wt: wt})
+			removeMu.Unlock()
+		}(removeIndex, candidate)
+		removeIndex++
+	}
+
+	removeWg.Wait()
+
+	// Sort by original index to maintain consistent ordering
+	slices.SortFunc(removedResult, func(a, b indexedRemoved) int {
+		return a.index - b.index
+	})
+
+	// Extract results in order and track prunable branches
+	for i := range removedResult {
+		result.Removed = append(result.Removed, removedResult[i].wt)
+		if removedResult[i].wt.Pruned {
 			result.Pruned = true
 		}
 	}
