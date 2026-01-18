@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -561,6 +562,60 @@ func TestCleanCommand_InteractiveConfirmation_Integration(t *testing.T) {
 		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/interactive-empty")
 		if strings.TrimSpace(out) == "" {
 			t.Error("branch should still exist")
+		}
+	})
+}
+
+func TestVersion_Integration(t *testing.T) {
+	t.Parallel()
+
+	binary := filepath.Join(t.TempDir(), "twig")
+
+	// Build with test values (build from current package directory)
+	build := exec.Command("go", "build",
+		"-ldflags", "-X main.version=1.2.3 -X main.commit=abc1234 -X main.date=2025-01-01T00:00:00Z",
+		"-o", binary, ".")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build failed: %v\n%s", err, out)
+	}
+
+	t.Run("VersionSubcommand", func(t *testing.T) {
+		t.Parallel()
+
+		cmd := exec.Command(binary, "version")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("version command failed: %v\n%s", err, out)
+		}
+
+		output := string(out)
+
+		// Verify output contains version, commit, and date
+		if !strings.Contains(output, "version: 1.2.3") {
+			t.Errorf("output should contain version, got: %q", output)
+		}
+		if !strings.Contains(output, "commit:  abc1234") {
+			t.Errorf("output should contain commit, got: %q", output)
+		}
+		if !strings.Contains(output, "date:    2025-01-01T00:00:00Z") {
+			t.Errorf("output should contain date, got: %q", output)
+		}
+	})
+
+	t.Run("VersionFlag", func(t *testing.T) {
+		t.Parallel()
+
+		cmd := exec.Command(binary, "--version")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("--version flag failed: %v\n%s", err, out)
+		}
+
+		output := strings.TrimSpace(string(out))
+
+		// --version should output only the version number
+		if output != "1.2.3" {
+			t.Errorf("--version output = %q, want %q", output, "1.2.3")
 		}
 	})
 }
