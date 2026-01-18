@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 )
 
 // CleanCommand removes merged worktrees that are no longer needed.
@@ -204,7 +205,19 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		Log:    c.Log,
 	}
 
-	// Analyze each worktree using RemoveCommand.Check
+	// Analyze each worktree using RemoveCommand.Check (parallel execution)
+	type indexedCandidate struct {
+		index     int
+		candidate CleanCandidate
+	}
+
+	var (
+		wg         sync.WaitGroup
+		mu         sync.Mutex
+		candidates []indexedCandidate
+	)
+
+	candidateIndex := 0
 	for i, wt := range worktrees {
 		// Skip main worktree (first non-bare worktree)
 		if i == 0 || wt.Bare {
@@ -216,53 +229,82 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			c.Log.DebugContext(ctx, "skipping detached worktree",
 				LogAttrKeyCategory.String(), LogCategoryClean,
 				"path", wt.Path)
-			result.Candidates = append(result.Candidates, CleanCandidate{
-				Branch:       wt.Branch,
-				WorktreePath: wt.Path,
-				Skipped:      true,
-				SkipReason:   SkipDetached,
+			candidates = append(candidates, indexedCandidate{
+				index: candidateIndex,
+				candidate: CleanCandidate{
+					Branch:       wt.Branch,
+					WorktreePath: wt.Path,
+					Skipped:      true,
+					SkipReason:   SkipDetached,
+				},
 			})
+			candidateIndex++
 			continue
 		}
 
-		c.Log.DebugContext(ctx, "checking worktree",
-			LogAttrKeyCategory.String(), LogCategoryClean,
-			"branch", wt.Branch)
+		// Launch parallel check
+		wg.Add(1)
+		go func(idx int, wt Worktree) {
+			defer wg.Done()
 
-		checkResult, err := removeCmd.Check(ctx, wt.Branch, CheckOptions{
-			Force:          opts.Force,
-			Target:         target,
-			Cwd:            cwd,
-			WorktreeInfo:   &wt,
-			MergedBranches: mergedBranches,
-		})
-		if err != nil {
-			c.Log.DebugContext(ctx, "check failed",
+			c.Log.DebugContext(ctx, "checking worktree",
+				LogAttrKeyCategory.String(), LogCategoryClean,
+				"branch", wt.Branch)
+
+			checkResult, err := removeCmd.Check(ctx, wt.Branch, CheckOptions{
+				Force:          opts.Force,
+				Target:         target,
+				Cwd:            cwd,
+				WorktreeInfo:   &wt,
+				MergedBranches: mergedBranches,
+			})
+			if err != nil {
+				c.Log.DebugContext(ctx, "check failed",
+					LogAttrKeyCategory.String(), LogCategoryClean,
+					"branch", wt.Branch,
+					"error", err.Error())
+				// Skip worktrees that fail to check (e.g., not in any worktree)
+				return
+			}
+
+			candidate := CleanCandidate{
+				Branch:       wt.Branch,
+				WorktreePath: checkResult.WorktreePath,
+				Prunable:     checkResult.Prunable,
+				Skipped:      !checkResult.CanRemove,
+				SkipReason:   checkResult.SkipReason,
+				CleanReason:  checkResult.CleanReason,
+				ChangedFiles: checkResult.ChangedFiles,
+			}
+
+			c.Log.DebugContext(ctx, "check completed",
 				LogAttrKeyCategory.String(), LogCategoryClean,
 				"branch", wt.Branch,
-				"error", err.Error())
-			// Skip worktrees that fail to check (e.g., not in any worktree)
-			continue
+				"canRemove", checkResult.CanRemove,
+				"reason", string(checkResult.CleanReason),
+				"skipReason", string(checkResult.SkipReason))
+
+			mu.Lock()
+			candidates = append(candidates, indexedCandidate{index: idx, candidate: candidate})
+			mu.Unlock()
+		}(candidateIndex, wt)
+		candidateIndex++
+	}
+
+	wg.Wait()
+
+	// Sort candidates by original index to maintain consistent ordering
+	for i := range len(candidates) {
+		for j := i + 1; j < len(candidates); j++ {
+			if candidates[j].index < candidates[i].index {
+				candidates[i], candidates[j] = candidates[j], candidates[i]
+			}
 		}
+	}
 
-		candidate := CleanCandidate{
-			Branch:       wt.Branch,
-			WorktreePath: checkResult.WorktreePath,
-			Prunable:     checkResult.Prunable,
-			Skipped:      !checkResult.CanRemove,
-			SkipReason:   checkResult.SkipReason,
-			CleanReason:  checkResult.CleanReason,
-			ChangedFiles: checkResult.ChangedFiles,
-		}
-
-		c.Log.DebugContext(ctx, "check completed",
-			LogAttrKeyCategory.String(), LogCategoryClean,
-			"branch", wt.Branch,
-			"canRemove", checkResult.CanRemove,
-			"reason", string(checkResult.CleanReason),
-			"skipReason", string(checkResult.SkipReason))
-
-		result.Candidates = append(result.Candidates, candidate)
+	// Extract candidates in order
+	for _, ic := range candidates {
+		result.Candidates = append(result.Candidates, ic.candidate)
 	}
 
 	// If check mode, just return candidates (no execution)
