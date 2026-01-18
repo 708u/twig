@@ -185,18 +185,18 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		"count", len(worktrees))
 
 	// Pre-fetch branch merge status to avoid redundant git branch --merged calls
-	mergedResult, err := c.Git.ClassifyBranchMergeStatus(ctx, target)
+	mergeStatus, err := c.Git.ClassifyBranchMergeStatus(ctx, target)
 	if err != nil {
 		c.Log.DebugContext(ctx, "failed to classify branch merge status",
 			LogAttrKeyCategory.String(), LogCategoryClean,
 			"error", err.Error())
 		// Continue without cache - Check() will fall back to individual calls
-		mergedResult = BranchMergeStatus{}
+		mergeStatus = BranchMergeStatus{}
 	} else {
 		c.Log.DebugContext(ctx, "merged branches fetched",
 			LogAttrKeyCategory.String(), LogCategoryClean,
-			"mergedCount", len(mergedResult.Merged),
-			"sameCommitCount", len(mergedResult.SameCommit))
+			"mergedCount", len(mergeStatus.Merged),
+			"sameCommitCount", len(mergeStatus.SameCommit))
 	}
 
 	// RemoveCommand is used for both Check and Run
@@ -260,7 +260,7 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 				Target:       target,
 				Cwd:          cwd,
 				WorktreeInfo: &wt,
-				MergedResult: mergedResult,
+				MergedResult: mergeStatus,
 			})
 			if err != nil {
 				c.Log.DebugContext(ctx, "check failed",

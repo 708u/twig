@@ -552,8 +552,8 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 // checkSkipReason checks if worktree should be skipped and returns the reason.
 // force level controls which conditions can be bypassed (matches git worktree behavior).
 // changedFiles is pre-fetched to avoid redundant git status calls.
-// mergedResult is pre-fetched to avoid redundant git branch --merged calls.
-func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, cwd, target string, force WorktreeForceLevel, changedFiles []FileStatus, mergedResult BranchMergeStatus) SkipReason {
+// mergeStatus is pre-fetched to avoid redundant git branch --merged calls.
+func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, cwd, target string, force WorktreeForceLevel, changedFiles []FileStatus, mergeStatus BranchMergeStatus) SkipReason {
 	// Check detached HEAD (never bypassed)
 	if wt.Detached {
 		return SkipDetached
@@ -592,7 +592,7 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, cwd, t
 
 	// Check merged (only when target is specified)
 	if target != "" && force < WorktreeForceLevelUnclean {
-		return c.checkMergedSkipReason(ctx, wt.Branch, target, mergedResult)
+		return c.checkMergedSkipReason(ctx, wt.Branch, target, mergeStatus)
 	}
 
 	return ""
@@ -600,11 +600,11 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, cwd, t
 
 // checkPrunableSkipReason checks if a prunable branch should be skipped.
 // Only checks merged status since worktree-specific conditions don't apply.
-// mergedResult is pre-fetched to avoid redundant git branch --merged calls.
-func (c *RemoveCommand) checkPrunableSkipReason(ctx context.Context, branch, target string, force WorktreeForceLevel, mergedResult BranchMergeStatus) SkipReason {
+// mergeStatus is pre-fetched to avoid redundant git branch --merged calls.
+func (c *RemoveCommand) checkPrunableSkipReason(ctx context.Context, branch, target string, force WorktreeForceLevel, mergeStatus BranchMergeStatus) SkipReason {
 	// Check merged (only when target is specified)
 	if target != "" && force < WorktreeForceLevelUnclean {
-		return c.checkMergedSkipReason(ctx, branch, target, mergedResult)
+		return c.checkMergedSkipReason(ctx, branch, target, mergeStatus)
 	}
 	return ""
 }
@@ -612,16 +612,16 @@ func (c *RemoveCommand) checkPrunableSkipReason(ctx context.Context, branch, tar
 // checkMergedSkipReason checks if a branch should be skipped due to merge status.
 // Returns appropriate SkipReason: empty if merged, SkipNotMerged if not merged,
 // or a dynamic "same commit as <target>" if pointing to same commit as target.
-func (c *RemoveCommand) checkMergedSkipReason(ctx context.Context, branch, target string, mergedResult BranchMergeStatus) SkipReason {
+func (c *RemoveCommand) checkMergedSkipReason(ctx context.Context, branch, target string, mergeStatus BranchMergeStatus) SkipReason {
 	// Check if we have cached results
-	hasCachedResult := len(mergedResult.Merged) > 0 || len(mergedResult.SameCommit) > 0
+	hasCachedResult := len(mergeStatus.Merged) > 0 || len(mergeStatus.SameCommit) > 0
 
 	if hasCachedResult {
 		// Use cached results
-		if mergedResult.Merged[branch] {
+		if mergeStatus.Merged[branch] {
 			return "" // merged, can remove
 		}
-		if mergedResult.SameCommit[branch] {
+		if mergeStatus.SameCommit[branch] {
 			return SkipReason(fmt.Sprintf("same commit as %s", target))
 		}
 		return SkipNotMerged
