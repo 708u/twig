@@ -42,7 +42,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -102,7 +102,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -160,7 +160,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -244,7 +244,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -285,7 +285,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -323,7 +323,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -363,7 +363,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -428,7 +428,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -467,7 +467,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -510,7 +510,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -559,7 +559,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -607,7 +607,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -677,7 +677,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -740,7 +740,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -799,7 +799,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -872,7 +872,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -949,7 +949,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -995,7 +995,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -1070,7 +1070,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}
@@ -1157,7 +1157,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		cmd := &CleanCommand{
 			FS:     osFS{},
-			Git:    NewGitRunner(mainDir, NewNopLogger()),
+			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
 			Log:    NewNopLogger(),
 		}

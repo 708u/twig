@@ -7,13 +7,13 @@ import (
 	"github.com/708u/twig/internal/testutil"
 )
 
-func TestNewGitRunner_NilLogger(t *testing.T) {
+func TestNewGitRunner_DefaultLogger(t *testing.T) {
 	t.Parallel()
 
-	// Should not panic when log is nil
-	runner := NewGitRunner("/tmp", nil)
+	// Should use nop logger by default
+	runner := NewGitRunner("/tmp")
 	if runner.Log == nil {
-		t.Error("Log should not be nil after NewGitRunner with nil logger")
+		t.Error("Log should not be nil after NewGitRunner")
 	}
 }
 

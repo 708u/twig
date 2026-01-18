@@ -22,7 +22,7 @@ func TestGitRunner_WorktreeFindByBranch_Integration(t *testing.T) {
 		wtPath := filepath.Join(repoDir, "feature-wt")
 		testutil.RunGit(t, mainDir, "worktree", "add", wtPath, "-b", "feature/test")
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		got, err := runner.WorktreeFindByBranch(t.Context(), "feature/test")
 		if err != nil {
@@ -38,7 +38,7 @@ func TestGitRunner_WorktreeFindByBranch_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		_, err := runner.WorktreeFindByBranch(t.Context(), "nonexistent")
 		if err == nil {
@@ -61,7 +61,7 @@ func TestGitRunner_WorktreeRemove_Integration(t *testing.T) {
 		wtPath := filepath.Join(repoDir, "to-remove")
 		testutil.RunGit(t, mainDir, "worktree", "add", wtPath, "-b", "to-remove")
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		_, err := runner.WorktreeRemove(t.Context(), wtPath)
 		if err != nil {
@@ -79,7 +79,7 @@ func TestGitRunner_WorktreeRemove_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		_, err := runner.WorktreeRemove(t.Context(), "/nonexistent/path")
 		if err == nil {
@@ -106,7 +106,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
@@ -125,7 +125,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 		writeFile(t, mainDir, "staged.txt", "content")
 		testutil.RunGit(t, mainDir, "add", "staged.txt")
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
@@ -149,7 +149,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 		// Modify it
 		writeFile(t, mainDir, "tracked.txt", "modified")
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
@@ -167,7 +167,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 
 		writeFile(t, mainDir, "untracked.txt", "content")
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
@@ -196,7 +196,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 		// Untracked
 		writeFile(t, mainDir, "untracked.txt", "content")
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
@@ -220,7 +220,7 @@ func TestGitRunner_ChangedFiles_Integration(t *testing.T) {
 		// Rename it
 		testutil.RunGit(t, mainDir, "mv", "old.txt", "new.txt")
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		files, err := runner.ChangedFiles(t.Context())
 		if err != nil {
@@ -243,7 +243,7 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 
 		testutil.RunGit(t, mainDir, "branch", "to-delete")
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		_, err := runner.BranchDelete(t.Context(), "to-delete")
 		if err != nil {
@@ -265,7 +265,7 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 		testutil.RunGit(t, mainDir, "commit", "--allow-empty", "-m", "unmerged commit")
 		testutil.RunGit(t, mainDir, "checkout", "main")
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		_, err := runner.BranchDelete(t.Context(), "unmerged", WithForceDelete())
 		if err != nil {
@@ -283,7 +283,7 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
 
-		runner := NewGitRunner(mainDir, NewNopLogger())
+		runner := NewGitRunner(mainDir)
 
 		_, err := runner.BranchDelete(t.Context(), "nonexistent")
 		if err == nil {

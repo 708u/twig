@@ -123,16 +123,32 @@ type GitRunner struct {
 	Log      *slog.Logger
 }
 
+type gitRunnerOptions struct {
+	log *slog.Logger
+}
+
+// GitRunnerOption configures GitRunner.
+type GitRunnerOption func(*gitRunnerOptions)
+
+// WithLogger sets the logger for GitRunner.
+func WithLogger(log *slog.Logger) GitRunnerOption {
+	return func(o *gitRunnerOptions) {
+		o.log = log
+	}
+}
+
 // NewGitRunner creates a new GitRunner with the default executor.
-// If log is nil, a nop logger is used.
-func NewGitRunner(dir string, log *slog.Logger) *GitRunner {
-	if log == nil {
-		log = NewNopLogger()
+func NewGitRunner(dir string, opts ...GitRunnerOption) *GitRunner {
+	o := &gitRunnerOptions{
+		log: NewNopLogger(),
+	}
+	for _, opt := range opts {
+		opt(o)
 	}
 	return &GitRunner{
 		Executor: osGitExecutor{},
 		Dir:      dir,
-		Log:      log,
+		Log:      o.log,
 	}
 }
 
