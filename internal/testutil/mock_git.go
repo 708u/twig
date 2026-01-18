@@ -87,6 +87,10 @@ type MockGitExecutor struct {
 	// WorktreePruneErr is returned when worktree prune is called.
 	WorktreePruneErr error
 
+	// BranchHEADs maps branch name to its HEAD commit hash.
+	// Used by rev-parse and for-each-ref to return commit hashes for branches.
+	BranchHEADs map[string]string
+
 	// Remotes is a list of configured remote names.
 	Remotes []string
 
@@ -168,6 +172,28 @@ func (m *MockGitExecutor) handleRevParse(args []string) ([]byte, error) {
 			hash = "abc123def456"
 		}
 		return []byte(hash + "\n"), nil
+	}
+
+	// Handle rev-parse <branch> (without --verify) for commit hash lookup
+	if len(args) == 2 && args[1] != "--verify" {
+		branch := args[1]
+		if m.BranchHEADs != nil {
+			if hash, ok := m.BranchHEADs[branch]; ok {
+				return []byte(hash + "\n"), nil
+			}
+		}
+		// Fallback: check worktrees for HEAD
+		for _, wt := range m.Worktrees {
+			if wt.Branch == branch {
+				head := wt.HEAD
+				if head == "" {
+					head = "commit-" + branch
+				}
+				return []byte(head + "\n"), nil
+			}
+		}
+		// Default hash based on branch name if not found
+		return []byte("default-" + branch + "\n"), nil
 	}
 
 	// args: ["rev-parse", "--verify", "refs/heads/{branch}"]
@@ -333,7 +359,55 @@ func (m *MockGitExecutor) handleForEachRef(args []string) ([]byte, error) {
 		}
 	}
 
-	// Handle refs/heads/ for MergedBranches (all branches with upstream status)
+	// Handle refs/heads/ for MergedBranches (all branches with commit hash and upstream status)
+	// Format: "%(refname:short) %(objectname) %(upstream:track)"
+	if ref == "refs/heads/" && strings.Contains(format, "%(objectname)") {
+		var lines []string
+		seen := make(map[string]bool)
+
+		// First, add branches from Worktrees
+		for _, wt := range m.Worktrees {
+			if wt.Bare || wt.Detached {
+				continue
+			}
+			head := wt.HEAD
+			if head == "" {
+				head = "default-" + wt.Branch
+			}
+			line := wt.Branch + " " + head
+			if slices.Contains(m.UpstreamGoneBranches, wt.Branch) {
+				line += " [gone]"
+			}
+			lines = append(lines, line)
+			seen[wt.Branch] = true
+		}
+
+		// Then, add branches from BranchHEADs (if not already added)
+		for branch, head := range m.BranchHEADs {
+			if seen[branch] {
+				continue
+			}
+			line := branch + " " + head
+			if slices.Contains(m.UpstreamGoneBranches, branch) {
+				line += " [gone]"
+			}
+			lines = append(lines, line)
+			seen[branch] = true
+		}
+
+		// Finally, add branches from UpstreamGoneBranches (if not already added)
+		for _, branch := range m.UpstreamGoneBranches {
+			if seen[branch] {
+				continue
+			}
+			line := branch + " default-" + branch + " [gone]"
+			lines = append(lines, line)
+		}
+
+		return []byte(strings.Join(lines, "\n") + "\n"), nil
+	}
+
+	// Handle refs/heads/ for upstream status only (legacy format)
 	// Format: "%(refname:short) %(upstream:track)"
 	if ref == "refs/heads/" && strings.Contains(format, "%(upstream:track)") {
 		var lines []string

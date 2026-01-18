@@ -32,8 +32,8 @@ func TestCleanCommand_Integration(t *testing.T) {
 		testutil.RunGit(t, wtPath, "add", "test.txt")
 		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
 
-		// Merge the branch to main
-		testutil.RunGit(t, mainDir, "merge", "feature/merged")
+		// Merge the branch to main (use --no-ff to create a merge commit)
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/merged", "feature/merged")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -352,9 +352,20 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create a merged branch
+		// Create a worktree with a commit
 		wtPath := filepath.Join(repoDir, "feature", "to-clean")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/to-clean", wtPath)
+
+		// Make a commit on the branch
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/to-clean", "feature/to-clean")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -418,8 +429,16 @@ func TestCleanCommand_Integration(t *testing.T) {
 		featurePath := filepath.Join(repoDir, "feature", "from-develop")
 		testutil.RunGit(t, developPath, "worktree", "add", "-b", "feature/from-develop", featurePath)
 
+		// Make a commit on the feature branch
+		featureFile := filepath.Join(featurePath, "feature.txt")
+		if err := os.WriteFile(featureFile, []byte("feature"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, featurePath, "add", "feature.txt")
+		testutil.RunGit(t, featurePath, "commit", "-m", "feature commit")
+
 		// Merge feature to develop
-		testutil.RunGit(t, developPath, "merge", "feature/from-develop")
+		testutil.RunGit(t, developPath, "merge", "--no-ff", "-m", "Merge feature/from-develop", "feature/from-develop")
 
 		cfgResult, err := LoadConfig(mainDir)
 		if err != nil {
@@ -488,17 +507,41 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create multiple merged worktrees
+		// Create multiple merged worktrees with commits
 		branches := []string{"feature/clean-a", "feature/clean-b"}
 		wtPaths := make([]string, len(branches))
 		for i, branch := range branches {
 			wtPaths[i] = filepath.Join(repoDir, "feature", fmt.Sprintf("clean-%c", 'a'+i))
 			testutil.RunGit(t, mainDir, "worktree", "add", "-b", branch, wtPaths[i])
+
+			// Make a commit on the branch
+			testFile := filepath.Join(wtPaths[i], fmt.Sprintf("test-%c.txt", 'a'+i))
+			if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			testutil.RunGit(t, wtPaths[i], "add", ".")
+			testutil.RunGit(t, wtPaths[i], "commit", "-m", fmt.Sprintf("commit %c", 'a'+i))
+
+			// Merge the branch to main
+			testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", fmt.Sprintf("Merge %s", branch), branch)
 		}
 
-		// Create a prunable branch (worktree deleted externally)
+		// Create a prunable branch with a commit (worktree deleted externally)
 		prunableWtPath := filepath.Join(repoDir, "feature", "clean-prunable")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/clean-prunable", prunableWtPath)
+
+		// Make a commit on the prunable branch
+		testFile := filepath.Join(prunableWtPath, "prunable.txt")
+		if err := os.WriteFile(testFile, []byte("prunable"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, prunableWtPath, "add", ".")
+		testutil.RunGit(t, prunableWtPath, "commit", "-m", "prunable commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/clean-prunable", "feature/clean-prunable")
+
+		// Delete the worktree directory externally
 		if err := os.RemoveAll(prunableWtPath); err != nil {
 			t.Fatal(err)
 		}
@@ -979,9 +1022,20 @@ func TestCleanCommand_Integration(t *testing.T) {
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
 
-		// Create a worktree
+		// Create a worktree with a commit
 		wtPath := filepath.Join(repoDir, "feature", "prunable")
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/prunable", wtPath)
+
+		// Make a commit on the branch
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/prunable", "feature/prunable")
 
 		// Manually delete the worktree directory (simulating rm -rf)
 		if err := os.RemoveAll(wtPath); err != nil {
