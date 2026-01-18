@@ -87,9 +87,6 @@ func NewRemoveCommand(fs FileSystem, git *GitRunner, cfg *Config, log *slog.Logg
 
 // NewDefaultRemoveCommand creates a RemoveCommand with production defaults.
 func NewDefaultRemoveCommand(cfg *Config, log *slog.Logger) *RemoveCommand {
-	if log == nil {
-		log = NewNopLogger()
-	}
 	return NewRemoveCommand(osFS{}, NewGitRunnerWithLogger(cfg.WorktreeSourceDir, log), cfg, log)
 }
 
