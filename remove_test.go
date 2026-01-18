@@ -602,7 +602,7 @@ func TestRemoveCommand_CleanupEmptyParentDirs(t *testing.T) {
 				Log:    NewNopLogger(),
 			}
 
-			cleaned := cmd.cleanupEmptyParentDirs(tt.wtPath)
+			cleaned := cmd.cleanupEmptyParentDirs(t.Context(), tt.wtPath)
 
 			if len(cleaned) != tt.wantCleanedLen {
 				t.Errorf("cleaned = %v, want length %d", cleaned, tt.wantCleanedLen)

@@ -244,7 +244,7 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 // Run removes the worktree and branch for the given branch name.
 // cwd is used to prevent removal when inside the target worktree.
 func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts RemoveOptions) (RemovedWorktree, error) {
-	c.Log.Debug("run started",
+	c.Log.DebugContext(ctx, "run started",
 		"category", LogCategoryRemove,
 		"branch", branch,
 		"check", opts.Check,
@@ -270,7 +270,7 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	result.SkipReason = checkResult.SkipReason
 	result.ChangedFiles = checkResult.ChangedFiles
 
-	c.Log.Debug("check completed",
+	c.Log.DebugContext(ctx, "check completed",
 		"category", LogCategoryRemove,
 		"canRemove", checkResult.CanRemove,
 		"branch", branch)
@@ -281,7 +281,7 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 
 	// Handle prunable worktree (directory already deleted externally)
 	if checkResult.Prunable {
-		c.Log.Debug("handling prunable worktree",
+		c.Log.DebugContext(ctx, "handling prunable worktree",
 			"category", LogCategoryRemove,
 			"branch", branch)
 		return c.removePrunable(ctx, branch, opts, result)
@@ -297,7 +297,7 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 			effectiveForce = WorktreeForceLevelUnclean
 		}
 	}
-	c.Log.Debug("submodule check",
+	c.Log.DebugContext(ctx, "submodule check",
 		"category", LogCategoryRemove,
 		"status", smStatus,
 		"effectiveForce", effectiveForce,
@@ -319,9 +319,9 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	}
 	gitOutput = append(gitOutput, wtOut...)
 
-	result.CleanedDirs = c.cleanupEmptyParentDirs(checkResult.WorktreePath)
+	result.CleanedDirs = c.cleanupEmptyParentDirs(ctx, checkResult.WorktreePath)
 	if len(result.CleanedDirs) > 0 {
-		c.Log.Debug("cleaned empty dirs",
+		c.Log.DebugContext(ctx, "cleaned empty dirs",
 			"category", LogCategoryRemove,
 			"count", len(result.CleanedDirs),
 			"branch", branch)
@@ -334,7 +334,7 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 		// upstream gone (squash/rebase merge) requires -D since commits differ
 		// Run() reaches here only after Check() verified no uncommitted changes
 		if gone, goneErr := c.Git.IsBranchUpstreamGone(ctx, branch); goneErr == nil && gone {
-			c.Log.Debug("upstream gone, using force delete",
+			c.Log.DebugContext(ctx, "upstream gone, using force delete",
 				"category", LogCategoryRemove,
 				"branch", branch)
 			branchOpts = append(branchOpts, WithForceDelete())
@@ -348,7 +348,7 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 
 	result.GitOutput = gitOutput
 
-	c.Log.Debug("run completed",
+	c.Log.DebugContext(ctx, "run completed",
 		"category", LogCategoryRemove,
 		"branch", branch)
 
@@ -362,7 +362,7 @@ func (c *RemoveCommand) removePrunable(ctx context.Context, branch string, opts 
 		return result, nil
 	}
 
-	c.Log.Debug("pruning stale worktree record",
+	c.Log.DebugContext(ctx, "pruning stale worktree record",
 		"category", LogCategoryRemove,
 		"branch", branch)
 
@@ -378,7 +378,7 @@ func (c *RemoveCommand) removePrunable(ctx context.Context, branch string, opts 
 	} else {
 		// upstream gone (squash/rebase merge) requires -D since commits differ
 		if gone, err := c.Git.IsBranchUpstreamGone(ctx, branch); err == nil && gone {
-			c.Log.Debug("prunable: upstream gone, using force delete",
+			c.Log.DebugContext(ctx, "prunable: upstream gone, using force delete",
 				"category", LogCategoryRemove,
 				"branch", branch)
 			branchOpts = append(branchOpts, WithForceDelete())
@@ -391,7 +391,7 @@ func (c *RemoveCommand) removePrunable(ctx context.Context, branch string, opts 
 	}
 	result.GitOutput = brOut
 
-	c.Log.Debug("run completed",
+	c.Log.DebugContext(ctx, "run completed",
 		"category", LogCategoryRemove,
 		"branch", branch,
 		"prunable", true)
@@ -402,7 +402,7 @@ func (c *RemoveCommand) removePrunable(ctx context.Context, branch string, opts 
 // cleanupEmptyParentDirs removes empty parent directories up to WorktreeDestBaseDir.
 // Returns the list of directories that were removed. Errors are ignored since
 // cleanup failures should not fail the overall remove operation.
-func (c *RemoveCommand) cleanupEmptyParentDirs(wtPath string) []string {
+func (c *RemoveCommand) cleanupEmptyParentDirs(ctx context.Context, wtPath string) []string {
 	var cleaned []string
 	baseDir := c.Config.WorktreeDestBaseDir
 	if baseDir == "" {
@@ -421,7 +421,7 @@ func (c *RemoveCommand) cleanupEmptyParentDirs(wtPath string) []string {
 		if err := c.FS.Remove(current); err != nil {
 			break
 		}
-		c.Log.Debug("removed empty dir",
+		c.Log.DebugContext(ctx, "removed empty dir",
 			"category", LogCategoryRemove,
 			"dir", current)
 		cleaned = append(cleaned, current)
@@ -488,7 +488,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 	result.WorktreePath = wtInfo.Path
 	result.Prunable = wtInfo.Prunable
 
-	c.Log.Debug("checking",
+	c.Log.DebugContext(ctx, "checking",
 		"category", LogCategoryRemove,
 		"branch", branch,
 		"path", wtInfo.Path,
@@ -499,7 +499,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 		if reason := c.checkPrunableSkipReason(ctx, branch, opts.Target, opts.Force); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
-			c.Log.Debug("skip",
+			c.Log.DebugContext(ctx, "skip",
 				"category", LogCategoryRemove,
 				"reason", reason,
 				"branch", branch)
@@ -520,7 +520,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 		if reason := c.checkSkipReason(ctx, wt, opts.Cwd, opts.Target, opts.Force); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
-			c.Log.Debug("skip",
+			c.Log.DebugContext(ctx, "skip",
 				"category", LogCategoryRemove,
 				"reason", reason,
 				"branch", branch)
@@ -533,7 +533,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 	if opts.Target != "" {
 		result.CleanReason = c.getCleanReason(ctx, branch, opts.Target)
 		if result.CleanReason != "" {
-			c.Log.Debug("clean reason",
+			c.Log.DebugContext(ctx, "clean reason",
 				"category", LogCategoryRemove,
 				"reason", result.CleanReason,
 				"branch", branch)
