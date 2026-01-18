@@ -339,14 +339,11 @@ func TestListCommand_VerboseFlag_Integration(t *testing.T) {
 	t.Parallel()
 
 	t.Run("DoubleVerboseOutputsDebugLog", func(t *testing.T) {
-		// Not parallel: replaces global GenerateCommandID
-		orig := twig.GenerateCommandID
-		twig.GenerateCommandID = func() string { return "testid00" }
-		t.Cleanup(func() { twig.GenerateCommandID = orig })
+		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
 
-		cmd := newRootCmd()
+		cmd := newRootCmd(WithIDGenerator(func() string { return "testid00" }))
 
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}
