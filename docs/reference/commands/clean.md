@@ -163,12 +163,8 @@ With `-vv`, debug logging is enabled to trace internal operations:
 
 ```txt
 twig clean --check -vv
-2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] clean: run started check=true force=0 target=
-2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] clean: target resolved target=main
-2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] git: git -C /path/to/repo worktree list --porcelain
-2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] clean: worktrees listed count=3
 2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] clean: checking worktree branch=feat/old-branch
-2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] clean: check completed branch=feat/old-branch canRemove=true reason=merged skipReason=
+2026-01-18 12:34:56 [DEBUG] [a1b2c3d4] clean: check completed branch=feat/old-branch canRemove=true
 clean:
   feat/old-branch (merged)
 ```
