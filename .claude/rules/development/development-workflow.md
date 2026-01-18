@@ -26,34 +26,7 @@ When modifying a subcommand, pay special attention to its behavior:
 - Check error handling and exit codes
 - Understand the command's output format
 
-### 2. TDD Cycle
-
-Follow the Red-Green-Refactor cycle:
-
-#### Red: Write Failing Tests
-
-- Write tests that define expected behavior before implementation
-- Focus on behavior, not implementation details
-- Run tests to confirm they fail for the expected reason
-
-#### Green: Implement Changes
-
-- Write minimal code to make tests pass
-- Follow existing patterns and conventions in the codebase
-- Keep changes focused and minimal
-
-#### Refactor
-
-- Improve code structure while keeping tests green
-- Remove duplication and improve readability
-- Run tests after each refactoring step
-
-#### Update Existing Tests
-
-- Check related unit tests (`*_test.go`) and integration tests (`*_integration_test.go`)
-- Modify or remove obsolete tests if needed
-
-### 3. Update Documentation
+### 2. Update Documentation
 
 If the changes affect subcommand behavior, update the documentation:
 
@@ -61,7 +34,7 @@ If the changes affect subcommand behavior, update the documentation:
 - Document new flags, arguments, or behavior changes
 - Update examples if needed
 
-### 4. Sync Plugin Docs
+### 3. Sync Plugin Docs
 
 If you modified files in `docs/reference/`, run:
 
@@ -71,7 +44,7 @@ make sync-plugin-docs
 
 See @docs/development/plugin-docs-sync.md for details.
 
-### 5. Verify All Tests Pass
+### 4. Verify All Tests Pass
 
 Run the full test suite before completing:
 
@@ -82,7 +55,7 @@ go test -tags=integration ./...
 This command runs both unit tests and integration tests.
 All tests must pass before the modification is considered complete.
 
-### 6. Run Linter
+### 5. Run Linter
 
 Run golangci-lint to check code quality:
 
