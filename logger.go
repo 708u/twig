@@ -162,6 +162,7 @@ const (
 	LogCategoryConfig = "config"
 	LogCategoryGlob   = "glob"
 	LogCategoryRemove = "remove"
+	LogCategoryClean  = "clean"
 )
 
 // Command ID generation settings.

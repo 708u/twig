@@ -44,6 +44,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Run in default mode (dry-run equivalent)
@@ -103,6 +104,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
@@ -160,6 +162,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Verbose: true})
@@ -243,6 +246,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Verbose: true})
@@ -283,6 +287,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Verbose: true})
@@ -320,6 +325,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Run with cwd inside the worktree
@@ -359,6 +365,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Run with --yes
@@ -423,6 +430,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Check against develop (should find feature as merged)
@@ -461,6 +469,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{})
@@ -503,6 +512,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Run with --yes
@@ -551,6 +561,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Run with --check
@@ -598,6 +609,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Without force, should skip
@@ -667,6 +679,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Without force, both should be skipped
@@ -729,6 +742,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Without force, should skip
@@ -787,6 +801,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Even with -ff, should skip current directory
@@ -859,6 +874,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
@@ -935,6 +951,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
@@ -980,6 +997,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Check mode should detect prunable branch
@@ -1054,6 +1072,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Execute clean (not check mode) - this should actually delete the branch
@@ -1140,6 +1159,7 @@ func TestCleanCommand_Integration(t *testing.T) {
 			FS:     osFS{},
 			Git:    NewGitRunner(mainDir),
 			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
 		}
 
 		// Execute clean (not check mode) - this should actually delete the branch
