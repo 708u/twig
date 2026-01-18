@@ -47,11 +47,12 @@ type InitCommander interface {
 }
 
 type options struct {
-	addCommander    AddCommander    // nil = use default
-	cleanCommander  CleanCommander  // nil = use default
-	listCommander   ListCommander   // nil = use default
-	removeCommander RemoveCommander // nil = use default
-	initCommander   InitCommander   // nil = use default
+	addCommander       AddCommander    // nil = use default
+	cleanCommander     CleanCommander  // nil = use default
+	listCommander      ListCommander   // nil = use default
+	removeCommander    RemoveCommander // nil = use default
+	initCommander      InitCommander   // nil = use default
+	commandIDGenerator func() string   // nil = use twig.GenerateCommandID
 }
 
 // Option configures newRootCmd.
@@ -89,6 +90,13 @@ func WithRemoveCommander(cmd RemoveCommander) Option {
 func WithInitCommander(cmd InitCommander) Option {
 	return func(o *options) {
 		o.initCommander = cmd
+	}
+}
+
+// WithCommandIDGenerator sets the command ID generator for testing.
+func WithCommandIDGenerator(gen func() string) Option {
+	return func(o *options) {
+		o.commandIDGenerator = gen
 	}
 }
 
@@ -340,7 +348,15 @@ Use --file with --sync or --carry to target specific files:
 			log := twig.NewNopLogger()
 			if verbosity >= 2 {
 				handler := twig.NewCLIHandler(cmd.ErrOrStderr(), twig.VerbosityToLevel(verbosity))
-				log = slog.New(handler)
+				// Add command ID for log grouping
+				idGen := twig.GenerateCommandID
+				if o.commandIDGenerator != nil {
+					idGen = o.commandIDGenerator
+				}
+				handlerWithID := handler.WithAttrs([]slog.Attr{
+					twig.LogAttrKeyCmdID.Attr(idGen()),
+				})
+				log = slog.New(handlerWithID)
 			}
 
 			var listCmd ListCommander

@@ -343,7 +343,7 @@ func TestListCommand_VerboseFlag_Integration(t *testing.T) {
 
 		_, mainDir := testutil.SetupTestRepo(t)
 
-		cmd := newRootCmd()
+		cmd := newRootCmd(WithCommandIDGenerator(func() string { return "testid00" }))
 
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}
@@ -357,9 +357,9 @@ func TestListCommand_VerboseFlag_Integration(t *testing.T) {
 			t.Fatalf("Execute failed: %v", err)
 		}
 
-		// Verify debug log is output to stderr
-		if !strings.Contains(stderr.String(), "[DEBUG] git:") {
-			t.Errorf("stderr should contain debug log, got: %q", stderr.String())
+		// Verify debug log is output to stderr (format: [DEBUG] [cmd_id] git:)
+		if !strings.Contains(stderr.String(), "[DEBUG] [testid00] git:") {
+			t.Errorf("stderr should contain debug log with cmd_id, got: %q", stderr.String())
 		}
 
 		// Verify normal output is still on stdout

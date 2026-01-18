@@ -2,18 +2,22 @@ package twig
 
 import (
 	"context"
-	"fmt"
+	"crypto/rand"
+	"encoding/hex"
 	"io"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 )
 
 // CLIHandler is a slog.Handler that outputs plain text for CLI usage.
-// Format: "2006-01-02 15:04:05 [LEVEL] category: message"
+// Format: "2006-01-02 15:04:05 [LEVEL] [cmd_id] category: message"
 type CLIHandler struct {
 	w     io.Writer
 	level slog.Level
+	attrs []slog.Attr
+	cmdID string
 	mu    sync.Mutex
 }
 
@@ -29,7 +33,7 @@ func (h *CLIHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 // Handle writes a log record to the handler's writer.
-// Format: 2006-01-02 15:04:05 [LEVEL] category: message
+// Format: 2006-01-02 15:04:05 [LEVEL] [cmd_id] category: message
 func (h *CLIHandler) Handle(ctx context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -37,28 +41,70 @@ func (h *CLIHandler) Handle(ctx context.Context, r slog.Record) error {
 	timestamp := r.Time.Format("2006-01-02 15:04:05")
 	level := strings.ToUpper(r.Level.String())
 
-	// Get category from attributes
+	// Get category from record attributes (takes precedence over handler attrs)
 	var category string
 	r.Attrs(func(a slog.Attr) bool {
-		if a.Key == "category" {
+		if a.Key == LogAttrKeyCategory.String() {
 			category = a.Value.String()
 			return false
 		}
 		return true
 	})
 
-	if category != "" {
-		_, err := fmt.Fprintf(h.w, "%s [%s] %s: %s\n", timestamp, level, category, r.Message)
-		return err
+	// Fall back to handler's stored attrs if not found in record
+	if category == "" {
+		for _, a := range h.attrs {
+			if a.Key == LogAttrKeyCategory.String() {
+				category = a.Value.String()
+				break
+			}
+		}
 	}
-	_, err := fmt.Fprintf(h.w, "%s [%s] %s\n", timestamp, level, r.Message)
+
+	// Build output with optional cmd_id
+	var sb strings.Builder
+	sb.WriteString(timestamp)
+	sb.WriteString(" [")
+	sb.WriteString(level)
+	sb.WriteString("]")
+
+	if h.cmdID != "" {
+		sb.WriteString(" [")
+		sb.WriteString(h.cmdID)
+		sb.WriteString("]")
+	}
+
+	if category != "" {
+		sb.WriteString(" ")
+		sb.WriteString(category)
+		sb.WriteString(": ")
+	} else {
+		sb.WriteString(" ")
+	}
+	sb.WriteString(r.Message)
+	sb.WriteString("\n")
+
+	_, err := io.WriteString(h.w, sb.String())
 	return err
 }
 
 // WithAttrs returns a new handler with the given attributes.
-// Currently not implemented: attrs are ignored. Use Handle's attrs instead.
-func (h *CLIHandler) WithAttrs(_ []slog.Attr) slog.Handler {
-	return h
+// The cmd_id attribute is stored separately for efficient access.
+func (h *CLIHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	newHandler := &CLIHandler{
+		w:     h.w,
+		level: h.level,
+		attrs: slices.Clone(h.attrs),
+		cmdID: h.cmdID,
+	}
+	for _, a := range attrs {
+		if a.Key == LogAttrKeyCmdID.String() {
+			newHandler.cmdID = a.Value.String()
+		} else {
+			newHandler.attrs = append(newHandler.attrs, a)
+		}
+	}
+	return newHandler
 }
 
 // WithGroup returns a new handler with the given group name.
@@ -90,10 +136,54 @@ func VerbosityToLevel(verbosity int) slog.Level {
 	}
 }
 
-// Log categories for consistent output prefixes.
+// LogAttrKey is a type-safe key for slog attributes.
+type LogAttrKey string
+
+// String returns the string value of the key.
+func (k LogAttrKey) String() string {
+	return string(k)
+}
+
+// Attr creates a slog.Attr with this key and the given value.
+func (k LogAttrKey) Attr(value string) slog.Attr {
+	return slog.String(string(k), value)
+}
+
+// Log attribute keys for slog records.
+const (
+	LogAttrKeyCategory LogAttrKey = "category"
+	LogAttrKeyCmdID    LogAttrKey = "cmd_id"
+)
+
+// Log category values for consistent output prefixes.
 const (
 	LogCategoryDebug  = "debug"
 	LogCategoryGit    = "git"
 	LogCategoryConfig = "config"
 	LogCategoryGlob   = "glob"
 )
+
+// Command ID generation settings.
+const (
+	// DefaultCommandIDBytes is the number of random bytes for command ID generation.
+	// This produces an 8-character hex string (4 bytes = 8 hex chars).
+	DefaultCommandIDBytes = 4
+)
+
+// GenerateCommandID generates a random command ID for log grouping.
+// Returns an 8-character hex string (e.g., "a1b2c3d4").
+func GenerateCommandID() string {
+	return GenerateCommandIDWithLength(DefaultCommandIDBytes)
+}
+
+// GenerateCommandIDWithLength generates a command ID with the specified byte length.
+// The returned string is hex-encoded, so it has 2*byteLen characters.
+func GenerateCommandIDWithLength(byteLen int) string {
+	b := make([]byte, byteLen)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failure is extremely rare (system-level issue).
+		// Return empty to skip cmd_id in log output.
+		return ""
+	}
+	return hex.EncodeToString(b)
+}
