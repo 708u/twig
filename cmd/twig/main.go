@@ -309,23 +309,23 @@ Use --file with --sync or --carry to target specific files:
 				return fmt.Errorf("--reason requires --lock")
 			}
 
+			idGen := twig.GenerateCommandID
+			if o.commandIDGenerator != nil {
+				idGen = o.commandIDGenerator
+			}
+			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
+
 			// Resolve CarryFrom path
 			var carryFrom string
 			if carryEnabled {
 				carryValue, _ := cmd.Flags().GetString("carry")
-				git := twig.NewGitRunner(cwd)
+				git := twig.NewGitRunner(cwd, twig.WithLogger(log))
 				var err error
 				carryFrom, err = resolveCarryFrom(cmd.Context(), carryValue, originalCwd, git)
 				if err != nil {
 					return err
 				}
 			}
-
-			idGen := twig.GenerateCommandID
-			if o.commandIDGenerator != nil {
-				idGen = o.commandIDGenerator
-			}
-			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
 
 			var addCmd AddCommander
 			if o.addCommander != nil {
