@@ -40,9 +40,6 @@ func NewCleanCommand(fs FileSystem, git *GitRunner, cfg *Config, log *slog.Logge
 
 // NewDefaultCleanCommand creates a new CleanCommand with production dependencies.
 func NewDefaultCleanCommand(cfg *Config, log *slog.Logger) *CleanCommand {
-	if log == nil {
-		log = NewNopLogger()
-	}
 	return NewCleanCommand(osFS{}, NewGitRunnerWithLogger(cfg.WorktreeSourceDir, log), cfg, log)
 }
 
