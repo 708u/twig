@@ -1245,4 +1245,66 @@ func TestCleanCommand_Integration(t *testing.T) {
 			}
 		}
 	})
+
+	// Known limitation: local-only fast-forward merges are not detected as merged.
+	// This is a tradeoff to prevent false positives on newly created branches.
+	// See: https://github.com/708u/twig/pull/104
+	t.Run("KnownLimitation_LocalFastForwardMergeNotDetected", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a worktree and make a commit
+		wtPath := filepath.Join(repoDir, "feature", "local-ff")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/local-ff", wtPath)
+
+		testFile := filepath.Join(wtPath, "feature.txt")
+		if err := os.WriteFile(testFile, []byte("feature content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "feature.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add feature")
+
+		// Fast-forward merge (no --no-ff)
+		// After this, main and feature/local-ff point to the same commit
+		testutil.RunGit(t, mainDir, "merge", "feature/local-ff")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Known limitation: the branch is skipped because it points to the same
+		// commit as main after fast-forward merge. We cannot distinguish this
+		// from a newly created branch that was never worked on.
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+
+		candidate := result.Candidates[0]
+		if candidate.Branch != "feature/local-ff" {
+			t.Errorf("expected branch feature/local-ff, got %s", candidate.Branch)
+		}
+
+		// This documents the limitation: the branch IS merged but is skipped
+		if !candidate.Skipped {
+			t.Error("known limitation: local ff merge should be skipped (same commit as target)")
+		}
+
+		if candidate.SkipReason != SkipNotMerged {
+			t.Errorf("skip reason should be %s, got %s", SkipNotMerged, candidate.SkipReason)
+		}
+	})
 }
