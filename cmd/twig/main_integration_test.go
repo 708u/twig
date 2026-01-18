@@ -339,7 +339,10 @@ func TestListCommand_VerboseFlag_Integration(t *testing.T) {
 	t.Parallel()
 
 	t.Run("DoubleVerboseOutputsDebugLog", func(t *testing.T) {
-		t.Parallel()
+		// Not parallel: replaces global GenerateCommandID
+		orig := twig.GenerateCommandID
+		twig.GenerateCommandID = func() string { return "testid00" }
+		t.Cleanup(func() { twig.GenerateCommandID = orig })
 
 		_, mainDir := testutil.SetupTestRepo(t)
 
@@ -358,8 +361,8 @@ func TestListCommand_VerboseFlag_Integration(t *testing.T) {
 		}
 
 		// Verify debug log is output to stderr (format: [DEBUG] [cmd_id] git:)
-		if !strings.Contains(stderr.String(), "[DEBUG]") || !strings.Contains(stderr.String(), "git:") {
-			t.Errorf("stderr should contain debug log with git category, got: %q", stderr.String())
+		if !strings.Contains(stderr.String(), "[DEBUG] [testid00] git:") {
+			t.Errorf("stderr should contain debug log with cmd_id, got: %q", stderr.String())
 		}
 
 		// Verify normal output is still on stdout
