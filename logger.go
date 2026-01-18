@@ -12,7 +12,7 @@ import (
 )
 
 // CLIHandler is a slog.Handler that outputs plain text for CLI usage.
-// Format: "2006-01-02 15:04:05 [LEVEL] [cmd_id] category: message"
+// Format: "2006-01-02 15:04:05.000 [LEVEL] [cmd_id] category: message"
 type CLIHandler struct {
 	w     io.Writer
 	level slog.Level
@@ -33,12 +33,12 @@ func (h *CLIHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 // Handle writes a log record to the handler's writer.
-// Format: 2006-01-02 15:04:05 [LEVEL] [cmd_id] category: message
+// Format: 2006-01-02 15:04:05.000 [LEVEL] [cmd_id] category: message
 func (h *CLIHandler) Handle(ctx context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	timestamp := r.Time.Format("2006-01-02 15:04:05")
+	timestamp := r.Time.Format("2006-01-02 15:04:05.000")
 	level := strings.ToUpper(r.Level.String())
 
 	// Get category from record attributes (takes precedence over handler attrs)

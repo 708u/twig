@@ -40,7 +40,7 @@ twig list -q
 
 # Debug output (shows git command traces)
 twig list -vv
-2026-01-17 12:34:56 [DEBUG] git: git -C /Users/user/repo worktree list --porcelain
+2026-01-17 12:34:56.000 [DEBUG] git: git -C /Users/user/repo worktree list --porcelain
 /Users/user/repo                                   abc1234 [main]
 /Users/user/repo-worktree/feat/add-list-command    def5678 [feat/add-list-command]
 /Users/user/repo-worktree/feat/add-move-command    012abcd [feat/add-move-command]
