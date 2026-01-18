@@ -236,8 +236,6 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 		}
 	}
 
-	fmt.Fprintf(&stdout, "twig remove: %s\n", r.Branch)
-
 	return FormatResult{Stdout: stdout.String()}
 }
 

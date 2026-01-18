@@ -1,6 +1,6 @@
 .PHONY: build install lint fmt sync-plugin-docs
 
-VERSION ?= dev
+VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")-dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE    ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
@@ -15,7 +15,7 @@ lint:
 	golangci-lint run --build-tags=integration ./...
 
 fmt:
-	golangci-lint fmt --build-tags=integration ./...
+	golangci-lint fmt ./...
 
 sync-plugin-docs:
 	./scripts/sync-plugin-docs.sh

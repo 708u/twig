@@ -183,8 +183,6 @@ clean:
   fix/completed (upstream gone)
 
 Proceed? [y/N]: y
-twig clean: feature/old-branch
-twig clean: fix/completed
 
 # Show with skip reasons and changed files
 twig clean -v
@@ -197,12 +195,16 @@ skip:
     ?? tmp/debug.log
   feature/wip (not merged)
 
-Proceed? [y/N]:
+Proceed? [y/N]: y
+Removed worktree and branch: feature/old-branch
 
-# Remove without confirmation
+# Remove without confirmation (silent on success)
 twig clean --yes
-twig clean: feature/old-branch
-twig clean: fix/completed
+
+# Remove with verbose output
+twig clean --yes -v
+Removed worktree and branch: feature/old-branch
+Removed worktree and branch: fix/completed
 
 # Only check candidates (no prompt, no removal)
 twig clean --check
