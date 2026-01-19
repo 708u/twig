@@ -488,7 +488,7 @@ func (g *GitRunner) ChangedFiles(ctx context.Context) ([]FileStatus, error) {
 		return nil, fmt.Errorf("failed to check git status: %w", err)
 	}
 
-	var files []FileStatus
+	files := make([]FileStatus, 0)
 	for _, line := range strings.Split(string(output), "\n") {
 		if len(line) < 3 {
 			continue

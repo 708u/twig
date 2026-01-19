@@ -28,7 +28,7 @@ func TestGitRunner_ChangedFiles(t *testing.T) {
 		{
 			name:         "no changes",
 			statusOutput: "",
-			want:         nil,
+			want:         make([]FileStatus, 0),
 		},
 		{
 			name:         "modified file",
