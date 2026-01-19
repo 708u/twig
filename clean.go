@@ -47,14 +47,13 @@ func NewDefaultCleanCommand(cfg *Config, log *slog.Logger) *CleanCommand {
 
 // CleanCandidate represents a worktree that can be cleaned.
 type CleanCandidate struct {
-	Branch          string
-	WorktreePath    string
-	Prunable        bool
-	Skipped         bool
-	SkipReason      SkipReason
-	CleanReason     CleanReason
-	ChangedFiles    []FileStatus
-	ChangedFilesErr error // Error from ChangedFiles() call (nil means success)
+	Branch       string
+	WorktreePath string
+	Prunable     bool
+	Skipped      bool
+	SkipReason   SkipReason
+	CleanReason  CleanReason
+	ChangedFiles []FileStatus
 }
 
 // CleanResult aggregates results from clean operations.
@@ -273,14 +272,13 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			}
 
 			candidate := CleanCandidate{
-				Branch:          wt.Branch,
-				WorktreePath:    checkResult.WorktreePath,
-				Prunable:        checkResult.Prunable,
-				Skipped:         !checkResult.CanRemove,
-				SkipReason:      checkResult.SkipReason,
-				CleanReason:     checkResult.CleanReason,
-				ChangedFiles:    checkResult.ChangedFiles,
-				ChangedFilesErr: checkResult.ChangedFilesErr,
+				Branch:       wt.Branch,
+				WorktreePath: checkResult.WorktreePath,
+				Prunable:     checkResult.Prunable,
+				Skipped:      !checkResult.CanRemove,
+				SkipReason:   checkResult.SkipReason,
+				CleanReason:  checkResult.CleanReason,
+				ChangedFiles: checkResult.ChangedFiles,
 			}
 
 			c.Log.DebugContext(ctx, "check completed",

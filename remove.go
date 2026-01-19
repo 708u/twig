@@ -40,14 +40,13 @@ const (
 
 // CheckResult holds the result of checking whether a worktree can be removed.
 type CheckResult struct {
-	CanRemove       bool         // Whether the worktree can be removed
-	SkipReason      SkipReason   // Reason if cannot be removed
-	CleanReason     CleanReason  // Reason if can be removed (for clean command display)
-	Prunable        bool         // Whether worktree is prunable (directory was deleted externally)
-	WorktreePath    string       // Path to the worktree
-	Branch          string       // Branch name
-	ChangedFiles    []FileStatus // Uncommitted changes (for verbose output)
-	ChangedFilesErr error        // Error from ChangedFiles() call (nil means success)
+	CanRemove    bool         // Whether the worktree can be removed
+	SkipReason   SkipReason   // Reason if cannot be removed
+	CleanReason  CleanReason  // Reason if can be removed (for clean command display)
+	Prunable     bool         // Whether worktree is prunable (directory was deleted externally)
+	WorktreePath string       // Path to the worktree
+	Branch       string       // Branch name
+	ChangedFiles []FileStatus // Uncommitted changes (for verbose output)
 }
 
 // CheckOptions configures the check operation.
@@ -524,8 +523,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 		// Get changed files for verbose output (low cost, useful for all cases)
 		changedFiles, changedFilesErr := c.Git.InDir(wtInfo.Path).ChangedFiles(ctx)
 		result.ChangedFiles = changedFiles
-		result.ChangedFilesErr = changedFilesErr
-		if reason := c.checkSkipReason(ctx, wt, opts.Cwd, opts.Target, opts.Force, result.ChangedFiles, result.ChangedFilesErr, opts.MergeStatus); reason != "" {
+		if reason := c.checkSkipReason(ctx, wt, opts.Cwd, opts.Target, opts.Force, changedFiles, changedFilesErr, opts.MergeStatus); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
 			c.Log.DebugContext(ctx, "skip",
