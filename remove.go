@@ -522,8 +522,12 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 		}
 		// Get changed files for verbose output (low cost, useful for all cases)
 		changedFiles, changedFilesErr := c.Git.InDir(wtInfo.Path).ChangedFiles(ctx)
+		if changedFilesErr != nil {
+			// git status failed - return error to caller for proper handling
+			return result, fmt.Errorf("failed to check uncommitted changes: %w", changedFilesErr)
+		}
 		result.ChangedFiles = changedFiles
-		if reason := c.checkSkipReason(ctx, wt, opts, changedFiles, changedFilesErr); reason != "" {
+		if reason := c.checkSkipReason(ctx, wt, opts, changedFiles); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
 			c.Log.DebugContext(ctx, "skip",
@@ -551,8 +555,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 // checkSkipReason checks if worktree should be skipped and returns the reason.
 // force level controls which conditions can be bypassed (matches git worktree behavior).
 // changedFiles is pre-fetched to avoid redundant git status calls.
-// changedFilesErr indicates if changedFiles fetch failed (nil means success, even if changedFiles is empty).
-func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts CheckOptions, changedFiles []FileStatus, changedFilesErr error) SkipReason {
+func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts CheckOptions, changedFiles []FileStatus) SkipReason {
 	// Check detached HEAD (never bypassed)
 	if wt.Detached {
 		return SkipDetached
@@ -576,8 +579,7 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts C
 		}
 
 		// Check for uncommitted changes using pre-fetched result
-		// If ChangedFiles() failed, treat as having changes (safe default)
-		if changedFilesErr != nil || len(changedFiles) > 0 {
+		if len(changedFiles) > 0 {
 			return SkipHasChanges
 		}
 	}
