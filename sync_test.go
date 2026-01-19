@@ -7,7 +7,7 @@ import (
 	"github.com/708u/twig/internal/testutil"
 )
 
-func TestSyncCommand_resolveSource(t *testing.T) {
+func Test_resolveSource(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -43,13 +43,7 @@ func TestSyncCommand_resolveSource(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cmd := &SyncCommand{
-				Config: &Config{
-					DefaultSource: tt.defaultSource,
-				},
-			}
-
-			got, err := cmd.resolveSource(t.Context(), tt.source)
+			got, err := resolveSource(tt.source, tt.defaultSource)
 
 			if tt.wantErr {
 				if err == nil {

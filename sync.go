@@ -13,19 +13,19 @@ const LogCategorySync = "sync"
 
 // SyncCommand syncs symlinks and submodules from source worktree to target worktrees.
 type SyncCommand struct {
-	FS     FileSystem
-	Git    *GitRunner
-	Config *Config
-	Log    *slog.Logger
+	FS  FileSystem
+	Git *GitRunner
+	Log *slog.Logger
 }
 
 // SyncOptions configures the sync operation.
 type SyncOptions struct {
-	Check   bool   // Show what would be synced (dry-run)
-	Force   bool   // Replace existing symlinks
-	All     bool   // Sync all worktrees (except main)
-	Source  string // Source branch (empty = use default_source config)
-	Verbose bool   // Verbose output
+	Check         bool   // Show what would be synced (dry-run)
+	Force         bool   // Replace existing symlinks
+	All           bool   // Sync all worktrees (except main)
+	Source        string // Source branch (empty = use DefaultSource)
+	DefaultSource string // Fallback when Source is empty (from config)
+	Verbose       bool   // Verbose output
 }
 
 // SyncTargetResult holds the result of syncing a single worktree.
@@ -48,21 +48,20 @@ type SyncResult struct {
 }
 
 // NewSyncCommand creates a SyncCommand with explicit dependencies.
-func NewSyncCommand(fs FileSystem, git *GitRunner, cfg *Config, log *slog.Logger) *SyncCommand {
+func NewSyncCommand(fs FileSystem, git *GitRunner, log *slog.Logger) *SyncCommand {
 	if log == nil {
 		log = NewNopLogger()
 	}
 	return &SyncCommand{
-		FS:     fs,
-		Git:    git,
-		Config: cfg,
-		Log:    log,
+		FS:  fs,
+		Git: git,
+		Log: log,
 	}
 }
 
 // NewDefaultSyncCommand creates a SyncCommand with production defaults.
-func NewDefaultSyncCommand(cfg *Config, log *slog.Logger) *SyncCommand {
-	return NewSyncCommand(osFS{}, NewGitRunner(cfg.WorktreeSourceDir, WithLogger(log)), cfg, log)
+func NewDefaultSyncCommand(gitDir string, log *slog.Logger) *SyncCommand {
+	return NewSyncCommand(osFS{}, NewGitRunner(gitDir, WithLogger(log)), log)
 }
 
 // SyncFormatOptions configures sync output formatting.
@@ -200,7 +199,7 @@ func (c *SyncCommand) Run(ctx context.Context, targets []string, cwd string, opt
 	result.Check = opts.Check
 
 	// Resolve source branch
-	sourceBranch, err := c.resolveSource(ctx, opts.Source)
+	sourceBranch, err := resolveSource(opts.Source, opts.DefaultSource)
 	if err != nil {
 		return result, err
 	}
@@ -272,14 +271,13 @@ func (c *SyncCommand) Run(ctx context.Context, targets []string, cwd string, opt
 }
 
 // resolveSource resolves the source branch.
-func (c *SyncCommand) resolveSource(_ context.Context, source string) (string, error) {
+func resolveSource(source, defaultSource string) (string, error) {
 	if source != "" {
 		return source, nil
 	}
 
-	// Use default_source from config
-	if c.Config.DefaultSource != "" {
-		return c.Config.DefaultSource, nil
+	if defaultSource != "" {
+		return defaultSource, nil
 	}
 
 	return "", fmt.Errorf("source branch not specified and no default_source configured\nhint: use --source <branch> or set default_source in .twig/settings.toml")

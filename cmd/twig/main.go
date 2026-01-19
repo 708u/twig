@@ -780,15 +780,16 @@ Examples:
 			if o.syncCommander != nil {
 				syncCmdRunner = o.syncCommander
 			} else {
-				syncCmdRunner = twig.NewDefaultSyncCommand(cfg, log)
+				syncCmdRunner = twig.NewDefaultSyncCommand(cfg.WorktreeSourceDir, log)
 			}
 
 			result, err := syncCmdRunner.Run(cmd.Context(), args, cwd, twig.SyncOptions{
-				Check:   check,
-				Force:   force,
-				All:     all,
-				Source:  source,
-				Verbose: verbose,
+				Check:         check,
+				Force:         force,
+				All:           all,
+				Source:        source,
+				DefaultSource: cfg.DefaultSource,
+				Verbose:       verbose,
 			})
 			if err != nil {
 				return err
