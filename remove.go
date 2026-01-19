@@ -578,17 +578,10 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, cwd, t
 			return SkipDirtySubmodule
 		}
 
-		// Use pre-fetched changedFiles instead of calling HasChanges() again
-		if changedFilesErr == nil {
-			if len(changedFiles) > 0 {
-				return SkipHasChanges
-			}
-		} else {
-			// Fallback: changedFiles was not fetched (error occurred)
-			hasChanges, err := c.Git.InDir(wt.Path).HasChanges(ctx)
-			if err != nil || hasChanges {
-				return SkipHasChanges
-			}
+		// Check for uncommitted changes using pre-fetched result
+		// If ChangedFiles() failed, treat as having changes (safe default)
+		if changedFilesErr != nil || len(changedFiles) > 0 {
+			return SkipHasChanges
 		}
 	}
 
