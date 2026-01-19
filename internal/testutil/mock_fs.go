@@ -5,12 +5,35 @@ import (
 	"io/fs"
 	"os"
 	"slices"
+	"time"
 )
+
+// NewError creates a simple error for testing.
+func NewError(msg string) error {
+	return errors.New(msg)
+}
+
+// MockFileInfo is a mock implementation of fs.FileInfo for testing.
+type MockFileInfo struct {
+	NameVal    string
+	SizeVal    int64
+	ModeVal    fs.FileMode
+	ModTimeVal time.Time
+	IsDirVal   bool
+}
+
+func (m *MockFileInfo) Name() string       { return m.NameVal }
+func (m *MockFileInfo) Size() int64        { return m.SizeVal }
+func (m *MockFileInfo) Mode() fs.FileMode  { return m.ModeVal }
+func (m *MockFileInfo) ModTime() time.Time { return m.ModTimeVal }
+func (m *MockFileInfo) IsDir() bool        { return m.IsDirVal }
+func (m *MockFileInfo) Sys() any           { return nil }
 
 // MockFS is a mock implementation of twig.FileSystem for testing.
 type MockFS struct {
 	// Override functions (takes precedence if set)
 	StatFunc       func(name string) (fs.FileInfo, error)
+	LstatFunc      func(name string) (fs.FileInfo, error)
 	SymlinkFunc    func(oldname, newname string) error
 	IsNotExistFunc func(err error) bool
 	GlobFunc       func(dir, pattern string) ([]string, error)
@@ -53,6 +76,16 @@ type MockFS struct {
 func (m *MockFS) Stat(name string) (fs.FileInfo, error) {
 	if m.StatFunc != nil {
 		return m.StatFunc(name)
+	}
+	if slices.Contains(m.ExistingPaths, name) {
+		return nil, nil
+	}
+	return nil, fs.ErrNotExist
+}
+
+func (m *MockFS) Lstat(name string) (fs.FileInfo, error) {
+	if m.LstatFunc != nil {
+		return m.LstatFunc(name)
 	}
 	if slices.Contains(m.ExistingPaths, name) {
 		return nil, nil

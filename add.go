@@ -273,8 +273,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		}
 	}
 
-	symlinks, err := c.createSymlinks(
-		c.Config.WorktreeSourceDir, wtPath, c.Config.Symlinks)
+	symlinks, err := createSymlinks(c.FS, c.Config.WorktreeSourceDir, wtPath, c.Config.Symlinks, CreateSymlinksOptions{})
 	if err != nil {
 		return result, err
 	}
@@ -335,53 +334,4 @@ func (c *AddCommand) createWorktree(ctx context.Context, branch, path string) ([
 	}
 
 	return output, nil
-}
-
-func (c *AddCommand) createSymlinks(
-	srcDir, dstDir string, patterns []string) ([]SymlinkResult, error) {
-	var results []SymlinkResult
-
-	for _, pattern := range patterns {
-		matches, err := c.FS.Glob(srcDir, pattern)
-		if err != nil {
-			return nil, fmt.Errorf("invalid glob pattern %s: %w", pattern, err)
-		}
-		if len(matches) == 0 {
-			results = append(results, SymlinkResult{
-				Skipped: true,
-				Reason:  fmt.Sprintf("%s does not match any files, skipping", pattern),
-			})
-			continue
-		}
-
-		for _, match := range matches {
-			src := filepath.Join(srcDir, match)
-			dst := filepath.Join(dstDir, match)
-
-			// Skip if destination already exists (e.g., git-tracked file checked out by worktree).
-			if _, err := c.FS.Stat(dst); err == nil {
-				results = append(results, SymlinkResult{
-					Src:     src,
-					Dst:     dst,
-					Skipped: true,
-					Reason:  fmt.Sprintf("skipping symlink for %s (already exists)", match),
-				})
-				continue
-			}
-
-			if dir := filepath.Dir(dst); dir != dstDir {
-				if err := c.FS.MkdirAll(dir, 0755); err != nil {
-					return nil, fmt.Errorf("failed to create directory for %s: %w", match, err)
-				}
-			}
-
-			if err := c.FS.Symlink(src, dst); err != nil {
-				return nil, fmt.Errorf("failed to create symlink for %s: %w", match, err)
-			}
-
-			results = append(results, SymlinkResult{Src: src, Dst: dst})
-		}
-	}
-
-	return results, nil
 }

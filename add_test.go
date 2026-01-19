@@ -2,6 +2,7 @@ package twig
 
 import (
 	"errors"
+	"io/fs"
 	"slices"
 	"strings"
 	"testing"
@@ -958,7 +959,7 @@ func TestAddResult_Format_Submodules(t *testing.T) {
 	})
 }
 
-func TestAddCommand_createSymlinks(t *testing.T) {
+func TestCreateSymlinks(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -1024,6 +1025,12 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 						".claude": {".claude"},
 					},
 					ExistingPaths: []string{"/dst/.claude"},
+					LstatFunc: func(name string) (fs.FileInfo, error) {
+						if name == "/dst/.claude" {
+							return &testutil.MockFileInfo{NameVal: ".claude"}, nil
+						}
+						return nil, fs.ErrNotExist
+					},
 				}
 			},
 			wantErr:        false,
@@ -1038,11 +1045,7 @@ func TestAddCommand_createSymlinks(t *testing.T) {
 
 			mockFS := tt.setupFS(t)
 
-			cmd := &AddCommand{
-				FS: mockFS,
-			}
-
-			results, err := cmd.createSymlinks("/src", "/dst", tt.targets)
+			results, err := createSymlinks(mockFS, "/src", "/dst", tt.targets, CreateSymlinksOptions{})
 
 			if tt.wantErr {
 				if err == nil {
