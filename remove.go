@@ -523,7 +523,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 		// Get changed files for verbose output (low cost, useful for all cases)
 		changedFiles, changedFilesErr := c.Git.InDir(wtInfo.Path).ChangedFiles(ctx)
 		result.ChangedFiles = changedFiles
-		if reason := c.checkSkipReason(ctx, wt, opts.Cwd, opts.Target, opts.Force, changedFiles, changedFilesErr, opts.MergeStatus); reason != "" {
+		if reason := c.checkSkipReason(ctx, wt, opts, changedFiles, changedFilesErr); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
 			c.Log.DebugContext(ctx, "skip",
@@ -552,25 +552,24 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 // force level controls which conditions can be bypassed (matches git worktree behavior).
 // changedFiles is pre-fetched to avoid redundant git status calls.
 // changedFilesErr indicates if changedFiles fetch failed (nil means success, even if changedFiles is empty).
-// mergeStatus is pre-fetched to avoid redundant git branch --merged calls.
-func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, cwd, target string, force WorktreeForceLevel, changedFiles []FileStatus, changedFilesErr error, mergeStatus BranchMergeStatus) SkipReason {
+func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts CheckOptions, changedFiles []FileStatus, changedFilesErr error) SkipReason {
 	// Check detached HEAD (never bypassed)
 	if wt.Detached {
 		return SkipDetached
 	}
 
 	// Check current directory (never bypassed)
-	if strings.HasPrefix(cwd, wt.Path) {
+	if strings.HasPrefix(opts.Cwd, wt.Path) {
 		return SkipCurrentDir
 	}
 
 	// Check locked
-	if wt.Locked && force < WorktreeForceLevelLocked {
+	if wt.Locked && opts.Force < WorktreeForceLevelLocked {
 		return SkipLocked
 	}
 
 	// Check dirty submodule and uncommitted changes
-	if force < WorktreeForceLevelUnclean {
+	if opts.Force < WorktreeForceLevelUnclean {
 		smStatus, err := c.Git.InDir(wt.Path).CheckSubmoduleCleanStatus(ctx)
 		if err == nil && smStatus == SubmoduleCleanStatusDirty {
 			return SkipDirtySubmodule
@@ -584,8 +583,8 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, cwd, t
 	}
 
 	// Check merged (only when target is specified)
-	if target != "" && force < WorktreeForceLevelUnclean {
-		return c.checkMergedSkipReason(ctx, wt.Branch, target, mergeStatus)
+	if opts.Target != "" && opts.Force < WorktreeForceLevelUnclean {
+		return c.checkMergedSkipReason(ctx, wt.Branch, opts.Target, opts.MergeStatus)
 	}
 
 	return ""
