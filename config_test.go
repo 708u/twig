@@ -359,6 +359,66 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 			t.Errorf("expected no warnings, got: %v", result.Warnings)
 		}
 	})
+
+	t.Run("RelativeDestBaseDirResolvedFromConfigDir", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		tmpDir, _ = filepath.EvalSymlinks(tmpDir)
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Project config with relative path
+		projectSettings := `worktree_destination_base_dir = "../workspace"
+`
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(tmpDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Relative path should be resolved from config directory (tmpDir)
+		// "../workspace" from tmpDir should resolve to sibling "workspace" directory
+		expected := filepath.Join(filepath.Dir(tmpDir), "workspace")
+		if result.Config.WorktreeDestBaseDir != expected {
+			t.Errorf("WorktreeDestBaseDir = %q, want %q", result.Config.WorktreeDestBaseDir, expected)
+		}
+	})
+
+	t.Run("AbsoluteDestBaseDirUnchanged", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		tmpDir, _ = filepath.EvalSymlinks(tmpDir)
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		absDestDir := "/absolute/path/to/worktrees"
+
+		// Project config with absolute path
+		projectSettings := `worktree_destination_base_dir = "` + absDestDir + `"
+`
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(tmpDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Absolute path should remain unchanged
+		if result.Config.WorktreeDestBaseDir != absDestDir {
+			t.Errorf("WorktreeDestBaseDir = %q, want %q", result.Config.WorktreeDestBaseDir, absDestDir)
+		}
+	})
 }
 
 func TestConfig_ShouldInitSubmodules(t *testing.T) {

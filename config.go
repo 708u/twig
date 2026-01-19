@@ -111,6 +111,9 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 	if destBaseDir == "" {
 		repoName := filepath.Base(srcDir)
 		destBaseDir = filepath.Join(srcDir, "..", repoName+"-worktree")
+	} else if !filepath.IsAbs(destBaseDir) {
+		// Resolve relative paths based on the config file directory
+		destBaseDir = filepath.Join(srcDir, destBaseDir)
 	}
 	destBaseDir, err = filepath.Abs(destBaseDir)
 	if err != nil {
