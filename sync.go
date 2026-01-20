@@ -3,6 +3,7 @@ package twig
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"slices"
 	"strings"
@@ -21,7 +22,6 @@ type SyncCommand struct {
 // SyncOptions configures the sync operation.
 type SyncOptions struct {
 	Check         bool   // Show what would be synced (dry-run)
-	Force         bool   // Replace existing symlinks
 	All           bool   // Sync all worktrees (except main)
 	Source        string // Source branch (empty = use DefaultSource)
 	DefaultSource string // Fallback when Source is empty (from config)
@@ -192,8 +192,7 @@ func (c *SyncCommand) Run(ctx context.Context, targets []string, cwd string, opt
 		LogAttrKeyCategory.String(), LogCategorySync,
 		"targets", targets,
 		"all", opts.All,
-		"check", opts.Check,
-		"force", opts.Force)
+		"check", opts.Check)
 
 	var result SyncResult
 	result.Check = opts.Check
@@ -347,18 +346,18 @@ func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target 
 		return result
 	}
 
-	// Sync symlinks
+	// Sync symlinks (always replace existing symlinks to ensure sync)
 	if len(cfg.Symlinks) > 0 {
 		if opts.Check {
 			// In check mode, predict what would be created
-			symlinks, err := c.predictSymlinks(sourcePath, target.Path, cfg.Symlinks, opts.Force)
+			symlinks, err := c.predictSymlinks(sourcePath, target.Path, cfg.Symlinks)
 			if err != nil {
 				result.Err = err
 				return result
 			}
 			result.Symlinks = symlinks
 		} else {
-			symlinks, err := createSymlinks(c.FS, sourcePath, target.Path, cfg.Symlinks, CreateSymlinksOptions{Force: opts.Force})
+			symlinks, err := createSymlinks(c.FS, sourcePath, target.Path, cfg.Symlinks, CreateSymlinksOptions{Force: true})
 			if err != nil {
 				result.Err = err
 				return result
@@ -402,7 +401,7 @@ func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target 
 }
 
 // predictSymlinks predicts what symlinks would be created without actually creating them.
-func (c *SyncCommand) predictSymlinks(srcDir, dstDir string, patterns []string, force bool) ([]SymlinkResult, error) {
+func (c *SyncCommand) predictSymlinks(srcDir, dstDir string, patterns []string) ([]SymlinkResult, error) {
 	var results []SymlinkResult
 
 	for _, pattern := range patterns {
@@ -424,17 +423,17 @@ func (c *SyncCommand) predictSymlinks(srcDir, dstDir string, patterns []string, 
 
 			// Check if destination already exists
 			if info, err := c.FS.Lstat(dst); err == nil {
-				isSymlink := info.Mode()&0o120000 != 0
-				if force && isSymlink {
-					// Would replace
+				isSymlink := info.Mode()&fs.ModeSymlink != 0
+				if isSymlink {
+					// Would replace existing symlink
 					results = append(results, SymlinkResult{Src: src, Dst: dst})
 				} else {
-					// Would skip
+					// Would skip regular file
 					results = append(results, SymlinkResult{
 						Src:     src,
 						Dst:     dst,
 						Skipped: true,
-						Reason:  fmt.Sprintf("skipping symlink for %s (already exists)", match),
+						Reason:  fmt.Sprintf("skipping symlink for %s (regular file exists)", match),
 					})
 				}
 			} else {

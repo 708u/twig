@@ -2,6 +2,7 @@ package twig
 
 import (
 	"fmt"
+	"io/fs"
 	"path/filepath"
 )
 
@@ -12,11 +13,11 @@ type CreateSymlinksOptions struct {
 
 // createSymlinks creates symlinks from srcDir to dstDir based on glob patterns.
 // Returns results for each symlink operation.
-func createSymlinks(fs FileSystem, srcDir, dstDir string, patterns []string, opts CreateSymlinksOptions) ([]SymlinkResult, error) {
+func createSymlinks(fsys FileSystem, srcDir, dstDir string, patterns []string, opts CreateSymlinksOptions) ([]SymlinkResult, error) {
 	var results []SymlinkResult
 
 	for _, pattern := range patterns {
-		matches, err := fs.Glob(srcDir, pattern)
+		matches, err := fsys.Glob(srcDir, pattern)
 		if err != nil {
 			return nil, fmt.Errorf("invalid glob pattern %s: %w", pattern, err)
 		}
@@ -33,12 +34,12 @@ func createSymlinks(fs FileSystem, srcDir, dstDir string, patterns []string, opt
 			dst := filepath.Join(dstDir, match)
 
 			// Check if destination already exists
-			if info, err := fs.Lstat(dst); err == nil && info != nil {
+			if info, err := fsys.Lstat(dst); err == nil && info != nil {
 				// Check if it's a symlink
-				isSymlink := info.Mode()&0o120000 != 0
+				isSymlink := info.Mode()&fs.ModeSymlink != 0
 				if opts.Force && isSymlink {
 					// Force mode: remove existing symlink and recreate
-					if err := fs.Remove(dst); err != nil {
+					if err := fsys.Remove(dst); err != nil {
 						return nil, fmt.Errorf("failed to remove existing symlink for %s: %w", match, err)
 					}
 				} else {
@@ -54,12 +55,12 @@ func createSymlinks(fs FileSystem, srcDir, dstDir string, patterns []string, opt
 			}
 
 			if dir := filepath.Dir(dst); dir != dstDir {
-				if err := fs.MkdirAll(dir, 0755); err != nil {
+				if err := fsys.MkdirAll(dir, 0755); err != nil {
 					return nil, fmt.Errorf("failed to create directory for %s: %w", match, err)
 				}
 			}
 
-			if err := fs.Symlink(src, dst); err != nil {
+			if err := fsys.Symlink(src, dst); err != nil {
 				return nil, fmt.Errorf("failed to create symlink for %s: %w", match, err)
 			}
 

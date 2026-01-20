@@ -721,10 +721,10 @@ stop processing of remaining branches.`,
 		Long: `Sync symlinks and submodules from source worktree to target worktrees.
 
 By default, syncs to the current worktree. Use --all to sync all worktrees
-except main.
+except main. Source is determined by --source flag or default_source config.
 
 Examples:
-  # Sync current worktree
+  # Sync current worktree from default_source
   twig sync
 
   # Sync specific worktrees
@@ -733,8 +733,8 @@ Examples:
   # Sync all worktrees (except main)
   twig sync --all
 
-  # Replace existing symlinks
-  twig sync --force
+  # Sync from a specific source branch
+  twig sync --source develop
 
   # Preview what would be synced
   twig sync --check`,
@@ -761,7 +761,6 @@ Examples:
 			verbosity, _ := cmd.Flags().GetCount("verbose")
 			verbose := verbosity >= 1
 			check, _ := cmd.Flags().GetBool("check")
-			force, _ := cmd.Flags().GetBool("force")
 			all, _ := cmd.Flags().GetBool("all")
 			source, _ := cmd.Flags().GetString("source")
 
@@ -785,7 +784,6 @@ Examples:
 
 			result, err := syncCmdRunner.Run(cmd.Context(), args, cwd, twig.SyncOptions{
 				Check:         check,
-				Force:         force,
 				All:           all,
 				Source:        source,
 				DefaultSource: cfg.DefaultSource,
@@ -810,7 +808,6 @@ Examples:
 	syncCmd.Flags().String("source", "", "Source branch (default: default_source config)")
 	syncCmd.Flags().BoolP("all", "a", false, "Sync all worktrees (except main)")
 	syncCmd.Flags().Bool("check", false, "Show what would be synced (dry-run)")
-	syncCmd.Flags().BoolP("force", "f", false, "Replace existing symlinks")
 	rootCmd.AddCommand(syncCmd)
 
 	versionCmd := &cobra.Command{

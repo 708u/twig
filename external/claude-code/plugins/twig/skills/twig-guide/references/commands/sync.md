@@ -19,7 +19,6 @@ twig sync [<branch>...] [flags]
 | `--source`        |       | Source branch (default: `default_source` config)   |
 | `--all`           | `-a`  | Sync all worktrees (except main)                   |
 | `--check`         |       | Show what would be synced (dry-run)                |
-| `--force`         | `-f`  | Replace existing symlinks                          |
 | `--verbose`       | `-v`  | Enable verbose output (use `-vv` for debug)        |
 
 ## Behavior
@@ -61,17 +60,14 @@ early with a message indicating nothing to sync.
 
 ### Symlink Behavior
 
-By default, existing files (including symlinks) at the destination are
-skipped. Use `--force` to replace existing symlinks.
+Symlinks are synchronized to match the source worktree. Existing symlinks are
+replaced to ensure synchronization. Regular files are never overwritten.
 
-| Condition               | Default      | With `--force`     |
-|-------------------------|--------------|--------------------|
-| No file at destination  | Create       | Create             |
-| Symlink exists          | Skip         | Replace            |
-| Regular file exists     | Skip         | Skip (not replaced)|
-
-The `--force` flag only replaces symlinks, not regular files. This prevents
-accidental data loss when a tracked file exists at the destination.
+| Condition               | Behavior                                |
+|-------------------------|-----------------------------------------|
+| No file at destination  | Create symlink                          |
+| Symlink exists          | Replace with new symlink                |
+| Regular file exists     | Skip (not replaced, prevents data loss) |
 
 ### Check Mode
 
@@ -136,9 +132,6 @@ twig sync --all
 
 # Sync from a specific source branch
 twig sync --source develop
-
-# Replace existing symlinks
-twig sync --force
 
 # Preview what would be synced
 twig sync --check

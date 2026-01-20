@@ -324,7 +324,6 @@ func TestSyncCommand_predictSymlinks(t *testing.T) {
 		name        string
 		patterns    []string
 		setupFS     func() *testutil.MockFS
-		force       bool
 		wantCreated int
 		wantSkipped int
 		wantErr     bool
@@ -342,7 +341,7 @@ func TestSyncCommand_predictSymlinks(t *testing.T) {
 			wantCreated: 1,
 		},
 		{
-			name:     "existing_symlink_no_force",
+			name:     "existing_symlink_replaced",
 			patterns: []string{".envrc"},
 			setupFS: func() *testutil.MockFS {
 				return &testutil.MockFS{
@@ -352,16 +351,15 @@ func TestSyncCommand_predictSymlinks(t *testing.T) {
 					ExistingPaths: []string{"/dst/.envrc"},
 					LstatFunc: func(name string) (fs.FileInfo, error) {
 						return &testutil.MockFileInfo{
-							ModeVal: 0o120000, // symlink
+							ModeVal: fs.ModeSymlink,
 						}, nil
 					},
 				}
 			},
-			force:       false,
-			wantSkipped: 1,
+			wantCreated: 1,
 		},
 		{
-			name:     "existing_symlink_with_force",
+			name:     "existing_regular_file_skipped",
 			patterns: []string{".envrc"},
 			setupFS: func() *testutil.MockFS {
 				return &testutil.MockFS{
@@ -371,13 +369,12 @@ func TestSyncCommand_predictSymlinks(t *testing.T) {
 					ExistingPaths: []string{"/dst/.envrc"},
 					LstatFunc: func(name string) (fs.FileInfo, error) {
 						return &testutil.MockFileInfo{
-							ModeVal: 0o120000, // symlink
+							ModeVal: 0, // regular file (no special mode bits)
 						}, nil
 					},
 				}
 			},
-			force:       true,
-			wantCreated: 1,
+			wantSkipped: 1,
 		},
 		{
 			name:     "no_matches",
@@ -398,7 +395,7 @@ func TestSyncCommand_predictSymlinks(t *testing.T) {
 			mockFS := tt.setupFS()
 			cmd := &SyncCommand{FS: mockFS}
 
-			results, err := cmd.predictSymlinks("/src", "/dst", tt.patterns, tt.force)
+			results, err := cmd.predictSymlinks("/src", "/dst", tt.patterns)
 
 			if tt.wantErr {
 				if err == nil {
