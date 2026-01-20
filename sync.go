@@ -357,7 +357,7 @@ func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target 
 			}
 			result.Symlinks = symlinks
 		} else {
-			symlinks, err := createSymlinks(c.FS, sourcePath, target.Path, cfg.Symlinks, CreateSymlinksOptions{Force: true})
+			symlinks, err := createSymlinks(c.FS, sourcePath, target.Path, cfg.Symlinks)
 			if err != nil {
 				result.Err = err
 				return result

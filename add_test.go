@@ -1035,7 +1035,7 @@ func TestCreateSymlinks(t *testing.T) {
 			},
 			wantErr:        false,
 			wantSkipped:    1,
-			wantReasonLike: "already exists",
+			wantReasonLike: "regular file exists",
 		},
 	}
 
@@ -1045,7 +1045,7 @@ func TestCreateSymlinks(t *testing.T) {
 
 			mockFS := tt.setupFS(t)
 
-			results, err := createSymlinks(mockFS, "/src", "/dst", tt.targets, CreateSymlinksOptions{})
+			results, err := createSymlinks(mockFS, "/src", "/dst", tt.targets)
 
 			if tt.wantErr {
 				if err == nil {

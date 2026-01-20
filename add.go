@@ -273,7 +273,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		}
 	}
 
-	symlinks, err := createSymlinks(c.FS, c.Config.WorktreeSourceDir, wtPath, c.Config.Symlinks, CreateSymlinksOptions{})
+	symlinks, err := createSymlinks(c.FS, c.Config.WorktreeSourceDir, wtPath, c.Config.Symlinks)
 	if err != nil {
 		return result, err
 	}

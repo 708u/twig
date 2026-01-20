@@ -6,14 +6,10 @@ import (
 	"path/filepath"
 )
 
-// CreateSymlinksOptions configures symlink creation behavior.
-type CreateSymlinksOptions struct {
-	Force bool // Replace existing symlinks
-}
-
 // createSymlinks creates symlinks from srcDir to dstDir based on glob patterns.
+// Existing symlinks are replaced. Regular files are skipped to prevent data loss.
 // Returns results for each symlink operation.
-func createSymlinks(fsys FileSystem, srcDir, dstDir string, patterns []string, opts CreateSymlinksOptions) ([]SymlinkResult, error) {
+func createSymlinks(fsys FileSystem, srcDir, dstDir string, patterns []string) ([]SymlinkResult, error) {
 	var results []SymlinkResult
 
 	for _, pattern := range patterns {
@@ -35,20 +31,19 @@ func createSymlinks(fsys FileSystem, srcDir, dstDir string, patterns []string, o
 
 			// Check if destination already exists
 			if info, err := fsys.Lstat(dst); err == nil && info != nil {
-				// Check if it's a symlink
 				isSymlink := info.Mode()&fs.ModeSymlink != 0
-				if opts.Force && isSymlink {
-					// Force mode: remove existing symlink and recreate
+				if isSymlink {
+					// Remove existing symlink and recreate
 					if err := fsys.Remove(dst); err != nil {
 						return nil, fmt.Errorf("failed to remove existing symlink for %s: %w", match, err)
 					}
 				} else {
-					// Skip existing file/symlink
+					// Skip regular files to prevent data loss
 					results = append(results, SymlinkResult{
 						Src:     src,
 						Dst:     dst,
 						Skipped: true,
-						Reason:  fmt.Sprintf("skipping symlink for %s (already exists)", match),
+						Reason:  fmt.Sprintf("skipping symlink for %s (regular file exists)", match),
 					})
 					continue
 				}
