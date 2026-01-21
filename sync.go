@@ -172,15 +172,15 @@ func (r SyncResult) formatTarget(stdout, stderr *strings.Builder, t SyncTargetRe
 	}
 
 	if t.Skipped {
-		fmt.Fprintf(stdout, "twig sync: %s (skipped: %s)\n", t.Branch, t.SkipReason)
+		fmt.Fprintf(stdout, "Skipped %s: %s\n", t.Branch, t.SkipReason)
 		return
 	}
 
 	var submoduleInfo string
 	if t.SubmoduleInit.Attempted && t.SubmoduleInit.Count > 0 {
-		submoduleInfo = fmt.Sprintf(", %d submodule(s)", t.SubmoduleInit.Count)
+		submoduleInfo = fmt.Sprintf(", %d submodule(s) initialized", t.SubmoduleInit.Count)
 	}
-	fmt.Fprintf(stdout, "twig sync: %s (%d symlinks%s)\n", t.Branch, createdCount, submoduleInfo)
+	fmt.Fprintf(stdout, "Synced %s: %d symlinks created%s\n", t.Branch, createdCount, submoduleInfo)
 }
 
 // Run syncs symlinks and submodules from source to target worktrees.

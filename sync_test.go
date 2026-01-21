@@ -148,7 +148,7 @@ feat/a:
 				},
 			},
 			opts:       SyncFormatOptions{},
-			wantStdout: "twig sync: feat/a (2 symlinks, 1 submodule(s))\n",
+			wantStdout: "Synced feat/a: 2 symlinks created, 1 submodule(s) initialized\n",
 		},
 		{
 			name: "normal_mode_verbose",
@@ -170,7 +170,7 @@ feat/a:
 			wantStdout: `Syncing from main to feat/a
 Created symlink: /repo/feat/a/.envrc -> /repo/main/.envrc
 Initialized 2 submodule(s)
-twig sync: feat/a (1 symlinks, 2 submodule(s))
+Synced feat/a: 1 symlinks created, 2 submodule(s) initialized
 `,
 		},
 		{
@@ -187,7 +187,7 @@ twig sync: feat/a (1 symlinks, 2 submodule(s))
 				},
 			},
 			opts:       SyncFormatOptions{},
-			wantStdout: "twig sync: feat/a (skipped: up to date)\n",
+			wantStdout: "Skipped feat/a: up to date\n",
 		},
 		{
 			name: "error_target",
@@ -223,7 +223,7 @@ twig sync: feat/a (1 symlinks, 2 submodule(s))
 				},
 			},
 			opts:       SyncFormatOptions{},
-			wantStdout: "twig sync: feat/a (skipped: up to date)\n",
+			wantStdout: "Skipped feat/a: up to date\n",
 			wantStderr: "warning: already exists\n",
 		},
 		{

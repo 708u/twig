@@ -79,8 +79,8 @@ This is useful for previewing the sync operation.
 ### Default Output
 
 ```txt
-twig sync: feat/a (2 symlinks, 1 submodule(s))
-twig sync: feat/b (skipped: up to date)
+Synced feat/a: 2 symlinks created, 1 submodule(s) initialized
+Skipped feat/b: up to date
 ```
 
 ### Verbose Output
@@ -90,7 +90,7 @@ Syncing from main to feat/a
 Created symlink: /repo/feat/a/.envrc -> /repo/main/.envrc
 Created symlink: /repo/feat/a/.tool-versions -> /repo/main/.tool-versions
 Initialized 1 submodule(s)
-twig sync: feat/a (2 symlinks, 1 submodule(s))
+Synced feat/a: 2 symlinks created, 1 submodule(s) initialized
 ```
 
 ### Check Mode Output
@@ -115,7 +115,7 @@ With `-vv`, debug logging traces internal operations:
 2026-01-19 12:34:56.000 [DEBUG] [a1b2c3d4] sync: resolving source branch=main
 2026-01-19 12:34:56.000 [DEBUG] [a1b2c3d4] sync: loading config from source
 2026-01-19 12:34:56.000 [DEBUG] [a1b2c3d4] sync: syncing target branch=feat/a
-twig sync: feat/a (2 symlinks)
+Synced feat/a: 2 symlinks created
 ```
 
 ## Examples
