@@ -48,12 +48,18 @@ type InitCommander interface {
 	Run(ctx context.Context, dir string, opts twig.InitOptions) (twig.InitResult, error)
 }
 
+// SyncCommander defines the interface for sync operations.
+type SyncCommander interface {
+	Run(ctx context.Context, targets []string, cwd string, opts twig.SyncOptions) (twig.SyncResult, error)
+}
+
 type options struct {
 	addCommander       AddCommander    // nil = use default
 	cleanCommander     CleanCommander  // nil = use default
 	listCommander      ListCommander   // nil = use default
 	removeCommander    RemoveCommander // nil = use default
 	initCommander      InitCommander   // nil = use default
+	syncCommander      SyncCommander   // nil = use default
 	commandIDGenerator func() string   // nil = use twig.GenerateCommandID
 }
 
@@ -92,6 +98,13 @@ func WithRemoveCommander(cmd RemoveCommander) Option {
 func WithInitCommander(cmd InitCommander) Option {
 	return func(o *options) {
 		o.initCommander = cmd
+	}
+}
+
+// WithSyncCommander sets the SyncCommander instance for testing.
+func WithSyncCommander(cmd SyncCommander) Option {
+	return func(o *options) {
+		o.syncCommander = cmd
 	}
 }
 
@@ -701,6 +714,146 @@ stop processing of remaining branches.`,
 	}
 	initCmd.Flags().BoolP("force", "f", false, "Overwrite existing configuration file")
 	rootCmd.AddCommand(initCmd)
+
+	syncCmd := &cobra.Command{
+		Use:   "sync [<branch>...]",
+		Short: "Sync symlinks and submodules from source worktree",
+		Long: `Sync symlinks and submodules from source worktree to target worktrees.
+
+By default, syncs to the current worktree. Use --all to sync all worktrees
+except main. Source is determined by --source flag or default_source config.
+
+Examples:
+  # Sync current worktree from default_source
+  twig sync
+
+  # Sync specific worktrees
+  twig sync feat/a feat/b
+
+  # Sync all worktrees (except main)
+  twig sync --all
+
+  # Sync from a specific source branch
+  twig sync --source develop
+
+  # Preview what would be synced
+  twig sync --check`,
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			dir, err := resolveCompletionDirectory(cmd)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			git := twig.NewGitRunner(dir)
+			branches, err := git.WorktreeListBranches(cmd.Context())
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			// Exclude already-specified branches from suggestions
+			available := make([]string, 0, len(branches))
+			for _, b := range branches {
+				if !slices.Contains(args, b) {
+					available = append(available, b)
+				}
+			}
+			return available, cobra.ShellCompDirectiveNoFileComp
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			verbosity, _ := cmd.Flags().GetCount("verbose")
+			verbose := verbosity >= 1
+			check, _ := cmd.Flags().GetBool("check")
+			all, _ := cmd.Flags().GetBool("all")
+			source, _ := cmd.Flags().GetString("source")
+
+			// --all and specific targets are mutually exclusive
+			if all && len(args) > 0 {
+				return fmt.Errorf("cannot use --all with specific targets")
+			}
+
+			// Create logger early so git operations are logged
+			idGen := twig.GenerateCommandID
+			if o.commandIDGenerator != nil {
+				idGen = o.commandIDGenerator
+			}
+			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
+
+			// Resolve source: CLI --source > config default_source > current worktree
+			git := twig.NewGitRunner(cwd, twig.WithLogger(log))
+			if source == "" {
+				source = cfg.DefaultSource
+			}
+
+			// Self-sync check: no source specified means current worktree is source,
+			// no targets specified means current worktree is target
+			if source == "" && !all && len(args) == 0 {
+				return fmt.Errorf("cannot sync: no source specified and no targets specified\nhint: use --source flag or set default_source in config")
+			}
+
+			var sourcePath string
+			var sourceCfg *twig.Config
+			if source == "" {
+				// Use current worktree as source
+				sourcePath = cwd
+				sourceCfg = cfg
+				// Get current branch name for result
+				out, err := git.Run(cmd.Context(), "rev-parse", "--abbrev-ref", "HEAD")
+				if err != nil {
+					return fmt.Errorf("failed to get current branch: %w", err)
+				}
+				source = strings.TrimSpace(string(out))
+			} else {
+				// Find source worktree and load config
+				sourceWT, err := git.WorktreeFindByBranch(cmd.Context(), source)
+				if err != nil {
+					return fmt.Errorf("failed to find worktree for branch %q: %w", source, err)
+				}
+				sourcePath = sourceWT.Path
+
+				configResult, err := twig.LoadConfig(sourcePath)
+				if err != nil {
+					return fmt.Errorf("failed to load config from source worktree: %w", err)
+				}
+				for _, w := range configResult.Warnings {
+					fmt.Fprintln(cmd.ErrOrStderr(), "warning:", w)
+				}
+				sourceCfg = configResult.Config
+			}
+
+			var syncCmdRunner SyncCommander
+			if o.syncCommander != nil {
+				syncCmdRunner = o.syncCommander
+			} else {
+				syncCmdRunner = twig.NewDefaultSyncCommand(sourcePath, log)
+			}
+
+			result, err := syncCmdRunner.Run(cmd.Context(), args, cwd, twig.SyncOptions{
+				Check:          check,
+				All:            all,
+				Source:         source,
+				SourcePath:     sourcePath,
+				Symlinks:       sourceCfg.Symlinks,
+				InitSubmodules: sourceCfg.ShouldInitSubmodules(),
+				Verbose:        verbose,
+			})
+			if err != nil {
+				return err
+			}
+
+			formatted := result.Format(twig.SyncFormatOptions{Verbose: verbose})
+			if formatted.Stderr != "" {
+				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
+			}
+			fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
+
+			if result.HasErrors() {
+				return fmt.Errorf("failed to sync %d target(s)", result.ErrorCount())
+			}
+			return nil
+		},
+	}
+	syncCmd.Flags().String("source", "", "Source branch (default: default_source config)")
+	syncCmd.Flags().BoolP("all", "a", false, "Sync all worktrees (except main)")
+	syncCmd.Flags().Bool("check", false, "Show what would be synced (dry-run)")
+	rootCmd.AddCommand(syncCmd)
 
 	versionCmd := &cobra.Command{
 		Use:   "version",
