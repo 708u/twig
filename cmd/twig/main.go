@@ -769,10 +769,23 @@ Examples:
 				return fmt.Errorf("cannot use --all with specific targets")
 			}
 
+			// Create logger early so git operations are logged
+			idGen := twig.GenerateCommandID
+			if o.commandIDGenerator != nil {
+				idGen = o.commandIDGenerator
+			}
+			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
+
 			// Resolve source: CLI --source > config default_source > current worktree
-			git := twig.NewGitRunner(cwd)
+			git := twig.NewGitRunner(cwd, twig.WithLogger(log))
 			if source == "" {
 				source = cfg.DefaultSource
+			}
+
+			// Self-sync check: no source specified means current worktree is source,
+			// no targets specified means current worktree is target
+			if source == "" && !all && len(args) == 0 {
+				return fmt.Errorf("cannot sync: no source specified and no targets specified\nhint: use --source flag or set default_source in config")
 			}
 
 			var sourcePath string
@@ -804,12 +817,6 @@ Examples:
 				}
 				sourceCfg = configResult.Config
 			}
-
-			idGen := twig.GenerateCommandID
-			if o.commandIDGenerator != nil {
-				idGen = o.commandIDGenerator
-			}
-			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
 
 			var syncCmdRunner SyncCommander
 			if o.syncCommander != nil {

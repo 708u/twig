@@ -39,12 +39,16 @@ The source worktree is determined in this order:
 
 Targets are determined based on arguments and flags:
 
-| Arguments | `--all` | Behavior                           |
+| Arguments | `--all` | Behavior                            |
 |-----------|---------|-------------------------------------|
-| None      | No      | Sync current worktree               |
+| None      | No      | Sync current worktree (see note)    |
 | None      | Yes     | Sync all worktrees (except main)    |
 | Specified | No      | Sync specified worktrees            |
 | Specified | Yes     | Error (mutually exclusive)          |
+
+**Note:** When no targets are specified and source falls back to current
+worktree (no `--source` flag and no `default_source` config), this results
+in syncing current worktree to itself, which is an error.
 
 ### What Gets Synced
 
@@ -159,7 +163,7 @@ See [Configuration](../configuration.md) for details.
 
 | Condition                        | Behavior                              |
 |----------------------------------|---------------------------------------|
-| Source not specified + no config | Error with hint                       |
+| No source + no targets specified | Error with hint                       |
 | Source worktree not found        | Error                                 |
 | Target worktree not found        | Error for that target                 |
 | Target is same as source         | Skipped                               |
