@@ -19,9 +19,9 @@ type SyncCommand struct {
 // SyncOptions configures the sync operation.
 type SyncOptions struct {
 	Check          bool     // Show what would be synced (dry-run)
-	All            bool     // Sync all worktrees (except main)
-	Source         string   // Source branch (resolved by CLI)
-	SourcePath     string   // Source worktree path (resolved by CLI)
+	All            bool     // Sync all worktrees
+	Source         string   // Source branch
+	SourcePath     string   // Source worktree path
 	Symlinks       []string // Symlink patterns from source config
 	InitSubmodules bool     // Whether to init submodules from source config
 	Verbose        bool     // Verbose output
