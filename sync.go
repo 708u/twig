@@ -9,9 +9,6 @@ import (
 	"strings"
 )
 
-// LogCategorySync is the log category for sync operations.
-const LogCategorySync = "sync"
-
 // SyncCommand syncs symlinks and submodules from source worktree to target worktrees.
 type SyncCommand struct {
 	FS  FileSystem
