@@ -33,7 +33,7 @@ The source worktree is determined in this order:
 
 1. `--source` flag if specified
 2. `default_source` configuration if set
-3. Error if neither is available
+3. Current worktree (fallback)
 
 ### Target Resolution
 

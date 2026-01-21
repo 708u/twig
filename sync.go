@@ -18,11 +18,13 @@ type SyncCommand struct {
 
 // SyncOptions configures the sync operation.
 type SyncOptions struct {
-	Check         bool   // Show what would be synced (dry-run)
-	All           bool   // Sync all worktrees (except main)
-	Source        string // Source branch (empty = use DefaultSource)
-	DefaultSource string // Fallback when Source is empty (from config)
-	Verbose       bool   // Verbose output
+	Check          bool     // Show what would be synced (dry-run)
+	All            bool     // Sync all worktrees (except main)
+	Source         string   // Source branch (resolved by CLI)
+	SourcePath     string   // Source worktree path (resolved by CLI)
+	Symlinks       []string // Symlink patterns from source config
+	InitSubmodules bool     // Whether to init submodules from source config
+	Verbose        bool     // Verbose output
 }
 
 // SyncTargetResult holds the result of syncing a single worktree.
@@ -193,39 +195,17 @@ func (c *SyncCommand) Run(ctx context.Context, targets []string, cwd string, opt
 
 	var result SyncResult
 	result.Check = opts.Check
+	result.SourceBranch = opts.Source
 
-	// Resolve source branch
-	sourceBranch, err := resolveSource(opts.Source, opts.DefaultSource)
-	if err != nil {
-		return result, err
-	}
-	result.SourceBranch = sourceBranch
-
-	c.Log.DebugContext(ctx, "source resolved",
+	c.Log.DebugContext(ctx, "source from options",
 		LogAttrKeyCategory.String(), LogCategorySync,
-		"source", sourceBranch)
-
-	// Find source worktree
-	sourceWT, err := c.Git.WorktreeFindByBranch(ctx, sourceBranch)
-	if err != nil {
-		return result, fmt.Errorf("failed to find source worktree for branch %q: %w", sourceBranch, err)
-	}
-
-	// Load config from source worktree
-	configResult, err := LoadConfig(sourceWT.Path)
-	if err != nil {
-		return result, fmt.Errorf("failed to load config from source worktree: %w", err)
-	}
-	sourceCfg := configResult.Config
-
-	c.Log.DebugContext(ctx, "config loaded from source",
-		LogAttrKeyCategory.String(), LogCategorySync,
-		"path", sourceWT.Path,
-		"symlinksCount", len(sourceCfg.Symlinks),
-		"initSubmodules", sourceCfg.InitSubmodules)
+		"source", opts.Source,
+		"sourcePath", opts.SourcePath,
+		"symlinksCount", len(opts.Symlinks),
+		"initSubmodules", opts.InitSubmodules)
 
 	// Check if there's anything to sync
-	if len(sourceCfg.Symlinks) == 0 && !sourceCfg.ShouldInitSubmodules() {
+	if len(opts.Symlinks) == 0 && !opts.InitSubmodules {
 		result.NothingToSync = true
 		c.Log.DebugContext(ctx, "nothing to sync",
 			LogAttrKeyCategory.String(), LogCategorySync)
@@ -233,7 +213,7 @@ func (c *SyncCommand) Run(ctx context.Context, targets []string, cwd string, opt
 	}
 
 	// Resolve target worktrees
-	targetWTs, err := c.resolveTargets(ctx, targets, sourceBranch, cwd, opts.All)
+	targetWTs, err := c.resolveTargets(ctx, targets, opts.Source, cwd, opts.All)
 	if err != nil {
 		return result, err
 	}
@@ -249,7 +229,7 @@ func (c *SyncCommand) Run(ctx context.Context, targets []string, cwd string, opt
 			"branch", wt.Branch,
 			"path", wt.Path)
 
-		targetResult := c.syncTarget(ctx, sourceWT.Path, wt, sourceCfg, opts)
+		targetResult := c.syncTarget(ctx, opts.SourcePath, wt, opts)
 		result.Targets = append(result.Targets, targetResult)
 
 		c.Log.DebugContext(ctx, "target synced",
@@ -264,19 +244,6 @@ func (c *SyncCommand) Run(ctx context.Context, targets []string, cwd string, opt
 		"targetCount", len(result.Targets))
 
 	return result, nil
-}
-
-// resolveSource resolves the source branch.
-func resolveSource(source, defaultSource string) (string, error) {
-	if source != "" {
-		return source, nil
-	}
-
-	if defaultSource != "" {
-		return defaultSource, nil
-	}
-
-	return "", fmt.Errorf("source branch not specified and no default_source configured\nhint: use --source <branch> or set default_source in .twig/settings.toml")
 }
 
 // resolveTargets resolves the list of target worktrees.
@@ -330,7 +297,7 @@ func (c *SyncCommand) resolveTargets(ctx context.Context, targets []string, sour
 }
 
 // syncTarget syncs a single target worktree.
-func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target Worktree, cfg *Config, opts SyncOptions) SyncTargetResult {
+func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target Worktree, opts SyncOptions) SyncTargetResult {
 	result := SyncTargetResult{
 		Branch:       target.Branch,
 		WorktreePath: target.Path,
@@ -344,17 +311,17 @@ func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target 
 	}
 
 	// Sync symlinks (always replace existing symlinks to ensure sync)
-	if len(cfg.Symlinks) > 0 {
+	if len(opts.Symlinks) > 0 {
 		if opts.Check {
 			// In check mode, predict what would be created
-			symlinks, err := c.predictSymlinks(sourcePath, target.Path, cfg.Symlinks)
+			symlinks, err := c.predictSymlinks(sourcePath, target.Path, opts.Symlinks)
 			if err != nil {
 				result.Err = err
 				return result
 			}
 			result.Symlinks = symlinks
 		} else {
-			symlinks, err := createSymlinks(c.FS, sourcePath, target.Path, cfg.Symlinks)
+			symlinks, err := createSymlinks(c.FS, sourcePath, target.Path, opts.Symlinks)
 			if err != nil {
 				result.Err = err
 				return result
@@ -364,7 +331,7 @@ func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target 
 	}
 
 	// Sync submodules
-	if cfg.ShouldInitSubmodules() {
+	if opts.InitSubmodules {
 		if opts.Check {
 			// In check mode, indicate submodules would be initialized
 			result.SubmoduleInit.Attempted = true

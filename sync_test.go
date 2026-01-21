@@ -7,65 +7,6 @@ import (
 	"github.com/708u/twig/internal/testutil"
 )
 
-func Test_resolveSource(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name          string
-		source        string
-		defaultSource string
-		want          string
-		wantErr       bool
-		errContains   string
-	}{
-		{
-			name:    "explicit_source",
-			source:  "main",
-			want:    "main",
-			wantErr: false,
-		},
-		{
-			name:          "default_source_from_config",
-			source:        "",
-			defaultSource: "develop",
-			want:          "develop",
-			wantErr:       false,
-		},
-		{
-			name:        "no_source_no_default",
-			source:      "",
-			wantErr:     true,
-			errContains: "source branch not specified",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := resolveSource(tt.source, tt.defaultSource)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
-					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
-				}
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestSyncResult_Format(t *testing.T) {
 	t.Parallel()
 
@@ -425,19 +366,4 @@ func TestSyncCommand_predictSymlinks(t *testing.T) {
 			}
 		})
 	}
-}
-
-// contains checks if s contains substr.
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

@@ -769,6 +769,42 @@ Examples:
 				return fmt.Errorf("cannot use --all with specific targets")
 			}
 
+			// Resolve source: CLI --source > config default_source > current worktree
+			git := twig.NewGitRunner(cwd)
+			if source == "" {
+				source = cfg.DefaultSource
+			}
+
+			var sourcePath string
+			var sourceCfg *twig.Config
+			if source == "" {
+				// Use current worktree as source
+				sourcePath = cwd
+				sourceCfg = cfg
+				// Get current branch name for result
+				out, err := git.Run(cmd.Context(), "rev-parse", "--abbrev-ref", "HEAD")
+				if err != nil {
+					return fmt.Errorf("failed to get current branch: %w", err)
+				}
+				source = strings.TrimSpace(string(out))
+			} else {
+				// Find source worktree and load config
+				sourceWT, err := git.WorktreeFindByBranch(cmd.Context(), source)
+				if err != nil {
+					return fmt.Errorf("failed to find worktree for branch %q: %w", source, err)
+				}
+				sourcePath = sourceWT.Path
+
+				configResult, err := twig.LoadConfig(sourcePath)
+				if err != nil {
+					return fmt.Errorf("failed to load config from source worktree: %w", err)
+				}
+				for _, w := range configResult.Warnings {
+					fmt.Fprintln(cmd.ErrOrStderr(), "warning:", w)
+				}
+				sourceCfg = configResult.Config
+			}
+
 			idGen := twig.GenerateCommandID
 			if o.commandIDGenerator != nil {
 				idGen = o.commandIDGenerator
@@ -779,15 +815,17 @@ Examples:
 			if o.syncCommander != nil {
 				syncCmdRunner = o.syncCommander
 			} else {
-				syncCmdRunner = twig.NewDefaultSyncCommand(cfg.WorktreeSourceDir, log)
+				syncCmdRunner = twig.NewDefaultSyncCommand(sourcePath, log)
 			}
 
 			result, err := syncCmdRunner.Run(cmd.Context(), args, cwd, twig.SyncOptions{
-				Check:         check,
-				All:           all,
-				Source:        source,
-				DefaultSource: cfg.DefaultSource,
-				Verbose:       verbose,
+				Check:          check,
+				All:            all,
+				Source:         source,
+				SourcePath:     sourcePath,
+				Symlinks:       sourceCfg.Symlinks,
+				InitSubmodules: sourceCfg.ShouldInitSubmodules(),
+				Verbose:        verbose,
 			})
 			if err != nil {
 				return err
