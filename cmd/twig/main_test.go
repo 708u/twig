@@ -1292,3 +1292,121 @@ func TestInitCmd(t *testing.T) {
 		}
 	})
 }
+
+func TestAddCmd_CarryCompletion(t *testing.T) {
+	t.Parallel()
+
+	_, mainDir := testutil.SetupTestRepo(t)
+
+	// Create another worktree to have multiple branches
+	testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/a", filepath.Join(filepath.Dir(mainDir), "feat-a"))
+	t.Cleanup(func() {
+		testutil.RunGit(t, mainDir, "worktree", "remove", "--force", filepath.Join(filepath.Dir(mainDir), "feat-a"))
+	})
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"-C", mainDir, "add", "--carry"})
+
+	// Find the add command
+	addCmd, _, _ := cmd.Find([]string{"add"})
+	if addCmd == nil {
+		t.Fatal("add command not found")
+	}
+
+	// Set context for the command
+	addCmd.SetContext(t.Context())
+
+	// Get the completion function for carry flag
+	completionFunc, exists := addCmd.GetFlagCompletionFunc("carry")
+	if !exists {
+		t.Fatal("carry flag completion function not registered")
+	}
+
+	// Execute completion
+	completions, directive := completionFunc(addCmd, []string{}, "")
+
+	if directive != 4 { // cobra.ShellCompDirectiveNoFileComp = 4 (1 << 2)
+		t.Errorf("directive = %d, want %d (NoFileComp)", directive, 4)
+	}
+
+	// Should include worktree branches
+	if len(completions) < 1 {
+		t.Errorf("expected at least 1 completion, got %d", len(completions))
+	}
+}
+
+func TestAddCmd_SourceCompletion(t *testing.T) {
+	t.Parallel()
+
+	_, mainDir := testutil.SetupTestRepo(t)
+
+	// Create another worktree
+	testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/b", filepath.Join(filepath.Dir(mainDir), "feat-b"))
+	t.Cleanup(func() {
+		testutil.RunGit(t, mainDir, "worktree", "remove", "--force", filepath.Join(filepath.Dir(mainDir), "feat-b"))
+	})
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"-C", mainDir, "add", "--source"})
+
+	addCmd, _, _ := cmd.Find([]string{"add"})
+	if addCmd == nil {
+		t.Fatal("add command not found")
+	}
+
+	// Set context for the command
+	addCmd.SetContext(t.Context())
+
+	completionFunc, exists := addCmd.GetFlagCompletionFunc("source")
+	if !exists {
+		t.Fatal("source flag completion function not registered")
+	}
+
+	completions, directive := completionFunc(addCmd, []string{}, "")
+
+	if directive != 4 { // cobra.ShellCompDirectiveNoFileComp = 4 (1 << 2)
+		t.Errorf("directive = %d, want %d (NoFileComp)", directive, 4)
+	}
+
+	if len(completions) < 1 {
+		t.Errorf("expected at least 1 completion, got %d", len(completions))
+	}
+}
+
+func TestSyncCmd_SourceCompletion(t *testing.T) {
+	t.Parallel()
+
+	_, mainDir := testutil.SetupTestRepo(t)
+
+	// Create another worktree
+	testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/c", filepath.Join(filepath.Dir(mainDir), "feat-c"))
+	t.Cleanup(func() {
+		testutil.RunGit(t, mainDir, "worktree", "remove", "--force", filepath.Join(filepath.Dir(mainDir), "feat-c"))
+	})
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"-C", mainDir, "sync", "--source"})
+
+	syncCmd, _, _ := cmd.Find([]string{"sync"})
+	if syncCmd == nil {
+		t.Fatal("sync command not found")
+	}
+
+	// Set context for the command
+	syncCmd.SetContext(t.Context())
+
+	completionFunc, exists := syncCmd.GetFlagCompletionFunc("source")
+	if !exists {
+		t.Fatal("source flag completion function not registered")
+	}
+
+	completions, directive := completionFunc(syncCmd, []string{}, "")
+
+	if directive != 4 { // cobra.ShellCompDirectiveNoFileComp = 4 (1 << 2)
+		t.Errorf("directive = %d, want %d (NoFileComp)", directive, 4)
+	}
+
+	if len(completions) < 1 {
+		t.Errorf("expected at least 1 completion, got %d", len(completions))
+	}
+}
