@@ -8,7 +8,7 @@ import (
 )
 
 const settingsTemplate = `# twig project configuration
-# See: https://github.com/708u/twig-worktree
+# See: https://github.com/708u/twig
 
 # Default source branch for new worktrees (prevents symlink chaining)
 default_source = "main"
