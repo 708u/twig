@@ -35,6 +35,7 @@ creation, symlinks, and change management in a single command.
 | `twig remove <branch>...` | Remove worktrees and their branches |
 | `twig list` | List all worktrees |
 | `twig clean` | Remove unneeded worktrees |
+| `twig sync` | Sync symlinks and submodules to worktrees |
 
 ## Typical Workflows
 
@@ -111,5 +112,6 @@ For detailed information on each command, refer to:
 - ./references/commands/remove.md - Remove worktrees and branches
 - ./references/commands/list.md - List worktrees
 - ./references/commands/clean.md - Clean merged worktrees
+- ./references/commands/sync.md - Sync symlinks and submodules
 - ./references/commands/init.md - Initialize configuration
 - ./references/configuration.md - Configuration file details

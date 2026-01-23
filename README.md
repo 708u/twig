@@ -156,6 +156,7 @@ twig completion fish | source
 | [list](docs/reference/commands/list.md)            | List worktrees                                   |
 | [remove](docs/reference/commands/remove.md)        | Delete worktree and branch (multiple supported)  |
 | [clean](docs/reference/commands/clean.md)          | Bulk delete merged worktrees                     |
+| [sync](docs/reference/commands/sync.md)            | Sync symlinks and submodules to worktrees        |
 
 See the documentation above for detailed flags and specifications.
 
