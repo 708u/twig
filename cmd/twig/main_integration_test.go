@@ -610,6 +610,133 @@ func TestCleanCommand_InteractiveConfirmation_Integration(t *testing.T) {
 	})
 }
 
+func TestFlagCompletion_Integration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("AddCarryFlagCompletion", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		// Create another worktree to have multiple branches
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/a", filepath.Join(filepath.Dir(mainDir), "feat-a"))
+		t.Cleanup(func() {
+			testutil.RunGit(t, mainDir, "worktree", "remove", "--force", filepath.Join(filepath.Dir(mainDir), "feat-a"))
+		})
+
+		cmd := newRootCmd()
+
+		addCmd, _, _ := cmd.Find([]string{"add"})
+		if addCmd == nil {
+			t.Fatal("add command not found")
+		}
+
+		// Set directory flag directly since we're calling completion function
+		// without Execute() (which would parse flags from SetArgs)
+		if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+			t.Fatalf("failed to set directory flag: %v", err)
+		}
+		addCmd.SetContext(t.Context())
+
+		completionFunc, exists := addCmd.GetFlagCompletionFunc("carry")
+		if !exists {
+			t.Fatal("carry flag completion function not registered")
+		}
+
+		completions, directive := completionFunc(addCmd, []string{}, "")
+
+		if directive != 4 { // cobra.ShellCompDirectiveNoFileComp = 4 (1 << 2)
+			t.Errorf("directive = %d, want %d (NoFileComp)", directive, 4)
+		}
+
+		if len(completions) < 1 {
+			t.Errorf("expected at least 1 completion, got %d", len(completions))
+		}
+	})
+
+	t.Run("AddSourceFlagCompletion", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		// Create another worktree
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/b", filepath.Join(filepath.Dir(mainDir), "feat-b"))
+		t.Cleanup(func() {
+			testutil.RunGit(t, mainDir, "worktree", "remove", "--force", filepath.Join(filepath.Dir(mainDir), "feat-b"))
+		})
+
+		cmd := newRootCmd()
+
+		addCmd, _, _ := cmd.Find([]string{"add"})
+		if addCmd == nil {
+			t.Fatal("add command not found")
+		}
+
+		// Set directory flag directly since we're calling completion function
+		// without Execute() (which would parse flags from SetArgs)
+		if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+			t.Fatalf("failed to set directory flag: %v", err)
+		}
+		addCmd.SetContext(t.Context())
+
+		completionFunc, exists := addCmd.GetFlagCompletionFunc("source")
+		if !exists {
+			t.Fatal("source flag completion function not registered")
+		}
+
+		completions, directive := completionFunc(addCmd, []string{}, "")
+
+		if directive != 4 { // cobra.ShellCompDirectiveNoFileComp = 4 (1 << 2)
+			t.Errorf("directive = %d, want %d (NoFileComp)", directive, 4)
+		}
+
+		if len(completions) < 1 {
+			t.Errorf("expected at least 1 completion, got %d", len(completions))
+		}
+	})
+
+	t.Run("SyncSourceFlagCompletion", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		// Create another worktree
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/c", filepath.Join(filepath.Dir(mainDir), "feat-c"))
+		t.Cleanup(func() {
+			testutil.RunGit(t, mainDir, "worktree", "remove", "--force", filepath.Join(filepath.Dir(mainDir), "feat-c"))
+		})
+
+		cmd := newRootCmd()
+
+		syncCmd, _, _ := cmd.Find([]string{"sync"})
+		if syncCmd == nil {
+			t.Fatal("sync command not found")
+		}
+
+		// Set directory flag directly since we're calling completion function
+		// without Execute() (which would parse flags from SetArgs)
+		if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+			t.Fatalf("failed to set directory flag: %v", err)
+		}
+		syncCmd.SetContext(t.Context())
+
+		completionFunc, exists := syncCmd.GetFlagCompletionFunc("source")
+		if !exists {
+			t.Fatal("source flag completion function not registered")
+		}
+
+		completions, directive := completionFunc(syncCmd, []string{}, "")
+
+		if directive != 4 { // cobra.ShellCompDirectiveNoFileComp = 4 (1 << 2)
+			t.Errorf("directive = %d, want %d (NoFileComp)", directive, 4)
+		}
+
+		if len(completions) < 1 {
+			t.Errorf("expected at least 1 completion, got %d", len(completions))
+		}
+	})
+}
+
 func TestVersion_Integration(t *testing.T) {
 	t.Parallel()
 
