@@ -483,7 +483,7 @@ type FileStatus struct {
 // unstaged, and untracked files. Status codes are the first 2 characters
 // from git status --porcelain output.
 func (g *GitRunner) ChangedFiles(ctx context.Context) ([]FileStatus, error) {
-	output, err := g.Run(ctx, GitCmdStatus, "--porcelain", "-uall")
+	output, err := g.Run(ctx, GitCmdStatus, "--porcelain", "-unormal")
 	if err != nil {
 		return nil, fmt.Errorf("failed to check git status: %w", err)
 	}
