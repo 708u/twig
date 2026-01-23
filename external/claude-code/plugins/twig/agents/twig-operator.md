@@ -69,6 +69,7 @@ This agent handles ONLY the following twig operations:
 | `list`    | List all worktrees                           |
 | `remove`  | Remove worktree and delete branch            |
 | `clean`   | Remove merged/prunable worktrees             |
+| `sync`    | Sync symlinks and submodules to worktrees    |
 | `version` | Display version information                  |
 
 ### Out of Scope
