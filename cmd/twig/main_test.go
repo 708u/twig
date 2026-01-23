@@ -1305,7 +1305,6 @@ func TestAddCmd_CarryCompletion(t *testing.T) {
 	})
 
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"-C", mainDir, "add", "--carry"})
 
 	// Find the add command
 	addCmd, _, _ := cmd.Find([]string{"add"})
@@ -1313,10 +1312,13 @@ func TestAddCmd_CarryCompletion(t *testing.T) {
 		t.Fatal("add command not found")
 	}
 
-	// Set context for the command
+	// Set directory flag directly since we're calling completion function
+	// without Execute() (which would parse flags from SetArgs)
+	if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+		t.Fatalf("failed to set directory flag: %v", err)
+	}
 	addCmd.SetContext(t.Context())
 
-	// Get the completion function for carry flag
 	completionFunc, exists := addCmd.GetFlagCompletionFunc("carry")
 	if !exists {
 		t.Fatal("carry flag completion function not registered")
@@ -1347,14 +1349,17 @@ func TestAddCmd_SourceCompletion(t *testing.T) {
 	})
 
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"-C", mainDir, "add", "--source"})
 
 	addCmd, _, _ := cmd.Find([]string{"add"})
 	if addCmd == nil {
 		t.Fatal("add command not found")
 	}
 
-	// Set context for the command
+	// Set directory flag directly since we're calling completion function
+	// without Execute() (which would parse flags from SetArgs)
+	if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+		t.Fatalf("failed to set directory flag: %v", err)
+	}
 	addCmd.SetContext(t.Context())
 
 	completionFunc, exists := addCmd.GetFlagCompletionFunc("source")
@@ -1385,14 +1390,17 @@ func TestSyncCmd_SourceCompletion(t *testing.T) {
 	})
 
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"-C", mainDir, "sync", "--source"})
 
 	syncCmd, _, _ := cmd.Find([]string{"sync"})
 	if syncCmd == nil {
 		t.Fatal("sync command not found")
 	}
 
-	// Set context for the command
+	// Set directory flag directly since we're calling completion function
+	// without Execute() (which would parse flags from SetArgs)
+	if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+		t.Fatalf("failed to set directory flag: %v", err)
+	}
 	syncCmd.SetContext(t.Context())
 
 	completionFunc, exists := syncCmd.GetFlagCompletionFunc("source")
