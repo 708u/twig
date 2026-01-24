@@ -33,6 +33,7 @@ CHECKS = {
         "when": "When docs (docs/reference/**) is modified",
         "commands": [
             "make sync-plugin-docs",
+            "Bump version in external/claude-code/plugins/twig/.claude-plugin/plugin.json",
         ],
     },
 }
