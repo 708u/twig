@@ -812,6 +812,53 @@ func TestRemoveCommandCompletion_Integration(t *testing.T) {
 	})
 }
 
+func TestCleanCommandCompletion_Integration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("TargetFlag", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		// Create additional branches for completion
+		testutil.RunGit(t, mainDir, "branch", "develop")
+		testutil.RunGit(t, mainDir, "branch", "feat/a")
+
+		cmd := newRootCmd()
+		cleanCmd, _, _ := cmd.Find([]string{"clean"})
+		if cleanCmd == nil {
+			t.Fatal("clean command not found")
+		}
+
+		if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+			t.Fatalf("failed to set directory flag: %v", err)
+		}
+		cleanCmd.SetContext(t.Context())
+
+		completionFunc, exists := cleanCmd.GetFlagCompletionFunc("target")
+		if !exists {
+			t.Fatal("target flag completion function not registered")
+		}
+
+		completions, directive := completionFunc(cleanCmd, []string{}, "")
+
+		if directive != 4 { // cobra.ShellCompDirectiveNoFileComp = 4 (1 << 2)
+			t.Errorf("directive = %d, want %d (NoFileComp)", directive, 4)
+		}
+		if len(completions) < 3 {
+			t.Errorf("expected at least 3 completions (main, develop, feat/a), got %d: %v", len(completions), completions)
+		}
+
+		// Verify expected branches are in completions
+		expectedBranches := []string{"main", "develop", "feat/a"}
+		for _, branch := range expectedBranches {
+			if !slices.Contains(completions, branch) {
+				t.Errorf("expected %q in completions, got %v", branch, completions)
+			}
+		}
+	})
+}
+
 func TestVersion_Integration(t *testing.T) {
 	t.Parallel()
 
