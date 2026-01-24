@@ -337,11 +337,11 @@ func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target 
 			result.SubmoduleInit.Attempted = true
 		} else {
 			wtGit := c.Git.InDir(target.Path)
-			count, initErr := wtGit.SubmoduleUpdate(ctx)
-			if initErr != nil {
+			count, err := wtGit.SubmoduleUpdate(ctx)
+			if err != nil {
 				result.SubmoduleInit.Attempted = true
 				result.SubmoduleInit.Skipped = true
-				result.SubmoduleInit.Reason = initErr.Error()
+				result.SubmoduleInit.Reason = err.Error()
 			} else if count > 0 {
 				result.SubmoduleInit.Attempted = true
 				result.SubmoduleInit.Count = count

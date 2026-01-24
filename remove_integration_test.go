@@ -489,12 +489,12 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		}
 
 		// First worktree should be removed
-		if _, statErr := os.Stat(wtPath1); !os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath1); !os.IsNotExist(err) {
 			t.Errorf("first worktree should be removed: %s", wtPath1)
 		}
 
 		// Parent directory should still exist (has sibling worktree)
-		if _, statErr := os.Stat(parentDir); os.IsNotExist(statErr) {
+		if _, err := os.Stat(parentDir); os.IsNotExist(err) {
 			t.Errorf("parent directory should still exist: %s", parentDir)
 		}
 

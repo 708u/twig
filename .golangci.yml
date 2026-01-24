@@ -35,6 +35,7 @@ linters:
       enable-all: true
       disable:
         - fieldalignment
+        - shadow
   exclusions:
     rules:
       - path: _test\.go

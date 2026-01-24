@@ -240,11 +240,11 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	// Initialize submodules in new worktree (CLI flag forces enable)
 	if c.InitSubmodules || c.Config.ShouldInitSubmodules() {
 		wtGit := c.Git.InDir(wtPath)
-		count, initErr := wtGit.SubmoduleUpdate(ctx)
-		if initErr != nil {
+		count, err := wtGit.SubmoduleUpdate(ctx)
+		if err != nil {
 			result.SubmoduleInit.Attempted = true
 			result.SubmoduleInit.Skipped = true
-			result.SubmoduleInit.Reason = initErr.Error()
+			result.SubmoduleInit.Reason = err.Error()
 		} else if count > 0 {
 			result.SubmoduleInit.Attempted = true
 			result.SubmoduleInit.Count = count

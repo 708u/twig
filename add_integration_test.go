@@ -41,7 +41,7 @@ func TestAddCommand_Integration(t *testing.T) {
 		}
 
 		wtPath := filepath.Join(repoDir, "feature", "test")
-		if _, statErr := os.Stat(wtPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 
@@ -575,7 +575,7 @@ worktree_destination_base_dir = %q
 
 		// Verify worktree was created successfully
 		wtPath := filepath.Join(repoDir, "feature", "warn-test")
-		if _, statErr := os.Stat(wtPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 
@@ -719,7 +719,7 @@ worktree_destination_base_dir = %q
 
 		// Verify worktree was created
 		wtPath := filepath.Join(repoDir, "feature", "sync-test")
-		if _, statErr := os.Stat(wtPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 
@@ -782,7 +782,7 @@ worktree_destination_base_dir = %q
 
 		// Verify worktree was created
 		wtPath := filepath.Join(repoDir, "feature", "carry-test")
-		if _, statErr := os.Stat(wtPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 
@@ -852,7 +852,7 @@ worktree_destination_base_dir = %q
 
 		// Verify worktree was created
 		wtPath := filepath.Join(repoDir, "feature", "carry-from-other")
-		if _, statErr := os.Stat(wtPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 
@@ -967,7 +967,7 @@ worktree_destination_base_dir = %q
 
 		// Verify worktree was created
 		wtPath := filepath.Join(repoDir, "feature", "sync-go-only")
-		if _, statErr := os.Stat(wtPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 
@@ -983,7 +983,7 @@ worktree_destination_base_dir = %q
 
 		// Verify readme.txt does NOT exist in new worktree (not synced)
 		notSyncedTxtFile := filepath.Join(wtPath, "readme.txt")
-		if _, statErr := os.Stat(notSyncedTxtFile); !os.IsNotExist(statErr) {
+		if _, err := os.Stat(notSyncedTxtFile); !os.IsNotExist(err) {
 			t.Errorf("readme.txt should not exist in new worktree: %s", notSyncedTxtFile)
 		}
 
@@ -1228,7 +1228,7 @@ worktree_destination_base_dir = %q
 
 		// Verify worktree was created
 		wtPath := filepath.Join(repoDir, "feature", "carry-go-only")
-		if _, statErr := os.Stat(wtPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 
@@ -1244,12 +1244,12 @@ worktree_destination_base_dir = %q
 
 		// Verify readme.txt does NOT exist in new worktree (not carried)
 		notCarriedTxtFile := filepath.Join(wtPath, "readme.txt")
-		if _, statErr := os.Stat(notCarriedTxtFile); !os.IsNotExist(statErr) {
+		if _, err := os.Stat(notCarriedTxtFile); !os.IsNotExist(err) {
 			t.Errorf("readme.txt should not exist in new worktree: %s", notCarriedTxtFile)
 		}
 
 		// Verify main.go does NOT exist in source (carried away)
-		if _, statErr := os.Stat(goFile); !os.IsNotExist(statErr) {
+		if _, err := os.Stat(goFile); !os.IsNotExist(err) {
 			t.Errorf("main.go should not exist in source after carry: %s", goFile)
 		}
 
@@ -1498,7 +1498,7 @@ worktree_destination_base_dir = %q
 
 		// Verify worktree was created
 		wtPath := filepath.Join(repoDir, "feature", "remote-only")
-		if _, statErr := os.Stat(wtPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 
@@ -1596,7 +1596,7 @@ worktree_destination_base_dir = %q
 
 		// Verify worktree was created
 		wtPath := filepath.Join(repoDir, "feature", "both-local-remote")
-		if _, statErr := os.Stat(wtPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 
@@ -1747,7 +1747,7 @@ init_submodules = true
 
 		// Verify worktree was created
 		wtPath := filepath.Join(repoDir, "feature", "with-submodule")
-		if _, statErr := os.Stat(wtPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 
@@ -1879,7 +1879,7 @@ init_submodules = false
 
 		// Verify worktree was created
 		wtPath := filepath.Join(repoDir, "feature", "cli-override")
-		if _, statErr := os.Stat(wtPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", wtPath)
 		}
 

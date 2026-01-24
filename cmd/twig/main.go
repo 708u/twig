@@ -470,9 +470,9 @@ Safety checks (all must pass):
 			if !yes {
 				fmt.Fprint(cmd.OutOrStdout(), "\nProceed? [y/N]: ")
 				reader := bufio.NewReader(cmd.InOrStdin())
-				input, readErr := reader.ReadString('\n')
-				if readErr != nil {
-					return readErr
+				input, err := reader.ReadString('\n')
+				if err != nil {
+					return err
 				}
 				input = strings.TrimSpace(strings.ToLower(input))
 				if input != "y" && input != "yes" {
@@ -631,7 +631,7 @@ stop processing of remaining branches.`,
 		if cmd.Flags().Changed("carry") {
 			carryValue, _ := cmd.Flags().GetString("carry")
 			if carryValue != "" && carryValue != carryFromCurrent {
-				if carryWT, findErr := git.WorktreeFindByBranch(ctx, carryValue); findErr == nil {
+				if carryWT, err := git.WorktreeFindByBranch(ctx, carryValue); err == nil {
 					dir = carryWT.Path
 				}
 			}

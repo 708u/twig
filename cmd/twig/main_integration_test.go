@@ -69,7 +69,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 
 		// Verify worktree was created
 		featBPath := filepath.Join(repoDir, "feat", "b")
-		if _, statErr := os.Stat(featBPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(featBPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", featBPath)
 		}
 
@@ -206,8 +206,8 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 
 		// Create a file unique to feat/a (not in symlinks, not in main)
 		featAOnlyFile := filepath.Join(featAPath, "feat-a-only.txt")
-		if writeErr := os.WriteFile(featAOnlyFile, []byte("only in feat/a"), 0644); writeErr != nil {
-			t.Fatal(writeErr)
+		if err := os.WriteFile(featAOnlyFile, []byte("only in feat/a"), 0644); err != nil {
+			t.Fatal(err)
 		}
 
 		// Load config from feat/a - it should have default_source = "main"
@@ -244,7 +244,7 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 
 		// Verify worktree was created
 		featBPath := filepath.Join(repoDir, "feat", "b")
-		if _, statErr := os.Stat(featBPath); os.IsNotExist(statErr) {
+		if _, err := os.Stat(featBPath); os.IsNotExist(err) {
 			t.Errorf("worktree directory does not exist: %s", featBPath)
 		}
 
