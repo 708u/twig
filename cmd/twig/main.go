@@ -627,26 +627,17 @@ stop processing of remaining branches.`,
 		ctx := cmd.Context()
 		git := twig.NewGitRunner(dir)
 
-		// Resolve directory for changed files based on flags
-		// Priority: --carry=<branch> > --carry (no value) > --source > current
+		// Use --carry target's worktree if specified
 		if cmd.Flags().Changed("carry") {
 			carryValue, _ := cmd.Flags().GetString("carry")
 			if carryValue != "" && carryValue != carryFromCurrent {
-				// --carry=<branch>: use that branch's worktree
 				if carryWT, findErr := git.WorktreeFindByBranch(ctx, carryValue); findErr == nil {
 					dir = carryWT.Path
 				}
 			}
-			// --carry (no value or carryFromCurrent): use current worktree (dir unchanged)
-		} else if source, _ := cmd.Flags().GetString("source"); source != "" {
-			// --source: use that branch's worktree
-			if sourceWT, findErr := git.WorktreeFindByBranch(ctx, source); findErr == nil {
-				dir = sourceWT.Path
-			}
 		}
-		// No flags: use current worktree (dir unchanged)
 
-		// Get changed files from the resolved directory
+		// Recreate with resolved dir (GitRunner holds dir internally)
 		git = twig.NewGitRunner(dir)
 		files, err := git.ChangedFiles(ctx)
 		if err != nil {
