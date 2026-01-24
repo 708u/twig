@@ -10,6 +10,24 @@ import random
 import sys
 from datetime import datetime
 
+# Checks required by file extension
+CHECKS = {
+    ".go": [
+        "go test ./...",
+        "make lint",
+        "make fmt",
+    ],
+}
+
+# Checks required by file extension
+CHECKS_BY_EXT = {
+    ".go": [
+        "go test ./...",
+        "make lint",
+        "make fmt",
+    ],
+}
+
 # State directory (relative to this script)
 STATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state")
 
@@ -105,9 +123,10 @@ def main():
     save_state(session_id, state)
 
     print("Warning: Have you run the necessary checks?", file=sys.stderr)
-    print("  - go test ./...", file=sys.stderr)
-    print("  - make lint", file=sys.stderr)
-    print("  - make fmt", file=sys.stderr)
+    for ext, commands in CHECKS.items():
+        print(f"  {ext}:", file=sys.stderr)
+        for cmd in commands:
+            print(f"    - {cmd}", file=sys.stderr)
     print("Commit again to proceed.", file=sys.stderr)
     sys.exit(2)
 
