@@ -141,7 +141,12 @@ def main():
     state["warned"] = True
     save_state(session_id, state)
 
-    print("Warning: Have you run the necessary checks? Commit again to proceed.", file=sys.stderr)
+    print("Warning: Have you run the necessary checks?", file=sys.stderr)
+    for category, info in CHECKS.items():
+        print(f"  [{category}] {info['when']}", file=sys.stderr)
+        for cmd in info["commands"]:
+            print(f"    - {cmd}", file=sys.stderr)
+    print("Commit again to proceed.", file=sys.stderr)
     sys.exit(2)
 
 
