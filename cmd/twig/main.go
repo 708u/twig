@@ -631,7 +631,7 @@ stop processing of remaining branches.`,
 		if cmd.Flags().Changed("carry") {
 			carryValue, _ := cmd.Flags().GetString("carry")
 			if carryValue != "" && carryValue != carryFromCurrent {
-				if carryWT, findErr := git.WorktreeFindByBranch(ctx, carryValue); findErr == nil {
+				if carryWT, err := git.WorktreeFindByBranch(ctx, carryValue); err == nil {
 					dir = carryWT.Path
 				}
 			}
