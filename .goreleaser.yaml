@@ -81,16 +81,13 @@ changelog:
     - title: "Performance"
       regexp: '^perf(\(.+\))?:.+$'
       order: 3
+    - title: "Documentation"
+      regexp: '^docs(\(.+\))?:.+$'
+      order: 4
     - title: "Other Changes"
       order: 999
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
-      - "^ci:"
-      - "^style:"
-      - "^refactor:"
       - "^Merge pull request"
       - "^Merge branch"
 
