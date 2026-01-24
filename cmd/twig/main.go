@@ -625,16 +625,20 @@ stop processing of remaining branches.`,
 		}
 
 		ctx := cmd.Context()
-		// If --source is specified, resolve to that worktree
-		if source, _ := cmd.Flags().GetString("source"); source != "" {
-			git := twig.NewGitRunner(dir)
-			if sourceWT, findErr := git.WorktreeFindByBranch(ctx, source); findErr == nil {
-				dir = sourceWT.Path
+		git := twig.NewGitRunner(dir)
+
+		// Use --carry target's worktree if specified
+		if cmd.Flags().Changed("carry") {
+			carryValue, _ := cmd.Flags().GetString("carry")
+			if carryValue != "" && carryValue != carryFromCurrent {
+				if carryWT, findErr := git.WorktreeFindByBranch(ctx, carryValue); findErr == nil {
+					dir = carryWT.Path
+				}
 			}
 		}
 
-		// Get changed files from the target directory
-		git := twig.NewGitRunner(dir)
+		// Recreate with resolved dir (GitRunner holds dir internally)
+		git = twig.NewGitRunner(dir)
 		files, err := git.ChangedFiles(ctx)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
@@ -649,6 +653,30 @@ stop processing of remaining branches.`,
 		}
 
 		return completions, cobra.ShellCompDirectiveNoSpace
+	})
+	addCmd.RegisterFlagCompletionFunc("carry", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		dir, err := resolveCompletionDirectory(cmd)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		git := twig.NewGitRunner(dir)
+		branches, err := git.WorktreeListBranches(cmd.Context())
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		return branches, cobra.ShellCompDirectiveNoFileComp
+	})
+	addCmd.RegisterFlagCompletionFunc("source", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		dir, err := resolveCompletionDirectory(cmd)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		git := twig.NewGitRunner(dir)
+		branches, err := git.WorktreeListBranches(cmd.Context())
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		return branches, cobra.ShellCompDirectiveNoFileComp
 	})
 	rootCmd.AddCommand(addCmd)
 
@@ -853,6 +881,18 @@ Examples:
 	syncCmd.Flags().String("source", "", "Source branch (default: default_source config)")
 	syncCmd.Flags().BoolP("all", "a", false, "Sync all worktrees (except main)")
 	syncCmd.Flags().Bool("check", false, "Show what would be synced (dry-run)")
+	syncCmd.RegisterFlagCompletionFunc("source", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		dir, err := resolveCompletionDirectory(cmd)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		git := twig.NewGitRunner(dir)
+		branches, err := git.WorktreeListBranches(cmd.Context())
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		return branches, cobra.ShellCompDirectiveNoFileComp
+	})
 	rootCmd.AddCommand(syncCmd)
 
 	versionCmd := &cobra.Command{
