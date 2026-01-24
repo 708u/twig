@@ -771,7 +771,7 @@ func TestSyncCommandCompletion_Integration(t *testing.T) {
 func TestRemoveCommandCompletion_Integration(t *testing.T) {
 	t.Parallel()
 
-	t.Run("ExcludesMainWorktree", func(t *testing.T) {
+	t.Run("SuggestsRemovableWorktrees", func(t *testing.T) {
 		t.Parallel()
 
 		_, mainDir := testutil.SetupTestRepo(t)
