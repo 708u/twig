@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -680,6 +681,152 @@ func TestAddCommandCompletion_Integration(t *testing.T) {
 		}
 		if len(completions) < 1 {
 			t.Errorf("expected at least 1 completion, got %d", len(completions))
+		}
+	})
+
+	t.Run("FileFlag_WithCarryBranch", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		featDir := filepath.Join(filepath.Dir(mainDir), "feat-file")
+
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/file", featDir)
+
+		// Create uncommitted file only in feat/file worktree
+		if err := os.WriteFile(filepath.Join(featDir, "feat-only.txt"), []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := newRootCmd()
+		addCmd, _, _ := cmd.Find([]string{"add"})
+		if addCmd == nil {
+			t.Fatal("add command not found")
+		}
+
+		if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+			t.Fatalf("failed to set directory flag: %v", err)
+		}
+		// Set --carry=feat/file to get files from that worktree
+		if err := addCmd.Flags().Set("carry", "feat/file"); err != nil {
+			t.Fatalf("failed to set carry flag: %v", err)
+		}
+		addCmd.SetContext(t.Context())
+
+		completionFunc, exists := addCmd.GetFlagCompletionFunc("file")
+		if !exists {
+			t.Fatal("file flag completion function not registered")
+		}
+
+		completions, directive := completionFunc(addCmd, []string{}, "")
+
+		if directive != 2 { // cobra.ShellCompDirectiveNoSpace = 2 (1 << 1)
+			t.Errorf("directive = %d, want %d (NoSpace)", directive, 2)
+		}
+
+		// Should include feat-only.txt from feat/file worktree
+		if !slices.Contains(completions, "feat-only.txt") {
+			t.Errorf("expected feat-only.txt in completions, got %v", completions)
+		}
+	})
+
+	t.Run("FileFlag_WithSource", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		featDir := filepath.Join(filepath.Dir(mainDir), "feat-src")
+
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/src", featDir)
+
+		// Create uncommitted file only in feat/src worktree
+		if err := os.WriteFile(filepath.Join(featDir, "source-only.txt"), []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := newRootCmd()
+		addCmd, _, _ := cmd.Find([]string{"add"})
+		if addCmd == nil {
+			t.Fatal("add command not found")
+		}
+
+		if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+			t.Fatalf("failed to set directory flag: %v", err)
+		}
+		// Set --source=feat/src (without --carry, so --source is used)
+		if err := addCmd.Flags().Set("source", "feat/src"); err != nil {
+			t.Fatalf("failed to set source flag: %v", err)
+		}
+		addCmd.SetContext(t.Context())
+
+		completionFunc, exists := addCmd.GetFlagCompletionFunc("file")
+		if !exists {
+			t.Fatal("file flag completion function not registered")
+		}
+
+		completions, directive := completionFunc(addCmd, []string{}, "")
+
+		if directive != 2 { // cobra.ShellCompDirectiveNoSpace = 2 (1 << 1)
+			t.Errorf("directive = %d, want %d (NoSpace)", directive, 2)
+		}
+
+		// Should include source-only.txt from feat/src worktree
+		if !slices.Contains(completions, "source-only.txt") {
+			t.Errorf("expected source-only.txt in completions, got %v", completions)
+		}
+	})
+
+	t.Run("FileFlag_CarryTakesPrecedenceOverSource", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+		carryDir := filepath.Join(filepath.Dir(mainDir), "feat-carry")
+		sourceDir := filepath.Join(filepath.Dir(mainDir), "feat-source")
+
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/carry", carryDir)
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/source", sourceDir)
+
+		// Create different files in each worktree
+		if err := os.WriteFile(filepath.Join(carryDir, "carry-file.txt"), []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(sourceDir, "source-file.txt"), []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := newRootCmd()
+		addCmd, _, _ := cmd.Find([]string{"add"})
+		if addCmd == nil {
+			t.Fatal("add command not found")
+		}
+
+		if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+			t.Fatalf("failed to set directory flag: %v", err)
+		}
+		// Set both --carry and --source; --carry should take precedence
+		if err := addCmd.Flags().Set("carry", "feat/carry"); err != nil {
+			t.Fatalf("failed to set carry flag: %v", err)
+		}
+		if err := addCmd.Flags().Set("source", "feat/source"); err != nil {
+			t.Fatalf("failed to set source flag: %v", err)
+		}
+		addCmd.SetContext(t.Context())
+
+		completionFunc, exists := addCmd.GetFlagCompletionFunc("file")
+		if !exists {
+			t.Fatal("file flag completion function not registered")
+		}
+
+		completions, directive := completionFunc(addCmd, []string{}, "")
+
+		if directive != 2 { // cobra.ShellCompDirectiveNoSpace = 2 (1 << 1)
+			t.Errorf("directive = %d, want %d (NoSpace)", directive, 2)
+		}
+
+		// Should include carry-file.txt (from --carry), not source-file.txt
+		if !slices.Contains(completions, "carry-file.txt") {
+			t.Errorf("expected carry-file.txt in completions, got %v", completions)
+		}
+		if slices.Contains(completions, "source-file.txt") {
+			t.Errorf("should not include source-file.txt when --carry is set, got %v", completions)
 		}
 	})
 }
