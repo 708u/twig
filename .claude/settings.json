@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/pre-commit-check.py"
+            "command": "python3 .claude/hooks/pre-commit-check/pre-commit-check.py"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/post-commit-reset.py"
+            "command": "python3 .claude/hooks/pre-commit-check/post-push-reset.py"
           }
         ]
       }

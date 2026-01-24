@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
 """
-Post-commit reset hook for Claude Code.
-Resets check execution state after successful git commit.
+Post-push reset hook for Claude Code.
+Resets check execution state after successful git push.
 """
 
 import json
 import os
 import sys
 
-# State file prefix (must match pre-commit-check.py)
-STATE_FILE_PREFIX = "pre_commit_state_"
+# State directory (relative to this script, must match pre-commit-check.py)
+STATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state")
 
 
 def get_state_file(session_id):
     """Get session-specific state file path."""
-    return os.path.expanduser(f"~/.claude/{STATE_FILE_PREFIX}{session_id}.json")
+    return os.path.join(STATE_DIR, f"{session_id}.json")
 
 
 def reset_state(session_id):
-    """Reset state after successful commit."""
+    """Reset state after successful push."""
     state_file = get_state_file(session_id)
     state = {"checks": [], "warnings": []}
     try:
-        os.makedirs(os.path.dirname(state_file), exist_ok=True)
+        os.makedirs(STATE_DIR, exist_ok=True)
         with open(state_file, "w") as f:
             json.dump(state, f)
     except IOError:
@@ -51,11 +51,10 @@ def main():
     if not command:
         sys.exit(0)
 
-    # Check if this was a successful git commit
-    if "git commit" in command:
-        stdout = tool_response.get("stdout", "")
-        # git commit output contains [branch hash] on success
-        if "[" in stdout:
+    # Reset state after successful git push
+    if "git push" in command:
+        exit_code = tool_response.get("exitCode", 1)
+        if exit_code == 0:
             reset_state(session_id)
 
     sys.exit(0)

@@ -11,28 +11,27 @@ import re
 import sys
 from datetime import datetime
 
-# State file prefix
-STATE_FILE_PREFIX = "pre_commit_state_"
+# State directory (relative to this script)
+STATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state")
 
 
 def get_state_file(session_id):
     """Get session-specific state file path."""
-    return os.path.expanduser(f"~/.claude/{STATE_FILE_PREFIX}{session_id}.json")
+    return os.path.join(STATE_DIR, f"{session_id}.json")
 
 
 def cleanup_old_state_files():
     """Remove state files older than 30 days."""
     try:
-        state_dir = os.path.expanduser("~/.claude")
-        if not os.path.exists(state_dir):
+        if not os.path.exists(STATE_DIR):
             return
 
         current_time = datetime.now().timestamp()
         thirty_days_ago = current_time - (30 * 24 * 60 * 60)
 
-        for filename in os.listdir(state_dir):
-            if filename.startswith(STATE_FILE_PREFIX) and filename.endswith(".json"):
-                file_path = os.path.join(state_dir, filename)
+        for filename in os.listdir(STATE_DIR):
+            if filename.endswith(".json"):
+                file_path = os.path.join(STATE_DIR, filename)
                 try:
                     file_mtime = os.path.getmtime(file_path)
                     if file_mtime < thirty_days_ago:
@@ -63,7 +62,7 @@ def save_state(session_id, state):
     """Save state to file."""
     state_file = get_state_file(session_id)
     try:
-        os.makedirs(os.path.dirname(state_file), exist_ok=True)
+        os.makedirs(STATE_DIR, exist_ok=True)
         with open(state_file, "w") as f:
             json.dump(
                 {
