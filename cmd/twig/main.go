@@ -518,15 +518,18 @@ stop processing of remaining branches.`,
 				return nil, cobra.ShellCompDirectiveError
 			}
 			git := twig.NewGitRunner(dir)
-			branches, err := git.WorktreeListBranches(cmd.Context())
+			worktrees, err := git.WorktreeList(cmd.Context())
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
-			// Exclude already-specified branches from suggestions
-			available := make([]string, 0, len(branches))
-			for _, b := range branches {
-				if !slices.Contains(args, b) {
-					available = append(available, b)
+			// Exclude main worktree, detached HEAD, and already-specified branches
+			var available []string
+			for i, wt := range worktrees {
+				if i == 0 || wt.Branch == "" {
+					continue
+				}
+				if !slices.Contains(args, wt.Branch) {
+					available = append(available, wt.Branch)
 				}
 			}
 			return available, cobra.ShellCompDirectiveNoFileComp

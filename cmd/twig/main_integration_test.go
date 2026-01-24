@@ -768,6 +768,50 @@ func TestSyncCommandCompletion_Integration(t *testing.T) {
 	})
 }
 
+func TestRemoveCommandCompletion_Integration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("SuggestsRemovableWorktrees", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/test", filepath.Join(filepath.Dir(mainDir), "feat-test"))
+
+		cmd := newRootCmd()
+		removeCmd, _, _ := cmd.Find([]string{"remove"})
+		if removeCmd == nil {
+			t.Fatal("remove command not found")
+		}
+
+		if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+			t.Fatalf("failed to set directory flag: %v", err)
+		}
+		removeCmd.SetContext(t.Context())
+
+		completionFunc := removeCmd.ValidArgsFunction
+		if completionFunc == nil {
+			t.Fatal("ValidArgsFunction not registered")
+		}
+
+		completions, directive := completionFunc(removeCmd, []string{}, "")
+
+		if directive != 4 { // cobra.ShellCompDirectiveNoFileComp = 4 (1 << 2)
+			t.Errorf("directive = %d, want %d (NoFileComp)", directive, 4)
+		}
+
+		// main should not be in completion candidates
+		if slices.Contains(completions, "main") {
+			t.Errorf("completions should not contain main, got %v", completions)
+		}
+
+		// feat/test should be in completion candidates
+		if !slices.Contains(completions, "feat/test") {
+			t.Errorf("completions should contain feat/test, got %v", completions)
+		}
+	})
+}
+
 func TestVersion_Integration(t *testing.T) {
 	t.Parallel()
 
