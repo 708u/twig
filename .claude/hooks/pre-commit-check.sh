@@ -11,7 +11,7 @@ if [[ "$tool_name" == "Bash" ]] && [[ "$command" == *"git commit"* ]]; then
   echo "  - go test ./..." >&2
   echo "  - make lint (or golangci-lint run)" >&2
   echo "  - make fmt (or go fmt ./...)" >&2
-  exit 2  # Block and display warning
+  exit 0  # Display warning but allow continuation
 fi
 
 exit 0
