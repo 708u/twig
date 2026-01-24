@@ -8,7 +8,6 @@ import json
 import os
 import re
 import sys
-from datetime import datetime
 
 # State file to track test execution (session-scoped)
 def get_state_file(session_id):
@@ -23,7 +22,7 @@ def load_state(session_id):
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             pass
-    return {"tests_run": False, "last_test_time": None}
+    return {"test": False, "lint": False, "fmt": False}
 
 def save_state(session_id, state):
     """Save state to file."""
@@ -35,21 +34,16 @@ def save_state(session_id, state):
     except IOError:
         pass
 
-def is_test_command(command):
-    """Check if command is a test/lint/fmt command."""
-    test_patterns = [
-        r"go\s+test",
-        r"make\s+lint",
-        r"make\s+fmt",
-        r"make\s+test",
-        r"golangci-lint",
-        r"go\s+fmt",
-        r"gofmt",
-    ]
-    for pattern in test_patterns:
-        if re.search(pattern, command):
-            return True
-    return False
+def detect_check_types(command):
+    """Detect which check types the command contains. Returns list of check types."""
+    checks = []
+    if re.search(r"go\s+test", command):
+        checks.append("test")
+    if re.search(r"make\s+lint", command) or re.search(r"golangci-lint\s+run", command):
+        checks.append("lint")
+    if re.search(r"make\s+fmt", command) or re.search(r"golangci-lint\s+fmt", command):
+        checks.append("fmt")
+    return checks
 
 def is_commit_command(command):
     """Check if command is a git commit command."""
@@ -77,23 +71,31 @@ def main():
 
     state = load_state(session_id)
 
-    # If this is a test command, mark tests as run
-    if is_test_command(command):
-        state["tests_run"] = True
-        state["last_test_time"] = datetime.now().isoformat()
+    # If this is a check command, mark those checks as done
+    check_types = detect_check_types(command)
+    if check_types:
+        for check_type in check_types:
+            state[check_type] = True
         save_state(session_id, state)
         sys.exit(0)
 
-    # If this is a commit command, check if tests were run
+    # If this is a commit command, check if all checks were run
     if is_commit_command(command):
-        if not state.get("tests_run", False):
-            print("Warning: Tests have not been run in this session.", file=sys.stderr)
+        missing = []
+        if not state.get("test", False):
+            missing.append("go test ./...")
+        if not state.get("lint", False):
+            missing.append("make lint")
+        if not state.get("fmt", False):
+            missing.append("make fmt")
+
+        if missing:
+            print("Warning: Required checks have not been run in this session.", file=sys.stderr)
             print("Please run the following before committing:", file=sys.stderr)
-            print("  - go test ./...", file=sys.stderr)
-            print("  - make lint (or golangci-lint run)", file=sys.stderr)
-            print("  - make fmt (or go fmt ./...)", file=sys.stderr)
+            for cmd in missing:
+                print(f"  - {cmd}", file=sys.stderr)
             sys.exit(2)
-        # Tests were run, allow commit
+        # All checks passed, allow commit
         sys.exit(0)
 
     sys.exit(0)

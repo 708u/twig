@@ -14,7 +14,7 @@ def get_state_file(session_id):
 def reset_state(session_id):
     """Reset state after successful commit."""
     state_file = get_state_file(session_id)
-    state = {"tests_run": False, "last_test_time": None}
+    state = {"test": False, "lint": False, "fmt": False}
     try:
         os.makedirs(os.path.dirname(state_file), exist_ok=True)
         with open(state_file, "w") as f:
