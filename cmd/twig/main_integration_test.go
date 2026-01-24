@@ -614,6 +614,39 @@ func TestCleanCommand_InteractiveConfirmation_Integration(t *testing.T) {
 func TestAddCommandCompletion_Integration(t *testing.T) {
 	t.Parallel()
 
+	t.Run("SourceFlag", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/b", filepath.Join(filepath.Dir(mainDir), "feat-b"))
+
+		cmd := newRootCmd()
+		addCmd, _, _ := cmd.Find([]string{"add"})
+		if addCmd == nil {
+			t.Fatal("add command not found")
+		}
+
+		if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
+			t.Fatalf("failed to set directory flag: %v", err)
+		}
+		addCmd.SetContext(t.Context())
+
+		completionFunc, exists := addCmd.GetFlagCompletionFunc("source")
+		if !exists {
+			t.Fatal("source flag completion function not registered")
+		}
+
+		completions, directive := completionFunc(addCmd, []string{}, "")
+
+		if directive != 4 { // cobra.ShellCompDirectiveNoFileComp = 4 (1 << 2)
+			t.Errorf("directive = %d, want %d (NoFileComp)", directive, 4)
+		}
+		if len(completions) < 1 {
+			t.Errorf("expected at least 1 completion, got %d", len(completions))
+		}
+	})
+
 	t.Run("CarryFlag", func(t *testing.T) {
 		t.Parallel()
 
@@ -637,41 +670,6 @@ func TestAddCommandCompletion_Integration(t *testing.T) {
 		completionFunc, exists := addCmd.GetFlagCompletionFunc("carry")
 		if !exists {
 			t.Fatal("carry flag completion function not registered")
-		}
-
-		completions, directive := completionFunc(addCmd, []string{}, "")
-
-		if directive != 4 { // cobra.ShellCompDirectiveNoFileComp = 4 (1 << 2)
-			t.Errorf("directive = %d, want %d (NoFileComp)", directive, 4)
-		}
-		if len(completions) < 1 {
-			t.Errorf("expected at least 1 completion, got %d", len(completions))
-		}
-	})
-
-	t.Run("SourceFlag", func(t *testing.T) {
-		t.Parallel()
-
-		_, mainDir := testutil.SetupTestRepo(t)
-
-		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/b", filepath.Join(filepath.Dir(mainDir), "feat-b"))
-
-		cmd := newRootCmd()
-		addCmd, _, _ := cmd.Find([]string{"add"})
-		if addCmd == nil {
-			t.Fatal("add command not found")
-		}
-
-		// Set directory flag directly since we're calling completion function
-		// without Execute() (which would parse flags from SetArgs)
-		if err := cmd.PersistentFlags().Set("directory", mainDir); err != nil {
-			t.Fatalf("failed to set directory flag: %v", err)
-		}
-		addCmd.SetContext(t.Context())
-
-		completionFunc, exists := addCmd.GetFlagCompletionFunc("source")
-		if !exists {
-			t.Fatal("source flag completion function not registered")
 		}
 
 		completions, directive := completionFunc(addCmd, []string{}, "")
