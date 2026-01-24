@@ -23,24 +23,23 @@ git log $(git tag --sort=-v:refname | head -1)..HEAD --oneline
 
 Based on conventional commits since last tag:
 
-| Commit Type    | Version Bump | Changelog |
-|----------------|--------------|-----------|
-| `!` (breaking) | MAJOR        | Yes       |
-| `feat`         | MINOR        | Yes       |
-| `fix`          | PATCH        | Yes       |
-| `perf`         | PATCH        | Yes       |
-| `build`        | PATCH        | No        |
-| `chore`        | PATCH        | No        |
-| `refactor`     | PATCH        | No        |
-| `ci`           | -            | No        |
-| `docs`         | -            | No        |
-| `style`        | -            | No        |
-| `test`         | -            | No        |
+| Commit Type    | Version Bump | Changelog Group  |
+|----------------|--------------|------------------|
+| `!` (breaking) | MAJOR        | Breaking Changes |
+| `feat`         | MINOR        | New Features     |
+| `fix`          | PATCH        | Bug Fixes        |
+| `perf`         | PATCH        | Performance      |
+| `docs`         | -            | Documentation    |
+| `build`        | PATCH        | Other Changes    |
+| `chore`        | PATCH        | Other Changes    |
+| `refactor`     | PATCH        | Other Changes    |
+| `ci`           | -            | Other Changes    |
+| `style`        | -            | Other Changes    |
+| `test`         | -            | Other Changes    |
 
 #### Judgment criteria
 
 - **Breaking change (`!`)**: CLI flags/arguments or config file format changes
-- **Claude plugin updates**: Use `chore` (not included in changelog)
 
 ### 3. Create and push tag
 
