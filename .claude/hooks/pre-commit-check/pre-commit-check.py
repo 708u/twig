@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
 Pre-commit check hook for Claude Code.
-Tracks test/lint/fmt execution and warns if not run before git commit.
+Warns before git commit and allows on second attempt.
 """
 
 import json
 import os
 import random
-import re
 import sys
 from datetime import datetime
 
@@ -49,13 +48,10 @@ def load_state(session_id):
         try:
             with open(state_file, "r") as f:
                 data = json.load(f)
-                return {
-                    "checks": set(data.get("checks", [])),
-                    "warnings": set(data.get("warnings", [])),
-                }
+                return {"warned": data.get("warned", False)}
         except (json.JSONDecodeError, IOError):
             pass
-    return {"checks": set(), "warnings": set()}
+    return {"warned": False}
 
 
 def save_state(session_id, state):
@@ -64,32 +60,9 @@ def save_state(session_id, state):
     try:
         os.makedirs(STATE_DIR, exist_ok=True)
         with open(state_file, "w") as f:
-            json.dump(
-                {
-                    "checks": list(state["checks"]),
-                    "warnings": list(state["warnings"]),
-                },
-                f,
-            )
+            json.dump(state, f)
     except IOError:
         pass
-
-
-def detect_check_types(command):
-    """Detect which check types the command contains."""
-    checks = []
-    if re.search(r"go\s+test", command):
-        checks.append("test")
-    if re.search(r"make\s+lint", command) or re.search(r"golangci-lint\s+run", command):
-        checks.append("lint")
-    if re.search(r"make\s+fmt", command) or re.search(r"golangci-lint\s+fmt", command):
-        checks.append("fmt")
-    return checks
-
-
-def is_commit_command(command):
-    """Check if command is a git commit command."""
-    return "git commit" in command
 
 
 def main():
@@ -117,48 +90,26 @@ def main():
     if not command:
         sys.exit(0)
 
-    state = load_state(session_id)
-
-    # If this is a check command, mark those checks as done
-    check_types = detect_check_types(command)
-    if check_types:
-        for check_type in check_types:
-            state["checks"].add(check_type)
-        save_state(session_id, state)
+    # Check for git commit command
+    if "git commit" not in command:
         sys.exit(0)
 
-    # If this is a commit command, check if all checks were run
-    if is_commit_command(command):
-        required_checks = {"test", "lint", "fmt"}
-        missing = required_checks - state["checks"]
+    state = load_state(session_id)
 
-        if missing:
-            # Create warning key for this specific set of missing checks
-            warning_key = "commit_missing_" + "_".join(sorted(missing))
+    # Already warned this session, allow commit
+    if state["warned"]:
+        sys.exit(0)
 
-            # Already warned for this, allow commit
-            if warning_key in state["warnings"]:
-                sys.exit(0)
+    # First commit attempt: warn and block
+    state["warned"] = True
+    save_state(session_id, state)
 
-            # First time: warn and block
-            state["warnings"].add(warning_key)
-            save_state(session_id, state)
-
-            missing_commands = {
-                "test": "go test ./...",
-                "lint": "make lint",
-                "fmt": "make fmt",
-            }
-            print("Warning: The following checks have not been run:", file=sys.stderr)
-            for check in sorted(missing):
-                print(f"  - {missing_commands[check]}", file=sys.stderr)
-            print(
-                "Run them if needed, or commit again to proceed anyway.",
-                file=sys.stderr,
-            )
-            sys.exit(2)
-
-    sys.exit(0)
+    print("Warning: Have you run the necessary checks?", file=sys.stderr)
+    print("  - go test ./...", file=sys.stderr)
+    print("  - make lint", file=sys.stderr)
+    print("  - make fmt", file=sys.stderr)
+    print("Commit again to proceed.", file=sys.stderr)
+    sys.exit(2)
 
 
 if __name__ == "__main__":
