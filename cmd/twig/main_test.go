@@ -1292,3 +1292,34 @@ func TestInitCmd(t *testing.T) {
 		}
 	})
 }
+
+func TestRemoveCmd_ValidArgs_ExcludesMain(t *testing.T) {
+	t.Parallel()
+
+	// Setup test repo with worktrees
+	_, mainDir := testutil.SetupTestRepo(t)
+
+	// Create a feature worktree
+	testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/test", filepath.Join(filepath.Dir(mainDir), "feat-test"))
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"-C", mainDir, "__complete", "remove", ""})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+
+	_ = cmd.Execute()
+
+	output := stdout.String()
+
+	// main should not be in completion candidates
+	if strings.Contains(output, "main\n") {
+		t.Errorf("completion output should not contain main branch, got: %q", output)
+	}
+
+	// feat/test should be in completion candidates
+	if !strings.Contains(output, "feat/test") {
+		t.Errorf("completion output should contain feat/test branch, got: %q", output)
+	}
+}
