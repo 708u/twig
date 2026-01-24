@@ -690,6 +690,18 @@ stop processing of remaining branches.`,
 	cleanCmd.Flags().Bool("check", false, "Show candidates without prompting or removing")
 	cleanCmd.Flags().String("target", "", "Target branch for merge check (default: auto-detect)")
 	cleanCmd.Flags().CountP("force", "f", "Force clean (-f: unmerged/uncommitted, -ff: also locked)")
+	cleanCmd.RegisterFlagCompletionFunc("target", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		dir, err := resolveCompletionDirectory(cmd)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		git := twig.NewGitRunner(dir)
+		branches, err := git.BranchList(cmd.Context())
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		return branches, cobra.ShellCompDirectiveNoFileComp
+	})
 	rootCmd.AddCommand(cleanCmd)
 
 	removeCmd.Flags().CountP("force", "f", "Force removal (-f: uncommitted/unmerged, -ff: also locked)")
