@@ -54,8 +54,7 @@ def main():
     # Reset state after successful git push
     if "git push" in command:
         stderr = tool_response.get("stderr", "")
-        # Consider push successful if no error/fatal in stderr
-        if "error:" not in stderr and "fatal:" not in stderr:
+        if not stderr:
             reset_state(session_id)
 
     sys.exit(0)
