@@ -291,8 +291,8 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	// Clean submodules require auto-force for git worktree remove,
 	// but this is safe since Check() already verified no dirty submodules.
 	effectiveForce := opts.Force
-	smStatus, smErr := c.Git.InDir(checkResult.WorktreePath).CheckSubmoduleCleanStatus(ctx)
-	if smErr == nil && smStatus == SubmoduleCleanStatusClean {
+	smStatus, err := c.Git.InDir(checkResult.WorktreePath).CheckSubmoduleCleanStatus(ctx)
+	if err == nil && smStatus == SubmoduleCleanStatusClean {
 		if effectiveForce < WorktreeForceLevelUnclean {
 			effectiveForce = WorktreeForceLevelUnclean
 		}
@@ -333,7 +333,7 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	} else {
 		// upstream gone (squash/rebase merge) requires -D since commits differ
 		// Run() reaches here only after Check() verified no uncommitted changes
-		if gone, goneErr := c.Git.IsBranchUpstreamGone(ctx, branch); goneErr == nil && gone {
+		if gone, err := c.Git.IsBranchUpstreamGone(ctx, branch); err == nil && gone {
 			c.Log.DebugContext(ctx, "upstream gone, using force delete",
 				"category", LogCategoryRemove,
 				"branch", branch)
@@ -521,10 +521,10 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 			Detached: wtInfo.Detached,
 		}
 		// Get changed files for verbose output (low cost, useful for all cases)
-		changedFiles, changedFilesErr := c.Git.InDir(wtInfo.Path).ChangedFiles(ctx)
-		if changedFilesErr != nil {
+		changedFiles, err := c.Git.InDir(wtInfo.Path).ChangedFiles(ctx)
+		if err != nil {
 			// git status failed - return error to caller for proper handling
-			return result, fmt.Errorf("failed to check uncommitted changes: %w", changedFilesErr)
+			return result, fmt.Errorf("failed to check uncommitted changes: %w", err)
 		}
 		result.ChangedFiles = changedFiles
 		if reason := c.checkSkipReason(ctx, wt, opts, changedFiles); reason != "" {
