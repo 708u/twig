@@ -198,4 +198,3 @@ Once installed, Claude can help with worktree operations:
 ## License
 
 [MIT](LICENSE)
-# test
