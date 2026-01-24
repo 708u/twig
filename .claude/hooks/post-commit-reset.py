@@ -33,7 +33,7 @@ def main():
     session_id = input_data.get("session_id", "default")
     tool_name = input_data.get("tool_name", "")
     tool_input = input_data.get("tool_input", {})
-    tool_result = input_data.get("tool_result", {})
+    tool_response = input_data.get("tool_response", {})
 
     # Only handle Bash commands
     if tool_name != "Bash":
@@ -45,12 +45,11 @@ def main():
 
     # Check if this was a successful git commit
     if "git commit" in command:
-        # Check if the command succeeded (exit code 0 or stdout contains commit hash)
-        stdout = tool_result.get("stdout", "")
-        exit_code = tool_result.get("exit_code", None)
+        # Check if the command succeeded (stdout contains [branch hash])
+        stdout = tool_response.get("stdout", "")
 
         # If commit was successful, reset state
-        if exit_code == 0 or "[" in stdout:  # git commit output contains [branch hash]
+        if "[" in stdout:  # git commit output contains [branch hash]
             reset_state(session_id)
 
     sys.exit(0)
