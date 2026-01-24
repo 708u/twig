@@ -16,7 +16,7 @@ CHECKS = {
     "code": {
         "when": "When Go code (*.go, go.mod, go.sum) is modified",
         "commands": [
-            "go test ./...",
+            "make test",
             "make lint",
             "make fmt",
             "go mod tidy",
