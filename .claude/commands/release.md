@@ -25,7 +25,7 @@ Based on conventional commits since last tag:
 
 | Commit Type    | Version Bump | Changelog Group  |
 |----------------|--------------|------------------|
-| `!` (breaking) | MAJOR        | Breaking Changes |
+|  ! (breaking)  | MAJOR        | Breaking Changes |
 | `feat`         | MINOR        | New Features     |
 | `fix`          | PATCH        | Bug Fixes        |
 | `perf`         | PATCH        | Performance      |
@@ -39,7 +39,7 @@ Based on conventional commits since last tag:
 
 #### Judgment criteria
 
-- **Breaking change (`!`)**: CLI flags/arguments or config file format changes
+- **Breaking change ('!')**: CLI flags/arguments or config file format changes
 
 ### 3. Create and push tag
 
