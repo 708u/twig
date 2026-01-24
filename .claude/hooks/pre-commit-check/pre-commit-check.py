@@ -10,13 +10,24 @@ import random
 import sys
 from datetime import datetime
 
-# Checks required by file extension
+# Checks by category
+# Each category has a description of when it's needed and the commands to run
 CHECKS = {
-    ".go": [
-        "go test ./...",
-        "make lint",
-        "make fmt",
-    ],
+    "code": {
+        "when": "When Go code (*.go, go.mod, go.sum) is modified",
+        "commands": [
+            "go test ./...",
+            "make lint",
+            "make fmt",
+            "go mod tidy",
+        ],
+    },
+    "docs": {
+        "when": "When docs (docs/reference/**) or CLI behavior is modified",
+        "commands": [
+            "make sync-plugin-docs",
+        ],
+    },
 }
 
 # Checks required by file extension
@@ -123,9 +134,9 @@ def main():
     save_state(session_id, state)
 
     print("Warning: Have you run the necessary checks?", file=sys.stderr)
-    for ext, commands in CHECKS.items():
-        print(f"  {ext}:", file=sys.stderr)
-        for cmd in commands:
+    for category, info in CHECKS.items():
+        print(f"  [{category}] {info['when']}", file=sys.stderr)
+        for cmd in info["commands"]:
             print(f"    - {cmd}", file=sys.stderr)
     print("Commit again to proceed.", file=sys.stderr)
     sys.exit(2)
