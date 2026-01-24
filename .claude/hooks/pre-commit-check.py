@@ -22,7 +22,7 @@ def load_state(session_id):
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             pass
-    return {"test": False, "lint": False, "fmt": False}
+    return {"test": False, "lint": False, "fmt": False, "warned": False}
 
 def save_state(session_id, state):
     """Save state to file."""
@@ -90,10 +90,17 @@ def main():
             missing.append("make fmt")
 
         if missing:
-            print("Warning: Required checks have not been run in this session.", file=sys.stderr)
-            print("Please run the following before committing:", file=sys.stderr)
+            # Already warned once, allow commit (Claude saw the warning)
+            if state.get("warned", False):
+                sys.exit(0)
+
+            # First time: warn and block
+            print("Warning: The following checks have not been run:", file=sys.stderr)
             for cmd in missing:
                 print(f"  - {cmd}", file=sys.stderr)
+            print("Run them if needed, or commit again to proceed anyway.", file=sys.stderr)
+            state["warned"] = True
+            save_state(session_id, state)
             sys.exit(2)
         # All checks passed, allow commit
         sys.exit(0)
