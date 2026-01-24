@@ -619,9 +619,6 @@ func TestAddCommandCompletion_Integration(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t)
 
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/a", filepath.Join(filepath.Dir(mainDir), "feat-a"))
-		t.Cleanup(func() {
-			testutil.RunGit(t, mainDir, "worktree", "remove", "--force", filepath.Join(filepath.Dir(mainDir), "feat-a"))
-		})
 
 		cmd := newRootCmd()
 		addCmd, _, _ := cmd.Find([]string{"add"})
@@ -657,9 +654,6 @@ func TestAddCommandCompletion_Integration(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t)
 
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/b", filepath.Join(filepath.Dir(mainDir), "feat-b"))
-		t.Cleanup(func() {
-			testutil.RunGit(t, mainDir, "worktree", "remove", "--force", filepath.Join(filepath.Dir(mainDir), "feat-b"))
-		})
 
 		cmd := newRootCmd()
 		addCmd, _, _ := cmd.Find([]string{"add"})
@@ -699,9 +693,6 @@ func TestSyncCommandCompletion_Integration(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t)
 
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/c", filepath.Join(filepath.Dir(mainDir), "feat-c"))
-		t.Cleanup(func() {
-			testutil.RunGit(t, mainDir, "worktree", "remove", "--force", filepath.Join(filepath.Dir(mainDir), "feat-c"))
-		})
 
 		cmd := newRootCmd()
 		syncCmd, _, _ := cmd.Find([]string{"sync"})
