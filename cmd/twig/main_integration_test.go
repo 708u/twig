@@ -610,7 +610,7 @@ func TestCleanCommand_InteractiveConfirmation_Integration(t *testing.T) {
 	})
 }
 
-func TestFlagCompletion_Integration(t *testing.T) {
+func TestCommandCompletion_Integration(t *testing.T) {
 	t.Parallel()
 
 	t.Run("Add", func(t *testing.T) {
