@@ -1,17 +1,47 @@
 #!/usr/bin/env python3
 """
 Pre-commit check hook for Claude Code.
-Tracks test/lint/fmt execution and requires them before git commit.
+Tracks test/lint/fmt execution and warns if not run before git commit.
 """
 
 import json
 import os
+import random
 import re
 import sys
+from datetime import datetime
 
-# State file to track test execution (session-scoped)
+# State file prefix
+STATE_FILE_PREFIX = "pre_commit_state_"
+
+
 def get_state_file(session_id):
-    return os.path.expanduser(f"~/.claude/pre_commit_state_{session_id}.json")
+    """Get session-specific state file path."""
+    return os.path.expanduser(f"~/.claude/{STATE_FILE_PREFIX}{session_id}.json")
+
+
+def cleanup_old_state_files():
+    """Remove state files older than 30 days."""
+    try:
+        state_dir = os.path.expanduser("~/.claude")
+        if not os.path.exists(state_dir):
+            return
+
+        current_time = datetime.now().timestamp()
+        thirty_days_ago = current_time - (30 * 24 * 60 * 60)
+
+        for filename in os.listdir(state_dir):
+            if filename.startswith(STATE_FILE_PREFIX) and filename.endswith(".json"):
+                file_path = os.path.join(state_dir, filename)
+                try:
+                    file_mtime = os.path.getmtime(file_path)
+                    if file_mtime < thirty_days_ago:
+                        os.remove(file_path)
+                except (OSError, IOError):
+                    pass
+    except Exception:
+        pass
+
 
 def load_state(session_id):
     """Load state from file."""
@@ -19,10 +49,15 @@ def load_state(session_id):
     if os.path.exists(state_file):
         try:
             with open(state_file, "r") as f:
-                return json.load(f)
+                data = json.load(f)
+                return {
+                    "checks": set(data.get("checks", [])),
+                    "warnings": set(data.get("warnings", [])),
+                }
         except (json.JSONDecodeError, IOError):
             pass
-    return {"test": False, "lint": False, "fmt": False, "warned": False}
+    return {"checks": set(), "warnings": set()}
+
 
 def save_state(session_id, state):
     """Save state to file."""
@@ -30,12 +65,19 @@ def save_state(session_id, state):
     try:
         os.makedirs(os.path.dirname(state_file), exist_ok=True)
         with open(state_file, "w") as f:
-            json.dump(state, f)
+            json.dump(
+                {
+                    "checks": list(state["checks"]),
+                    "warnings": list(state["warnings"]),
+                },
+                f,
+            )
     except IOError:
         pass
 
+
 def detect_check_types(command):
-    """Detect which check types the command contains. Returns list of check types."""
+    """Detect which check types the command contains."""
     checks = []
     if re.search(r"go\s+test", command):
         checks.append("test")
@@ -45,11 +87,18 @@ def detect_check_types(command):
         checks.append("fmt")
     return checks
 
+
 def is_commit_command(command):
     """Check if command is a git commit command."""
-    return "git commit" in command or "git commit" in command.replace("  ", " ")
+    return "git commit" in command
+
 
 def main():
+    """Main hook function."""
+    # Periodically clean up old state files (10% chance per run)
+    if random.random() < 0.1:
+        cleanup_old_state_files()
+
     # Read input from stdin
     try:
         raw_input = sys.stdin.read()
@@ -75,37 +124,43 @@ def main():
     check_types = detect_check_types(command)
     if check_types:
         for check_type in check_types:
-            state[check_type] = True
+            state["checks"].add(check_type)
         save_state(session_id, state)
         sys.exit(0)
 
     # If this is a commit command, check if all checks were run
     if is_commit_command(command):
-        missing = []
-        if not state.get("test", False):
-            missing.append("go test ./...")
-        if not state.get("lint", False):
-            missing.append("make lint")
-        if not state.get("fmt", False):
-            missing.append("make fmt")
+        required_checks = {"test", "lint", "fmt"}
+        missing = required_checks - state["checks"]
 
         if missing:
-            # Already warned once, allow commit (Claude saw the warning)
-            if state.get("warned", False):
+            # Create warning key for this specific set of missing checks
+            warning_key = "commit_missing_" + "_".join(sorted(missing))
+
+            # Already warned for this, allow commit
+            if warning_key in state["warnings"]:
                 sys.exit(0)
 
             # First time: warn and block
-            print("Warning: The following checks have not been run:", file=sys.stderr)
-            for cmd in missing:
-                print(f"  - {cmd}", file=sys.stderr)
-            print("Run them if needed, or commit again to proceed anyway.", file=sys.stderr)
-            state["warned"] = True
+            state["warnings"].add(warning_key)
             save_state(session_id, state)
+
+            missing_commands = {
+                "test": "go test ./...",
+                "lint": "make lint",
+                "fmt": "make fmt",
+            }
+            print("Warning: The following checks have not been run:", file=sys.stderr)
+            for check in sorted(missing):
+                print(f"  - {missing_commands[check]}", file=sys.stderr)
+            print(
+                "Run them if needed, or commit again to proceed anyway.",
+                file=sys.stderr,
+            )
             sys.exit(2)
-        # All checks passed, allow commit
-        sys.exit(0)
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

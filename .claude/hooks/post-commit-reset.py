@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
 """
 Post-commit reset hook for Claude Code.
-Resets test execution state after successful git commit.
+Resets check execution state after successful git commit.
 """
 
 import json
 import os
 import sys
 
+# State file prefix (must match pre-commit-check.py)
+STATE_FILE_PREFIX = "pre_commit_state_"
+
+
 def get_state_file(session_id):
-    return os.path.expanduser(f"~/.claude/pre_commit_state_{session_id}.json")
+    """Get session-specific state file path."""
+    return os.path.expanduser(f"~/.claude/{STATE_FILE_PREFIX}{session_id}.json")
+
 
 def reset_state(session_id):
     """Reset state after successful commit."""
     state_file = get_state_file(session_id)
-    state = {"test": False, "lint": False, "fmt": False, "warned": False}
+    state = {"checks": [], "warnings": []}
     try:
         os.makedirs(os.path.dirname(state_file), exist_ok=True)
         with open(state_file, "w") as f:
@@ -22,7 +28,9 @@ def reset_state(session_id):
     except IOError:
         pass
 
+
 def main():
+    """Main hook function."""
     # Read input from stdin
     try:
         raw_input = sys.stdin.read()
@@ -45,14 +53,13 @@ def main():
 
     # Check if this was a successful git commit
     if "git commit" in command:
-        # Check if the command succeeded (stdout contains [branch hash])
         stdout = tool_response.get("stdout", "")
-
-        # If commit was successful, reset state
-        if "[" in stdout:  # git commit output contains [branch hash]
+        # git commit output contains [branch hash] on success
+        if "[" in stdout:
             reset_state(session_id)
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()
