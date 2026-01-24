@@ -470,9 +470,9 @@ Safety checks (all must pass):
 			if !yes {
 				fmt.Fprint(cmd.OutOrStdout(), "\nProceed? [y/N]: ")
 				reader := bufio.NewReader(cmd.InOrStdin())
-				input, readErr := reader.ReadString('\n')
-				if readErr != nil {
-					return readErr
+				input, err := reader.ReadString('\n')
+				if err != nil {
+					return err
 				}
 				input = strings.TrimSpace(strings.ToLower(input))
 				if input != "y" && input != "yes" {
