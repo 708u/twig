@@ -22,8 +22,15 @@ CHECKS = {
             "go mod tidy",
         ],
     },
+    "cli": {
+        "when": "When CLI behavior is modified (cmd/twig/**, *.go)",
+        "commands": [
+            "Review docs/reference/ for accuracy",
+            "Update docs if command options/behavior changed",
+        ],
+    },
     "docs": {
-        "when": "When docs (docs/reference/**) or CLI behavior is modified",
+        "when": "When docs (docs/reference/**) is modified",
         "commands": [
             "make sync-plugin-docs",
         ],
