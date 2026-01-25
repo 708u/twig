@@ -27,9 +27,9 @@ type benchOpts struct {
 }
 
 var scales = map[string]scale{
-	"small":  {1000, 100, 10},
-	"medium": {5000, 500, 50},
-	"large":  {10000, 1000, 100},
+	"small":  {500, 1000, 5},
+	"medium": {2000, 5000, 10},
+	"large":  {10000, 20000, 20},
 }
 
 var (
@@ -58,9 +58,9 @@ Benchmarks:
   all         Run all benchmarks
 
 Scales (preset):
-  small       1000 files, 100 commits, 10 worktrees
-  medium      5000 files, 500 commits, 50 worktrees
-  large       10000 files, 1000 commits, 100 worktrees
+  small       500 files, 1000 commits, 5 worktrees
+  medium      2000 files, 5000 commits, 10 worktrees
+  large       10000 files, 20000 commits, 20 worktrees
 
 Custom scale flags override preset values when specified.
 

@@ -65,11 +65,11 @@ go run ./cmd/benchmark setup --files=1000 --worktrees=10 --merged /tmp/twig-benc
 
 ## Scale Settings
 
-| Scale  | Files  | Commits | Worktrees |
-|--------|--------|---------|-----------|
-| small  | 1,000  | 100     | 10        |
-| medium | 5,000  | 500     | 50        |
-| large  | 10,000 | 1,000   | 100       |
+| Scale  | Files  | Commits | Worktrees | Use Case           |
+|--------|--------|---------|-----------|------------------  |
+| small  | 500    | 1,000   | 5         | Personal/small OSS |
+| medium | 2,000  | 5,000   | 10        | Team development   |
+| large  | 10,000 | 20,000  | 20        | Large monorepo     |
 
 ### Run Command Options
 
