@@ -32,6 +32,7 @@ var scales = map[string]scale{
 	"large":  {10000, 20000, 20},
 }
 
+// Shared flags for all run subcommands
 var (
 	runFiles          int
 	runCommits        int
@@ -43,58 +44,78 @@ var (
 	runExportJSON     string
 	runExportMarkdown string
 	runCompare        bool
+	runTwigBin        string // twig binary path flag
+	runBenchmarkBin   string // benchmark binary path flag
+	twigBin           string // resolved twig binary path
+	benchmarkBin      string // resolved benchmark binary path
 )
 
 var runCmd = &cobra.Command{
-	Use:   "run <benchmark> [scale]",
+	Use:   "run",
 	Short: "Run benchmarks using hyperfine",
 	Long: `Run twig benchmarks using hyperfine.
 
-Benchmarks:
-  list        Benchmark twig list
-  add         Benchmark twig add
-  remove      Benchmark twig remove
-  clean       Benchmark twig clean --yes
-  all         Run all benchmarks
+Use subcommands to run specific benchmarks:
+  benchmark run list [scale]
+  benchmark run add [scale]
+  benchmark run remove [scale]
+  benchmark run clean [scale]
+  benchmark run all [scale]
 
 Scales (preset):
   small       500 files, 1000 commits, 5 worktrees
   medium      2000 files, 5000 commits, 10 worktrees
   large       10000 files, 20000 commits, 20 worktrees
 
-Custom scale flags override preset values when specified.
+Custom scale flags override preset values when specified.`,
+}
 
-Examples:
-  benchmark run list small
-  benchmark run clean large
-  benchmark run all medium
-  benchmark run list small --files=2000
-  benchmark run add small --worktrees=20
-  benchmark run all small --files=500 --commits=50 --worktrees=5
+var listCmd = &cobra.Command{
+	Use:   "list [scale]",
+	Short: "Benchmark twig list",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runBenchmark(benchList),
+}
 
-  # Export results
-  benchmark run list small --export-json=results.json
-  benchmark run all small --export-markdown=results.md
+var addCmd = &cobra.Command{
+	Use:   "add [scale]",
+	Short: "Benchmark twig add",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runBenchmark(benchAdd),
+}
 
-  # Compare twig vs git
-  benchmark run list small --compare
+var removeCmd = &cobra.Command{
+	Use:   "remove [scale]",
+	Short: "Benchmark twig remove",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runBenchmark(benchRemove),
+}
 
-  # Keep benchmark directory for inspection
-  benchmark run list small --keep --output-dir=/tmp/my-bench`,
-	Args: cobra.RangeArgs(1, 2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		benchmark := args[0]
+var cleanCmd = &cobra.Command{
+	Use:   "clean [scale]",
+	Short: "Benchmark twig clean --yes",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runBenchmark(benchClean),
+}
 
-		var s scale
-		if len(args) >= 2 {
-			scaleName := args[1]
+var allCmd = &cobra.Command{
+	Use:   "all [scale]",
+	Short: "Run all benchmarks",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runBenchmark(benchAll),
+}
+
+// runBenchmark returns a RunE function that executes the given benchmark.
+func runBenchmark(bench func(*benchOpts) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		s := scales["small"]
+		if len(args) >= 1 {
+			scaleName := args[0]
 			var ok bool
 			s, ok = scales[scaleName]
 			if !ok {
 				return fmt.Errorf("unknown scale '%s' (available: small, medium, large)", scaleName)
 			}
-		} else {
-			s = scales["small"]
 		}
 
 		if runFiles > 0 {
@@ -107,13 +128,13 @@ Examples:
 			s.worktrees = runWorktrees
 		}
 
-		if err := checkDeps(); err != nil {
-			return err
-		}
-
 		outputDir := runOutputDir
 		if outputDir == "" {
 			outputDir = benchBase
+		}
+
+		if err := checkDeps(); err != nil {
+			return err
 		}
 
 		if !runKeep {
@@ -133,30 +154,46 @@ Examples:
 			compare:        runCompare,
 		}
 
-		switch benchmark {
-		case "list":
-			return benchList(opts)
-		case "add":
-			return benchAdd(opts)
-		case "remove":
-			return benchRemove(opts)
-		case "clean":
-			return benchClean(opts)
-		case "all":
-			return benchAll(opts)
-		default:
-			return fmt.Errorf("unknown benchmark '%s' (available: list, add, remove, clean, all)", benchmark)
-		}
-	},
+		return bench(opts)
+	}
 }
 
 func checkDeps() error {
 	if _, err := exec.LookPath("hyperfine"); err != nil {
 		return fmt.Errorf("hyperfine is required but not installed\n  Install with: brew install hyperfine")
 	}
-	if _, err := exec.LookPath("twig"); err != nil {
-		return fmt.Errorf("twig is required but not installed\n  Install with: go install github.com/708u/twig/cmd/twig@latest")
+
+	if runTwigBin == "" {
+		path, err := exec.LookPath("twig")
+		if err != nil {
+			return fmt.Errorf("twig is required but not installed\n  Install with: go install github.com/708u/twig/cmd/twig@latest")
+		}
+		twigBin = path
+	} else {
+		if _, err := os.Stat(runTwigBin); err != nil {
+			return fmt.Errorf("twig binary not found: %s", runTwigBin)
+		}
+		twigBin = runTwigBin
 	}
+
+	// Resolve benchmark binary for --prepare commands
+	if runBenchmarkBin == "" {
+		binDir := "/tmp/twig-bench-bin"
+		benchmarkBin = binDir + "/benchmark"
+		if err := os.MkdirAll(binDir, 0755); err != nil {
+			return fmt.Errorf("failed to create bin directory: %w", err)
+		}
+		cmd := exec.Command("go", "build", "-o", benchmarkBin, "./cmd/benchmark")
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to build benchmark tool: %w", err)
+		}
+	} else {
+		if _, err := os.Stat(runBenchmarkBin); err != nil {
+			return fmt.Errorf("benchmark binary not found: %s", runBenchmarkBin)
+		}
+		benchmarkBin = runBenchmarkBin
+	}
+
 	return nil
 }
 
@@ -168,7 +205,7 @@ func benchList(opts *benchOpts) error {
 	}
 
 	args := opts.hyperfineArgs(3, 20)
-	args = append(args, fmt.Sprintf("twig list -C %s/main", opts.outputDir))
+	args = append(args, fmt.Sprintf("%s list -C %s/main", twigBin, opts.outputDir))
 
 	if opts.compare {
 		args = append(args, fmt.Sprintf("git -C %s/main worktree list", opts.outputDir))
@@ -186,8 +223,8 @@ func benchAdd(opts *benchOpts) error {
 
 	args := opts.hyperfineArgs(1, 10)
 	args = append(args,
-		"--prepare", fmt.Sprintf("twig remove bench/bench-test -C %s/main --force 2>/dev/null || true", opts.outputDir),
-		fmt.Sprintf("twig add bench/bench-test -C %s/main", opts.outputDir),
+		"--prepare", fmt.Sprintf("%s remove bench/bench-test -C %s/main --force 2>/dev/null || true", twigBin, opts.outputDir),
+		fmt.Sprintf("%s add bench/bench-test -C %s/main", twigBin, opts.outputDir),
 	)
 
 	return runHyperfine(args...)
@@ -202,8 +239,8 @@ func benchRemove(opts *benchOpts) error {
 
 	args := opts.hyperfineArgs(1, 10)
 	args = append(args,
-		"--prepare", fmt.Sprintf("twig add bench/bench-test -C %s/main 2>/dev/null || true", opts.outputDir),
-		fmt.Sprintf("twig remove bench/bench-test -C %s/main --force", opts.outputDir),
+		"--prepare", fmt.Sprintf("%s add bench/bench-test -C %s/main 2>/dev/null || true", twigBin, opts.outputDir),
+		fmt.Sprintf("%s remove bench/bench-test -C %s/main --force", twigBin, opts.outputDir),
 	)
 
 	return runHyperfine(args...)
@@ -216,13 +253,13 @@ func benchClean(opts *benchOpts) error {
 		return err
 	}
 
-	prepareCmd := fmt.Sprintf("go run ./cmd/benchmark setup --files=%d --commits=%d --worktrees=%d --merged %s 2>/dev/null",
-		opts.scale.files, opts.scale.commits, opts.scale.worktrees, opts.outputDir)
+	prepareCmd := fmt.Sprintf("%s setup --files=%d --commits=%d --worktrees=%d --merged %s 2>/dev/null",
+		benchmarkBin, opts.scale.files, opts.scale.commits, opts.scale.worktrees, opts.outputDir)
 
 	args := opts.hyperfineArgs(1, 5)
 	args = append(args,
 		"--prepare", prepareCmd,
-		fmt.Sprintf("twig clean --yes -C %s/main", opts.outputDir),
+		fmt.Sprintf("%s clean --yes -C %s/main", twigBin, opts.outputDir),
 	)
 
 	return runHyperfine(args...)
@@ -273,14 +310,24 @@ func runHyperfine(args ...string) error {
 }
 
 func init() {
-	runCmd.Flags().IntVar(&runFiles, "files", 0, "Override number of files (0 = use scale default)")
-	runCmd.Flags().IntVar(&runCommits, "commits", 0, "Override number of commits (0 = use scale default)")
-	runCmd.Flags().IntVar(&runWorktrees, "worktrees", 0, "Override number of worktrees (0 = use scale default)")
-	runCmd.Flags().IntVar(&runWarmup, "warmup", 0, "Number of warmup runs (0 = use benchmark default)")
-	runCmd.Flags().IntVar(&runRuns, "runs", 0, "Number of benchmark runs (0 = use benchmark default)")
-	runCmd.Flags().StringVar(&runOutputDir, "output-dir", "", "Output directory for benchmark repository (default: /tmp/twig-bench)")
-	runCmd.Flags().BoolVar(&runKeep, "keep", false, "Keep benchmark directory after completion")
-	runCmd.Flags().StringVar(&runExportJSON, "export-json", "", "Export results to JSON file")
-	runCmd.Flags().StringVar(&runExportMarkdown, "export-markdown", "", "Export results to Markdown file")
-	runCmd.Flags().BoolVar(&runCompare, "compare", false, "Compare twig commands with git equivalents")
+	// Register shared flags on parent command
+	runCmd.PersistentFlags().IntVar(&runFiles, "files", 0, "Override number of files (0 = use scale default)")
+	runCmd.PersistentFlags().IntVar(&runCommits, "commits", 0, "Override number of commits (0 = use scale default)")
+	runCmd.PersistentFlags().IntVar(&runWorktrees, "worktrees", 0, "Override number of worktrees (0 = use scale default)")
+	runCmd.PersistentFlags().IntVar(&runWarmup, "warmup", 0, "Number of warmup runs (0 = use benchmark default)")
+	runCmd.PersistentFlags().IntVar(&runRuns, "runs", 0, "Number of benchmark runs (0 = use benchmark default)")
+	runCmd.PersistentFlags().StringVar(&runOutputDir, "output-dir", "", "Output directory for benchmark repository (default: /tmp/twig-bench)")
+	runCmd.PersistentFlags().BoolVar(&runKeep, "keep", false, "Keep benchmark directory after completion")
+	runCmd.PersistentFlags().StringVar(&runExportJSON, "export-json", "", "Export results to JSON file")
+	runCmd.PersistentFlags().StringVar(&runExportMarkdown, "export-markdown", "", "Export results to Markdown file")
+	runCmd.PersistentFlags().BoolVar(&runCompare, "compare", false, "Compare twig commands with git equivalents")
+	runCmd.PersistentFlags().StringVar(&runTwigBin, "twig-bin", "", "Path to twig binary (default: use from PATH)")
+	runCmd.PersistentFlags().StringVar(&runBenchmarkBin, "benchmark-bin", "", "Path to benchmark binary (default: build from source)")
+
+	// Register subcommands
+	runCmd.AddCommand(listCmd)
+	runCmd.AddCommand(addCmd)
+	runCmd.AddCommand(removeCmd)
+	runCmd.AddCommand(cleanCmd)
+	runCmd.AddCommand(allCmd)
 }

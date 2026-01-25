@@ -43,9 +43,9 @@ go run ./cmd/benchmark run clean large
 go run ./cmd/benchmark run all small
 
 # Custom scale options (override preset values)
-go run ./cmd/benchmark run list small --files=2000
-go run ./cmd/benchmark run add small --worktrees=20
-go run ./cmd/benchmark run all small --files=500 --commits=50 --worktrees=5
+go run ./cmd/benchmark run list --files=2000 small
+go run ./cmd/benchmark run add --worktrees=20 small
+go run ./cmd/benchmark run all --files=500 --commits=50 --worktrees=5 small
 ```
 
 ### Setup Repository Only
@@ -85,9 +85,27 @@ go run ./cmd/benchmark setup --files=1000 --worktrees=10 --merged /tmp/twig-benc
 | `--export-json`     | Export results to JSON file                     |
 | `--export-markdown` | Export results to Markdown file                 |
 | `--compare`         | Compare twig commands with git equivalents      |
+| `--twig-bin`        | Path to twig binary (default: use from PATH)    |
 
 The scale argument becomes optional when using custom flags (defaults to
 `small`).
+
+### Custom twig Binary
+
+Use `--twig-bin` to benchmark a specific binary:
+
+```bash
+# Use installed twig (default)
+go run ./cmd/benchmark run list small
+
+# Build from source and benchmark
+go build -o /tmp/twig ./cmd/twig
+go run ./cmd/benchmark run list small --twig-bin=/tmp/twig
+
+# Compare different versions
+go run ./cmd/benchmark run list small --export-json=v1.json --twig-bin=/path/to/twig-v1
+go run ./cmd/benchmark run list small --export-json=v2.json --twig-bin=/path/to/twig-v2
+```
 
 ## Benchmarked Commands
 

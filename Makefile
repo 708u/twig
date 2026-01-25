@@ -26,7 +26,7 @@ sync-plugin-docs:
 
 # Benchmark targets
 benchmark-setup:
-	go run ./cmd/benchmark setup -files=1000 -worktrees=10 /tmp/twig-bench
+	go run ./cmd/benchmark setup --files=1000 --worktrees=10 /tmp/twig-bench
 
 benchmark-clean:
 	go run ./cmd/benchmark run clean small
