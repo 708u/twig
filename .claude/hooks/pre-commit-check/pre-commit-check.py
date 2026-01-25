@@ -141,12 +141,15 @@ def main():
     state["warned"] = True
     save_state(session_id, state)
 
-    print("Warning: Have you run the necessary checks?", file=sys.stderr)
+    print("BLOCKED: Required checks not confirmed.", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Run before committing:", file=sys.stderr)
     for category, info in CHECKS.items():
         print(f"  [{category}] {info['when']}", file=sys.stderr)
         for cmd in info["commands"]:
             print(f"    - {cmd}", file=sys.stderr)
-    print("Commit again to proceed.", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("After running checks, commit again to confirm.", file=sys.stderr)
     sys.exit(2)
 
 
