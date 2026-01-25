@@ -71,15 +71,20 @@ go run ./cmd/benchmark setup --files=1000 --worktrees=10 --merged /tmp/twig-benc
 | medium | 5,000  | 500     | 50        |
 | large  | 10,000 | 1,000   | 100       |
 
-### Custom Scale Options
+### Run Command Options
 
-Override preset values with flags:
-
-| Flag          | Description                              |
-|---------------|------------------------------------------|
-| `--files`     | Override number of files (0 = default)   |
-| `--commits`   | Override number of commits (0 = default) |
-| `--worktrees` | Override number of worktrees (0 = default)|
+| Flag                | Description                                     |
+|---------------------|-------------------------------------------------|
+| `--files`           | Override number of files (0 = use scale default)|
+| `--commits`         | Override number of commits (0 = default)        |
+| `--worktrees`       | Override number of worktrees (0 = default)      |
+| `--warmup`          | Number of warmup runs (0 = use benchmark default)|
+| `--runs`            | Number of benchmark runs (0 = default)          |
+| `--output-dir`      | Output directory (default: /tmp/twig-bench)     |
+| `--keep`            | Keep benchmark directory after completion       |
+| `--export-json`     | Export results to JSON file                     |
+| `--export-markdown` | Export results to Markdown file                 |
+| `--compare`         | Compare twig commands with git equivalents      |
 
 The scale argument becomes optional when using custom flags (defaults to
 `small`).
@@ -111,8 +116,13 @@ Benchmark 1: twig list -C /tmp/twig-bench/main
 
 ## Output Directory
 
-Benchmarks use `/tmp/twig-bench` as the working directory. This is
-automatically cleaned up after benchmarks complete.
+Benchmarks use `/tmp/twig-bench` as the working directory by default. This is
+automatically cleaned up after benchmarks complete unless `--keep` is specified.
+
+```bash
+# Use custom directory and keep it for inspection
+go run ./cmd/benchmark run list small --output-dir=/tmp/my-bench --keep
+```
 
 ## Tips
 
@@ -126,9 +136,25 @@ For more accurate results:
 
 ### Export Results
 
-hyperfine supports various export formats:
+Export benchmark results to JSON or Markdown:
 
 ```bash
-hyperfine --export-json results.json 'twig list -C /tmp/twig-bench/main'
-hyperfine --export-markdown results.md 'twig list -C /tmp/twig-bench/main'
+go run ./cmd/benchmark run list small --export-json=results.json
+go run ./cmd/benchmark run all small --export-markdown=results.md
+```
+
+### Compare with Git
+
+Use `--compare` to benchmark twig commands against their git equivalents:
+
+```bash
+go run ./cmd/benchmark run list small --compare
+```
+
+Example output:
+
+```text
+Summary
+  git -C /tmp/twig-bench/main worktree list ran
+    1.85 ± 0.15 times faster than twig list -C /tmp/twig-bench/main
 ```
