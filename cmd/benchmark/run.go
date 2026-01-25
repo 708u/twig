@@ -34,6 +34,7 @@ var scales = map[string]scale{
 
 // Shared flags for all run subcommands
 var (
+	runScale          string
 	runFiles          int
 	runCommits        int
 	runWorktrees      int
@@ -56,66 +57,61 @@ var runCmd = &cobra.Command{
 	Long: `Run twig benchmarks using hyperfine.
 
 Use subcommands to run specific benchmarks:
-  benchmark run list [scale]
-  benchmark run add [scale]
-  benchmark run remove [scale]
-  benchmark run clean [scale]
-  benchmark run all [scale]
+  benchmark run list
+  benchmark run add
+  benchmark run remove
+  benchmark run clean
+  benchmark run all
 
-Scales (preset):
-  small       500 files, 1000 commits, 5 worktrees
+Scale presets (--scale):
+  small       500 files, 1000 commits, 5 worktrees (default)
   medium      2000 files, 5000 commits, 10 worktrees
   large       10000 files, 20000 commits, 20 worktrees
 
-Custom scale flags override preset values when specified.`,
+Use --scale-files, --scale-commits, --scale-worktrees to override preset values.`,
 }
 
 var listCmd = &cobra.Command{
-	Use:   "list [scale]",
+	Use:   "list",
 	Short: "Benchmark twig list",
-	Args:  cobra.MaximumNArgs(1),
+	Args:  cobra.NoArgs,
 	RunE:  runBenchmark(benchList),
 }
 
 var addCmd = &cobra.Command{
-	Use:   "add [scale]",
+	Use:   "add",
 	Short: "Benchmark twig add",
-	Args:  cobra.MaximumNArgs(1),
+	Args:  cobra.NoArgs,
 	RunE:  runBenchmark(benchAdd),
 }
 
 var removeCmd = &cobra.Command{
-	Use:   "remove [scale]",
+	Use:   "remove",
 	Short: "Benchmark twig remove",
-	Args:  cobra.MaximumNArgs(1),
+	Args:  cobra.NoArgs,
 	RunE:  runBenchmark(benchRemove),
 }
 
 var cleanCmd = &cobra.Command{
-	Use:   "clean [scale]",
+	Use:   "clean",
 	Short: "Benchmark twig clean --yes",
-	Args:  cobra.MaximumNArgs(1),
+	Args:  cobra.NoArgs,
 	RunE:  runBenchmark(benchClean),
 }
 
 var allCmd = &cobra.Command{
-	Use:   "all [scale]",
+	Use:   "all",
 	Short: "Run all benchmarks",
-	Args:  cobra.MaximumNArgs(1),
+	Args:  cobra.NoArgs,
 	RunE:  runBenchmark(benchAll),
 }
 
 // runBenchmark returns a RunE function that executes the given benchmark.
 func runBenchmark(bench func(*benchOpts) error) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		s := scales["small"]
-		if len(args) >= 1 {
-			scaleName := args[0]
-			var ok bool
-			s, ok = scales[scaleName]
-			if !ok {
-				return fmt.Errorf("unknown scale '%s' (available: small, medium, large)", scaleName)
-			}
+		s, ok := scales[runScale]
+		if !ok {
+			return fmt.Errorf("unknown scale '%s' (available: small, medium, large)", runScale)
 		}
 
 		if runFiles > 0 {
@@ -311,9 +307,10 @@ func runHyperfine(args ...string) error {
 
 func init() {
 	// Register shared flags on parent command
-	runCmd.PersistentFlags().IntVar(&runFiles, "files", 0, "Override number of files (0 = use scale default)")
-	runCmd.PersistentFlags().IntVar(&runCommits, "commits", 0, "Override number of commits (0 = use scale default)")
-	runCmd.PersistentFlags().IntVar(&runWorktrees, "worktrees", 0, "Override number of worktrees (0 = use scale default)")
+	runCmd.PersistentFlags().StringVar(&runScale, "scale", "small", "Scale preset (small, medium, large)")
+	runCmd.PersistentFlags().IntVar(&runFiles, "scale-files", 0, "Override number of files")
+	runCmd.PersistentFlags().IntVar(&runCommits, "scale-commits", 0, "Override number of commits")
+	runCmd.PersistentFlags().IntVar(&runWorktrees, "scale-worktrees", 0, "Override number of worktrees")
 	runCmd.PersistentFlags().IntVar(&runWarmup, "warmup", 0, "Number of warmup runs (0 = use benchmark default)")
 	runCmd.PersistentFlags().IntVar(&runRuns, "runs", 0, "Number of benchmark runs (0 = use benchmark default)")
 	runCmd.PersistentFlags().StringVar(&runOutputDir, "output-dir", "", "Output directory for benchmark repository (default: /tmp/twig-bench)")

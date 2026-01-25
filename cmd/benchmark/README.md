@@ -176,3 +176,20 @@ Summary
   git -C /tmp/twig-bench/main worktree list ran
     1.85 ± 0.15 times faster than twig list -C /tmp/twig-bench/main
 ```
+
+## CPU Profiling
+
+twig supports CPU profiling via the `TWIG_CPUPROFILE` environment variable.
+This is useful for identifying performance bottlenecks.
+
+```bash
+# Setup benchmark repository
+go run ./cmd/benchmark setup --files=500 --worktrees=10 --merged /tmp/twig-bench
+
+# Run with profiling
+TWIG_CPUPROFILE=/tmp/clean.prof twig clean --yes -C /tmp/twig-bench/main
+
+# Analyze profile
+go tool pprof -top /tmp/clean.prof
+go tool pprof -http=:8080 /tmp/clean.prof
+```

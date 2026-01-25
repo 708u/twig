@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"slices"
 	"strings"
 	"sync"
@@ -930,6 +931,24 @@ Examples:
 var rootCmd = newRootCmd()
 
 func main() {
+	// CPU profiling support via environment variable
+	if profFile := os.Getenv("TWIG_CPUPROFILE"); profFile != "" {
+		f, err := os.Create(profFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "twig: failed to create CPU profile: %v\n", err)
+			os.Exit(1)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			f.Close()
+			fmt.Fprintf(os.Stderr, "twig: failed to start CPU profile: %v\n", err)
+			os.Exit(1)
+		}
+		defer func() {
+			pprof.StopCPUProfile()
+			f.Close()
+		}()
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(rootCmd.ErrOrStderr(), "twig:", err)
 		os.Exit(1)
