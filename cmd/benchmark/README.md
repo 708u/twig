@@ -66,26 +66,26 @@ go run ./cmd/benchmark setup --files=1000 --worktrees=10 --merged /tmp/twig-benc
 ## Scale Settings
 
 | Scale  | Files  | Commits | Worktrees | Use Case           |
-|--------|--------|---------|-----------|------------------  |
+|--------|--------|---------|-----------|--------------------|
 | small  | 500    | 1,000   | 5         | Personal/small OSS |
 | medium | 2,000  | 5,000   | 10        | Team development   |
 | large  | 10,000 | 20,000  | 20        | Large monorepo     |
 
 ### Run Command Options
 
-| Flag                | Description                                     |
-|---------------------|-------------------------------------------------|
-| `--files`           | Override number of files (0 = use scale default)|
-| `--commits`         | Override number of commits (0 = default)        |
-| `--worktrees`       | Override number of worktrees (0 = default)      |
-| `--warmup`          | Number of warmup runs (0 = use benchmark default)|
-| `--runs`            | Number of benchmark runs (0 = default)          |
-| `--output-dir`      | Output directory (default: /tmp/twig-bench)     |
-| `--keep`            | Keep benchmark directory after completion       |
-| `--export-json`     | Export results to JSON file                     |
-| `--export-markdown` | Export results to Markdown file                 |
-| `--compare`         | Compare twig commands with git equivalents      |
-| `--twig-bin`        | Path to twig binary (default: use from PATH)    |
+| Flag                | Description                                       |
+|---------------------|---------------------------------------------------|
+| `--files`           | Override number of files (0 = use scale default)  |
+| `--commits`         | Override number of commits (0 = default)          |
+| `--worktrees`       | Override number of worktrees (0 = default)        |
+| `--warmup`          | Number of warmup runs (0 = use benchmark default) |
+| `--runs`            | Number of benchmark runs (0 = default)            |
+| `--output-dir`      | Output directory (default: /tmp/twig-bench)       |
+| `--keep`            | Keep benchmark directory after completion         |
+| `--export-json`     | Export results to JSON file                       |
+| `--export-markdown` | Export results to Markdown file                   |
+| `--compare`         | Compare twig commands with git equivalents        |
+| `--twig-bin`        | Path to twig binary (default: use from PATH)      |
 
 The scale argument becomes optional when using custom flags (defaults to
 `small`).
@@ -109,12 +109,12 @@ go run ./cmd/benchmark run list small --export-json=v2.json --twig-bin=/path/to/
 
 ## Benchmarked Commands
 
-| Command | Setup | Measurement |
-|---------|-------|-------------|
-| `list`  | Normal worktrees | `twig list` |
-| `add`   | Normal worktrees | `twig add bench/bench-test` |
-| `remove`| Create worktree first | `twig remove bench/bench-test` |
-| `clean` | Merged worktrees | `twig clean --yes` |
+| Command  | Setup                 | Measurement                    |
+|----------|-----------------------|--------------------------------|
+| `list`   | Normal worktrees      | `twig list`                    |
+| `add`    | Normal worktrees      | `twig add bench/bench-test`    |
+| `remove` | Create worktree first | `twig remove bench/bench-test` |
+| `clean`  | Merged worktrees      | `twig clean --yes`             |
 
 ## Understanding Results
 
