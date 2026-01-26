@@ -271,7 +271,7 @@ func (c *SyncCommand) resolveTargets(ctx context.Context, targets []string, sour
 	if len(targets) == 0 {
 		// Find worktree containing cwd
 		for _, wt := range allWTs {
-			if strings.HasPrefix(cwd, wt.Path) {
+			if isPathWithin(cwd, wt.Path) {
 				if wt.Branch == sourceBranch {
 					return nil, fmt.Errorf("cannot sync source worktree to itself")
 				}

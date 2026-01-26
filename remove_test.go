@@ -915,6 +915,24 @@ func TestRemoveCommand_Check(t *testing.T) {
 			wantSkip:      SkipCurrentDir,
 		},
 		{
+			name:   "cwd_similar_prefix_not_within_worktree",
+			branch: "main",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "",
+				Cwd:    "/repo-worktree/feat/x/subdir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo", Branch: "main"},
+					},
+				}
+			},
+			wantCanRemove: true,
+		},
+		{
 			name:   "skip_locked",
 			branch: "feat/a",
 			opts: CheckOptions{

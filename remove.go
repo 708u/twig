@@ -562,7 +562,7 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts C
 	}
 
 	// Check current directory (never bypassed)
-	if strings.HasPrefix(opts.Cwd, wt.Path) {
+	if isPathWithin(opts.Cwd, wt.Path) {
 		return SkipCurrentDir
 	}
 
