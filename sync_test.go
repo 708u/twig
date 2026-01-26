@@ -2,6 +2,7 @@ package twig
 
 import (
 	"io/fs"
+	"strings"
 	"testing"
 
 	"github.com/708u/twig/internal/testutil"
@@ -372,7 +373,7 @@ func TestSyncCommand_resolveTargets(t *testing.T) {
 				if err == nil {
 					t.Fatal("expected error, got nil")
 				}
-				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
 					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
 				}
 				return
@@ -394,20 +395,6 @@ func TestSyncCommand_resolveTargets(t *testing.T) {
 			}
 		})
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func TestSyncCommand_predictSymlinks(t *testing.T) {
