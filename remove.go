@@ -562,7 +562,8 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts C
 	}
 
 	// Check current directory (never bypassed)
-	if strings.HasPrefix(opts.Cwd, wt.Path) {
+	// Use git rev-parse --show-toplevel to get the worktree root of cwd
+	if root, err := c.Git.InDir(opts.Cwd).WorktreeRoot(ctx); err == nil && root == wt.Path {
 		return SkipCurrentDir
 	}
 

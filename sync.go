@@ -269,9 +269,13 @@ func (c *SyncCommand) resolveTargets(ctx context.Context, targets []string, sour
 
 	// If no targets specified, use current worktree
 	if len(targets) == 0 {
-		// Find worktree containing cwd
+		// Find worktree containing cwd using git rev-parse --show-toplevel
+		root, err := c.Git.InDir(cwd).WorktreeRoot(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("current directory is not in any worktree: %w", err)
+		}
 		for _, wt := range allWTs {
-			if strings.HasPrefix(cwd, wt.Path) {
+			if wt.Path == root {
 				if wt.Branch == sourceBranch {
 					return nil, fmt.Errorf("cannot sync source worktree to itself")
 				}

@@ -113,6 +113,10 @@ type MockGitExecutor struct {
 
 	// SubmoduleUpdateArgs captures the args passed to submodule update.
 	SubmoduleUpdateArgs []string
+
+	// WorktreeRootMap maps directory to its worktree root.
+	// Used by rev-parse --show-toplevel to return the worktree root for a directory.
+	WorktreeRootMap map[string]string
 }
 
 func (m *MockGitExecutor) Run(ctx context.Context, args ...string) ([]byte, error) {
@@ -123,8 +127,10 @@ func (m *MockGitExecutor) Run(ctx context.Context, args ...string) ([]byte, erro
 }
 
 func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
-	// Skip -C <dir> option that comes before the command
+	// Extract -C <dir> option and track it for commands that need it
+	var dir string
 	for len(args) >= 2 && args[0] == "-C" {
+		dir = args[1]
 		args = args[2:]
 	}
 
@@ -134,7 +140,7 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 
 	switch args[0] {
 	case "rev-parse":
-		return m.handleRevParse(args)
+		return m.handleRevParse(args, dir)
 	case "worktree":
 		if len(args) > 1 {
 			switch args[1] {
@@ -164,7 +170,26 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 	return nil, nil
 }
 
-func (m *MockGitExecutor) handleRevParse(args []string) ([]byte, error) {
+func (m *MockGitExecutor) handleRevParse(args []string, dir string) ([]byte, error) {
+	// Handle --show-toplevel for WorktreeRoot
+	if len(args) >= 2 && args[1] == "--show-toplevel" {
+		// Look up the worktree root for the given directory
+		if m.WorktreeRootMap != nil && dir != "" {
+			if root, ok := m.WorktreeRootMap[dir]; ok {
+				return []byte(root + "\n"), nil
+			}
+		}
+		// Find worktree that contains dir
+		// dir must be equal to wt.Path or start with wt.Path + "/"
+		for _, wt := range m.Worktrees {
+			if dir == wt.Path || strings.HasPrefix(dir, wt.Path+"/") {
+				return []byte(wt.Path + "\n"), nil
+			}
+		}
+		// No worktree contains dir
+		return nil, &MockExitError{Code: 128}
+	}
+
 	// Handle stash@{0} for StashPush hash retrieval
 	if len(args) >= 2 && args[1] == "stash@{0}" {
 		hash := m.StashHash
