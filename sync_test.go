@@ -90,7 +90,7 @@ feat/a:
 				},
 			},
 			opts:       SyncFormatOptions{},
-			wantStdout: "Synced feat/a: 2 symlinks created, 1 submodule(s) initialized\n",
+			wantStdout: "Synced feat/a from main: 2 symlinks created, 1 submodule(s) initialized\n",
 		},
 		{
 			name: "normal_mode_verbose",
@@ -112,7 +112,7 @@ feat/a:
 			wantStdout: `Syncing from main to feat/a
 Created symlink: /repo/feat/a/.envrc -> /repo/main/.envrc
 Initialized 2 submodule(s)
-Synced feat/a: 1 symlinks created, 2 submodule(s) initialized
+Synced feat/a from main: 1 symlinks created, 2 submodule(s) initialized
 `,
 		},
 		{
