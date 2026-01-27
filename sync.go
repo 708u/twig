@@ -182,7 +182,7 @@ func (r SyncResult) formatTarget(stdout, stderr *strings.Builder, t SyncTargetRe
 	if t.SubmoduleInit.Attempted && t.SubmoduleInit.Count > 0 {
 		submoduleInfo = fmt.Sprintf(", %d submodule(s) initialized", t.SubmoduleInit.Count)
 	}
-	fmt.Fprintf(stdout, "Synced %s: %d symlinks created%s\n", t.Branch, createdCount, submoduleInfo)
+	fmt.Fprintf(stdout, "Synced %s from %s: %d symlinks created%s\n", t.Branch, r.SourceBranch, createdCount, submoduleInfo)
 }
 
 // Run syncs symlinks and submodules from source to target worktrees.

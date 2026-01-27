@@ -83,7 +83,7 @@ This is useful for previewing the sync operation.
 ### Default Output
 
 ```txt
-Synced feat/a: 2 symlinks created, 1 submodule(s) initialized
+Synced feat/a from main: 2 symlinks created, 1 submodule(s) initialized
 Skipped feat/b: up to date
 ```
 
@@ -94,7 +94,7 @@ Syncing from main to feat/a
 Created symlink: /repo/feat/a/.envrc -> /repo/main/.envrc
 Created symlink: /repo/feat/a/.tool-versions -> /repo/main/.tool-versions
 Initialized 1 submodule(s)
-Synced feat/a: 2 symlinks created, 1 submodule(s) initialized
+Synced feat/a from main: 2 symlinks created, 1 submodule(s) initialized
 ```
 
 ### Check Mode Output
