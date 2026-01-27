@@ -3,20 +3,9 @@ package twig
 import (
 	"io/fs"
 	"os"
-	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
 )
-
-// isPathWithin reports whether path is within or equal to basePath.
-// It properly handles path separators to avoid false positives like
-// "/path/to/repo-worktree" being considered within "/path/to/repo".
-func isPathWithin(path, basePath string) bool {
-	if path == basePath {
-		return true
-	}
-	return strings.HasPrefix(path, basePath+string(os.PathSeparator))
-}
 
 // FileSystem abstracts filesystem operations for testability.
 type FileSystem interface {

@@ -850,6 +850,16 @@ func (g *GitRunner) CheckSubmoduleCleanStatus(ctx context.Context) (SubmoduleCle
 	return SubmoduleCleanStatusClean, nil
 }
 
+// WorktreeRoot returns the root path of the worktree containing the current directory.
+// Uses git rev-parse --show-toplevel which returns the path git internally uses.
+func (g *GitRunner) WorktreeRoot(ctx context.Context) (string, error) {
+	out, err := g.Run(ctx, GitCmdRevParse, "--show-toplevel")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // SubmoduleUpdate runs git submodule update --init --recursive.
 // Returns the number of initialized submodules.
 func (g *GitRunner) SubmoduleUpdate(ctx context.Context) (int, error) {
