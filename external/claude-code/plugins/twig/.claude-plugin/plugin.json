@@ -1,6 +1,6 @@
 {
   "name": "twig",
-  "version": "0.7.0",
+  "version": "0.6.1",
   "description": "Claude Code plugin for twig - simplifies git worktree workflows",
   "author": {
     "name": "708u"
