@@ -155,21 +155,21 @@ clean:
 
 skip:
   feat/wip
-    - not merged
+    ✗ not merged
   feat/new-branch
-    - same commit as main
+    ✗ same commit as main
   feat/active
-    + merged
-    - has uncommitted changes
+    ✓ merged
+    ✗ has uncommitted changes
   feat/submod
-    + merged
-    - submodule has uncommitted changes
+    ✓ merged
+    ✗ submodule has uncommitted changes
 ```
 
 - `clean:` shows worktrees and prunable branches that will be removed
 - `skip:` shows skipped worktrees (verbose mode only)
 - Each item is indented with 2 spaces
-- Skip candidates show both cleanable reason (`+`) and skip reason (`-`)
+- Skip candidates show both cleanable reason (`✓`) and skip reason (`✗`)
 - A blank line separates groups
 
 With `--verbose`, worktrees skipped due to uncommitted changes show the
@@ -178,8 +178,8 @@ list of changed files:
 ```txt
 skip:
   feat/wip
-    + merged
-    - has uncommitted changes
+    ✓ merged
+    ✗ has uncommitted changes
        M src/main.go
       ?? tmp/debug.log
 ```
@@ -234,12 +234,12 @@ clean:
 
 skip:
   feature/active
-    + merged
-    - has uncommitted changes
+    ✓ merged
+    ✗ has uncommitted changes
        M src/main.go
       ?? tmp/debug.log
   feature/wip
-    - not merged
+    ✗ not merged
 
 Proceed? [y/N]: y
 Removed worktree and branch: feature/old-branch

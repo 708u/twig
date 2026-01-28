@@ -241,7 +241,7 @@ func TestCleanCmd(t *testing.T) {
 				},
 				Check: true,
 			},
-			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b\n    - not merged\n",
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b\n    ✗ not merged\n",
 		},
 	}
 

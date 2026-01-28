@@ -111,9 +111,9 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 			for _, c := range skipped {
 				fmt.Fprintf(&stdout, "  %s\n", c.Branch)
 				if c.CleanReason != "" {
-					fmt.Fprintf(&stdout, "    + %s\n", c.CleanReason)
+					fmt.Fprintf(&stdout, "    ✓ %s\n", c.CleanReason)
 				}
-				fmt.Fprintf(&stdout, "    - %s\n", c.SkipReason)
+				fmt.Fprintf(&stdout, "    ✗ %s\n", c.SkipReason)
 				if (c.SkipReason == SkipHasChanges || c.SkipReason == SkipDirtySubmodule) &&
 					len(c.ChangedFiles) > 0 {
 					for _, f := range c.ChangedFiles {
@@ -144,9 +144,9 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 		for _, c := range skipped {
 			fmt.Fprintf(&stdout, "  %s\n", c.Branch)
 			if c.CleanReason != "" {
-				fmt.Fprintf(&stdout, "    + %s\n", c.CleanReason)
+				fmt.Fprintf(&stdout, "    ✓ %s\n", c.CleanReason)
 			}
-			fmt.Fprintf(&stdout, "    - %s\n", c.SkipReason)
+			fmt.Fprintf(&stdout, "    ✗ %s\n", c.SkipReason)
 			if (c.SkipReason == SkipHasChanges || c.SkipReason == SkipDirtySubmodule) &&
 				len(c.ChangedFiles) > 0 {
 				for _, f := range c.ChangedFiles {

@@ -96,7 +96,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b\n    - not merged\n",
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b\n    ✗ not merged\n",
 			wantStderr: "",
 		},
 		{
@@ -184,7 +184,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "clean:\n  feat/a (merged)\n  feat/prunable (prunable, merged)\n\nskip:\n  feat/wip\n    - not merged\n",
+			wantStdout: "clean:\n  feat/a (merged)\n  feat/prunable (prunable, merged)\n\nskip:\n  feat/wip\n    ✗ not merged\n",
 			wantStderr: "",
 		},
 		{
@@ -219,7 +219,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/wip\n    + merged\n    - has uncommitted changes\n       M src/main.go\n      ?? tmp/debug.log\n",
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/wip\n    ✓ merged\n    ✗ has uncommitted changes\n       M src/main.go\n      ?? tmp/debug.log\n",
 			wantStderr: "",
 		},
 		{
@@ -239,7 +239,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "skip:\n  feat/submod\n    + merged\n    - submodule has uncommitted changes\n       M submodule/file.go\n\nNo worktrees to clean\n",
+			wantStdout: "skip:\n  feat/submod\n    ✓ merged\n    ✗ submodule has uncommitted changes\n       M submodule/file.go\n\nNo worktrees to clean\n",
 			wantStderr: "",
 		},
 		{
@@ -252,7 +252,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/locked\n    + merged\n    - locked\n",
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/locked\n    ✓ merged\n    ✗ locked\n",
 			wantStderr: "",
 		},
 		// Skip without CleanReason (merge-related skip reasons)
@@ -266,7 +266,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/wip\n    - not merged\n",
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/wip\n    ✗ not merged\n",
 			wantStderr: "",
 		},
 		{
@@ -286,7 +286,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "skip:\n  feat/a\n    + upstream gone\n    - has uncommitted changes\n       M src/main.go\n\nNo worktrees to clean\n",
+			wantStdout: "skip:\n  feat/a\n    ✓ upstream gone\n    ✗ has uncommitted changes\n       M src/main.go\n\nNo worktrees to clean\n",
 			wantStderr: "",
 		},
 	}
