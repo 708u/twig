@@ -14,6 +14,7 @@ type SkipReason string
 
 const (
 	SkipNotMerged      SkipReason = "not merged"
+	SkipSameCommit     SkipReason = "same commit"
 	SkipHasChanges     SkipReason = "has uncommitted changes"
 	SkipLocked         SkipReason = "locked"
 	SkipCurrentDir     SkipReason = "current directory"
@@ -28,6 +29,15 @@ type SkipError struct {
 
 func (e *SkipError) Error() string {
 	return fmt.Sprintf("cannot remove: %s", e.Reason)
+}
+
+// Format returns the display string for a SkipReason.
+// For SkipSameCommit, it appends the target branch name.
+func (r SkipReason) Format(target string) string {
+	if r == SkipSameCommit && target != "" {
+		return fmt.Sprintf("same commit as %s", target)
+	}
+	return string(r)
 }
 
 // CleanReason describes why a branch is cleanable.
@@ -531,7 +541,8 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 			result.CanRemove = false
 			result.SkipReason = reason
 			// Calculate CleanReason for skip candidates (except merge-related skip reasons)
-			if opts.Target != "" && !isMergeRelatedSkipReason(reason) {
+			isMergeRelated := reason == SkipNotMerged || reason == SkipSameCommit
+			if opts.Target != "" && !isMergeRelated {
 				result.CleanReason = c.getCleanReason(ctx, branch, opts.Target)
 			}
 			c.Log.DebugContext(ctx, "skip",
@@ -622,7 +633,7 @@ func (c *RemoveCommand) checkMergedSkipReason(ctx context.Context, branch, targe
 			return "" // merged, can remove
 		}
 		if mergeStatus.SameCommit[branch] {
-			return SkipReason(fmt.Sprintf("same commit as %s", target))
+			return SkipSameCommit
 		}
 		return SkipNotMerged
 	}
@@ -634,15 +645,6 @@ func (c *RemoveCommand) checkMergedSkipReason(ctx context.Context, branch, targe
 		return ""
 	}
 	return SkipNotMerged
-}
-
-// isMergeRelatedSkipReason returns true if the skip reason is merge-related.
-// These reasons should not have a CleanReason since the branch isn't cleanable.
-func isMergeRelatedSkipReason(reason SkipReason) bool {
-	if reason == SkipNotMerged {
-		return true
-	}
-	return strings.HasPrefix(string(reason), "same commit as")
 }
 
 // getCleanReason determines why a branch is cleanable.

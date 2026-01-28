@@ -1304,9 +1304,8 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 
 		// Skip reason should indicate same commit, not "not merged"
-		expectedReason := SkipReason("same commit as main")
-		if candidate.SkipReason != expectedReason {
-			t.Errorf("skip reason should be %q, got %q", expectedReason, candidate.SkipReason)
+		if candidate.SkipReason != SkipSameCommit {
+			t.Errorf("skip reason should be %q, got %q", SkipSameCommit, candidate.SkipReason)
 		}
 	})
 }
