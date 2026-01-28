@@ -530,9 +530,14 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 		if reason := c.checkSkipReason(ctx, wt, opts, changedFiles); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
+			// Calculate CleanReason for skip candidates (except merge-related skip reasons)
+			if opts.Target != "" && !isMergeRelatedSkipReason(reason) {
+				result.CleanReason = c.getCleanReason(ctx, branch, opts.Target)
+			}
 			c.Log.DebugContext(ctx, "skip",
 				"category", LogCategoryRemove,
 				"reason", reason,
+				"cleanReason", result.CleanReason,
 				"branch", branch)
 			return result, nil
 		}
@@ -629,6 +634,15 @@ func (c *RemoveCommand) checkMergedSkipReason(ctx context.Context, branch, targe
 		return ""
 	}
 	return SkipNotMerged
+}
+
+// isMergeRelatedSkipReason returns true if the skip reason is merge-related.
+// These reasons should not have a CleanReason since the branch isn't cleanable.
+func isMergeRelatedSkipReason(reason SkipReason) bool {
+	if reason == SkipNotMerged {
+		return true
+	}
+	return strings.HasPrefix(string(reason), "same commit as")
 }
 
 // getCleanReason determines why a branch is cleanable.
