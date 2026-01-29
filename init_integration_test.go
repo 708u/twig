@@ -71,6 +71,9 @@ func TestInitCommand_Integration(t *testing.T) {
 		if !strings.Contains(contentStr, "# init_submodules") {
 			t.Error("settings should contain commented init_submodules")
 		}
+		if !strings.Contains(contentStr, "# submodule_reference") {
+			t.Error("settings should contain commented submodule_reference")
+		}
 	})
 
 	t.Run("SkipsExistingFile", func(t *testing.T) {
