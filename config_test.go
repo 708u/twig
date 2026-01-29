@@ -447,3 +447,30 @@ func TestConfig_ShouldInitSubmodules(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_ShouldUseSubmoduleReference(t *testing.T) {
+	t.Parallel()
+
+	boolPtr := func(b bool) *bool { return &b }
+
+	tests := []struct {
+		name               string
+		submoduleReference *bool
+		want               bool
+	}{
+		{"nil returns false", nil, false},
+		{"true returns true", boolPtr(true), true},
+		{"false returns false", boolPtr(false), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &Config{SubmoduleReference: tt.submoduleReference}
+			if got := cfg.ShouldUseSubmoduleReference(); got != tt.want {
+				t.Errorf("ShouldUseSubmoduleReference() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

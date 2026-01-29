@@ -169,6 +169,28 @@ Synced feat/a from main: 1 symlinks created, 2 submodule(s) initialized
 			wantStderr: "warning: already exists\n",
 		},
 		{
+			name: "warning_submodule_no_reference",
+			result: SyncResult{
+				Check:        false,
+				SourceBranch: "main",
+				Targets: []SyncTargetResult{
+					{
+						Branch:       "feat/a",
+						WorktreePath: "/repo/feat/a",
+						SubmoduleInit: SubmoduleInitResult{
+							Attempted:             true,
+							Count:                 2,
+							NoReferenceSubmodules: []string{"sub/a", "sub/b"},
+						},
+					},
+				},
+			},
+			opts:       SyncFormatOptions{},
+			wantStdout: "Synced feat/a from main: 0 symlinks created, 2 submodule(s) initialized\n",
+			wantStderr: "warning: submodule sub/a: reference not available, initialize in main worktree first\n" +
+				"warning: submodule sub/b: reference not available, initialize in main worktree first\n",
+		},
+		{
 			name: "quiet_mode",
 			result: SyncResult{
 				Check:        false,
