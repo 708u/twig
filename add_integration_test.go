@@ -1902,3 +1902,152 @@ init_submodules = false
 		}
 	})
 }
+
+// Not parallel: uses t.Setenv for file:// protocol in local submodule URLs.
+func TestAddCommand_SubmoduleReference_Integration(t *testing.T) {
+	// Allow file:// protocol for local submodule URLs in tests
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+
+	t.Run("ReferenceAvailable", func(t *testing.T) {
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule repository
+		submoduleRepo := filepath.Join(repoDir, "submodule-repo")
+		if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "init")
+		testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+		if err := os.WriteFile(filepath.Join(submoduleRepo, "submodule-file.txt"), []byte("submodule content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "add", ".")
+		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+
+		// Add submodule to main repo and initialize it
+		testutil.RunGit(t, mainDir, "submodule", "add", submoduleRepo, "mysub")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+		// submodule is already initialized in main (because we added it)
+
+		// Setup twig config
+		twigDir := filepath.Join(mainDir, ".twig")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+init_submodules = true
+submodule_reference = true
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewDefaultAddCommand(result.Config, NewNopLogger(), AddOptions{})
+
+		addResult, err := cmd.Run(t.Context(), "feature/with-reference")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify submodule was initialized
+		wtPath := filepath.Join(repoDir, "feature", "with-reference")
+		submoduleFile := filepath.Join(wtPath, "mysub", "submodule-file.txt")
+		content, err := os.ReadFile(submoduleFile)
+		if err != nil {
+			t.Fatalf("failed to read submodule file: %v", err)
+		}
+		if string(content) != "submodule content" {
+			t.Errorf("submodule file content = %q, want %q", string(content), "submodule content")
+		}
+
+		// Verify result - no warning since reference was available
+		if !addResult.SubmoduleInit.Attempted {
+			t.Error("expected SubmoduleInit.Attempted to be true")
+		}
+		if addResult.SubmoduleInit.Count != 1 {
+			t.Errorf("SubmoduleInit.Count = %d, want 1", addResult.SubmoduleInit.Count)
+		}
+		if len(addResult.SubmoduleInit.NoReferenceSubmodules) != 0 {
+			t.Errorf("NoReferenceSubmodules = %v, want empty", addResult.SubmoduleInit.NoReferenceSubmodules)
+		}
+	})
+
+	t.Run("ReferenceNotAvailable", func(t *testing.T) {
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a submodule repository
+		submoduleRepo := filepath.Join(repoDir, "submodule-repo")
+		if err := os.MkdirAll(submoduleRepo, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "init")
+		testutil.RunGit(t, submoduleRepo, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, submoduleRepo, "config", "user.name", "Test")
+		if err := os.WriteFile(filepath.Join(submoduleRepo, "submodule-file.txt"), []byte("submodule content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, submoduleRepo, "add", ".")
+		testutil.RunGit(t, submoduleRepo, "commit", "-m", "initial")
+
+		// Add submodule to main repo but DON'T initialize it
+		testutil.RunGit(t, mainDir, "submodule", "add", submoduleRepo, "mysub")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+
+		// Remove .git/modules to simulate uninitialized state in main
+		modulesDir := filepath.Join(mainDir, ".git", "modules")
+		if err := os.RemoveAll(modulesDir); err != nil {
+			t.Fatal(err)
+		}
+
+		// Setup twig config with reference enabled
+		twigDir := filepath.Join(mainDir, ".twig")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+init_submodules = true
+submodule_reference = true
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewDefaultAddCommand(result.Config, NewNopLogger(), AddOptions{})
+
+		addResult, err := cmd.Run(t.Context(), "feature/no-reference")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify submodule was still initialized (fallback to normal init)
+		wtPath := filepath.Join(repoDir, "feature", "no-reference")
+		submoduleFile := filepath.Join(wtPath, "mysub", "submodule-file.txt")
+		content, err := os.ReadFile(submoduleFile)
+		if err != nil {
+			t.Fatalf("failed to read submodule file: %v", err)
+		}
+		if string(content) != "submodule content" {
+			t.Errorf("submodule file content = %q, want %q", string(content), "submodule content")
+		}
+
+		// Verify result - warning should be present
+		if !addResult.SubmoduleInit.Attempted {
+			t.Error("expected SubmoduleInit.Attempted to be true")
+		}
+		if addResult.SubmoduleInit.Count != 1 {
+			t.Errorf("SubmoduleInit.Count = %d, want 1", addResult.SubmoduleInit.Count)
+		}
+		if len(addResult.SubmoduleInit.NoReferenceSubmodules) != 1 {
+			t.Errorf("NoReferenceSubmodules length = %d, want 1", len(addResult.SubmoduleInit.NoReferenceSubmodules))
+		} else if addResult.SubmoduleInit.NoReferenceSubmodules[0] != "mysub" {
+			t.Errorf("NoReferenceSubmodules[0] = %q, want %q", addResult.SubmoduleInit.NoReferenceSubmodules[0], "mysub")
+		}
+	})
+}

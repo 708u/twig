@@ -7,6 +7,34 @@ import (
 	"github.com/708u/twig/internal/testutil"
 )
 
+func TestWithSubmoduleReference(t *testing.T) {
+	t.Parallel()
+
+	t.Run("sets reference path", func(t *testing.T) {
+		t.Parallel()
+
+		var opts submoduleUpdateOptions
+		opt := WithSubmoduleReference("/path/to/main")
+		opt(&opts)
+
+		if opts.referencePath != "/path/to/main" {
+			t.Errorf("referencePath = %q, want %q", opts.referencePath, "/path/to/main")
+		}
+	})
+
+	t.Run("empty path", func(t *testing.T) {
+		t.Parallel()
+
+		var opts submoduleUpdateOptions
+		opt := WithSubmoduleReference("")
+		opt(&opts)
+
+		if opts.referencePath != "" {
+			t.Errorf("referencePath = %q, want empty", opts.referencePath)
+		}
+	})
+}
+
 func TestNewGitRunner_DefaultLogger(t *testing.T) {
 	t.Parallel()
 

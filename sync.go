@@ -18,13 +18,14 @@ type SyncCommand struct {
 
 // SyncOptions configures the sync operation.
 type SyncOptions struct {
-	Check          bool     // Show what would be synced (dry-run)
-	All            bool     // Sync all worktrees
-	Source         string   // Source branch
-	SourcePath     string   // Source worktree path
-	Symlinks       []string // Symlink patterns from source config
-	InitSubmodules bool     // Whether to init submodules from source config
-	Verbose        bool     // Verbose output
+	Check              bool     // Show what would be synced (dry-run)
+	All                bool     // Sync all worktrees
+	Source             string   // Source branch
+	SourcePath         string   // Source worktree path
+	Symlinks           []string // Symlink patterns from source config
+	InitSubmodules     bool     // Whether to init submodules from source config
+	SubmoduleReference bool     // Whether to use --reference for submodule init
+	Verbose            bool     // Verbose output
 }
 
 // SyncTargetResult holds the result of syncing a single worktree.
@@ -159,6 +160,11 @@ func (r SyncResult) formatTarget(stdout, stderr *strings.Builder, t SyncTargetRe
 	// Output submodule init warning
 	if t.SubmoduleInit.Skipped {
 		fmt.Fprintf(stderr, "warning: %s\n", t.SubmoduleInit.Reason)
+	}
+
+	// Output warning for submodules that couldn't use reference
+	for _, sm := range t.SubmoduleInit.NoReferenceSubmodules {
+		fmt.Fprintf(stderr, "warning: submodule %s: reference not available, initialize in main worktree first\n", sm)
 	}
 
 	if opts.Verbose {
@@ -341,14 +347,23 @@ func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target 
 			result.SubmoduleInit.Attempted = true
 		} else {
 			wtGit := c.Git.InDir(target.Path)
-			count, err := wtGit.SubmoduleUpdate(ctx)
-			if err != nil {
+			var updateOpts []SubmoduleUpdateOption
+
+			if opts.SubmoduleReference {
+				if mainPath, err := c.Git.MainWorktreePath(ctx); err == nil {
+					updateOpts = append(updateOpts, WithSubmoduleReference(mainPath))
+				}
+			}
+
+			subResult, subErr := wtGit.SubmoduleUpdate(ctx, updateOpts...)
+			if subErr != nil {
 				result.SubmoduleInit.Attempted = true
 				result.SubmoduleInit.Skipped = true
-				result.SubmoduleInit.Reason = err.Error()
-			} else if count > 0 {
+				result.SubmoduleInit.Reason = subErr.Error()
+			} else if subResult.Count > 0 {
 				result.SubmoduleInit.Attempted = true
-				result.SubmoduleInit.Count = count
+				result.SubmoduleInit.Count = subResult.Count
+				result.SubmoduleInit.NoReferenceSubmodules = subResult.NoReference
 			}
 		}
 	}

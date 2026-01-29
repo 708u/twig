@@ -25,6 +25,9 @@ symlinks = []
 
 # Initialize submodules when creating worktrees (default: false)
 # init_submodules = true
+
+# Reuse objects from main worktree for faster submodule init (default: false)
+# submodule_reference = true
 `
 
 // InitCommand initializes twig configuration in a directory.

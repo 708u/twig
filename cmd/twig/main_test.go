@@ -943,6 +943,108 @@ func TestAddCmd(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+
+	t.Run("InitSubmodulesFlag", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		mock := &mockAddCommander{
+			result: twig.AddResult{
+				Branch:       "feat/submodule",
+				WorktreePath: "/path/to/worktree",
+				SubmoduleInit: twig.SubmoduleInitResult{
+					Attempted: true,
+					Count:     2,
+				},
+			},
+		}
+
+		cmd := newRootCmd(WithAddCommander(mock))
+
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "--init-submodules", "feat/submodule"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if mock.calledName != "feat/submodule" {
+			t.Errorf("calledName = %q, want %q", mock.calledName, "feat/submodule")
+		}
+		if !strings.Contains(stdout.String(), "2 submodules") {
+			t.Errorf("stdout = %q, want to contain '2 submodules'", stdout.String())
+		}
+	})
+
+	t.Run("SubmoduleReferenceFlag", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		mock := &mockAddCommander{
+			result: twig.AddResult{
+				Branch:       "feat/submodule-ref",
+				WorktreePath: "/path/to/worktree",
+				SubmoduleInit: twig.SubmoduleInitResult{
+					Attempted: true,
+					Count:     2,
+				},
+			},
+		}
+
+		cmd := newRootCmd(WithAddCommander(mock))
+
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "--init-submodules", "--submodule-reference", "feat/submodule-ref"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if mock.calledName != "feat/submodule-ref" {
+			t.Errorf("calledName = %q, want %q", mock.calledName, "feat/submodule-ref")
+		}
+	})
+
+	t.Run("OutputWithSubmoduleReferenceWarning", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		mock := &mockAddCommander{
+			result: twig.AddResult{
+				Branch:       "feat/submodule-warn",
+				WorktreePath: "/path/to/worktree",
+				SubmoduleInit: twig.SubmoduleInitResult{
+					Attempted:             true,
+					Count:                 2,
+					NoReferenceSubmodules: []string{"submod/a", "submod/b"},
+				},
+			},
+		}
+
+		cmd := newRootCmd(WithAddCommander(mock))
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs([]string{"-C", mainDir, "add", "--init-submodules", "--submodule-reference", "feat/submodule-warn"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Verify warnings are output for submodules that couldn't use reference
+		if !strings.Contains(stderr.String(), "submod/a: reference not available") {
+			t.Errorf("stderr = %q, want to contain 'submod/a: reference not available'", stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "submod/b: reference not available") {
+			t.Errorf("stderr = %q, want to contain 'submod/b: reference not available'", stderr.String())
+		}
+	})
 }
 
 func TestRemoveCmd(t *testing.T) {
