@@ -861,29 +861,85 @@ func (g *GitRunner) WorktreeRoot(ctx context.Context) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// SubmoduleUpdate runs git submodule update --init --recursive.
-// Returns the number of initialized submodules.
-func (g *GitRunner) SubmoduleUpdate(ctx context.Context) (int, error) {
-	args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
+// SubmoduleUpdateOption configures SubmoduleUpdate behavior.
+type SubmoduleUpdateOption func(*submoduleUpdateOptions)
 
-	_, err := g.Run(ctx, args...)
-	if err != nil {
-		return 0, fmt.Errorf("failed to initialize submodules: %w", err)
+type submoduleUpdateOptions struct {
+	referencePath string
+}
+
+// WithSubmoduleReference enables --reference optimization using main worktree's modules.
+func WithSubmoduleReference(mainWorktreePath string) SubmoduleUpdateOption {
+	return func(o *submoduleUpdateOptions) {
+		o.referencePath = mainWorktreePath
+	}
+}
+
+// SubmoduleUpdateResult holds the result of SubmoduleUpdate.
+type SubmoduleUpdateResult struct {
+	Count       int      // number of initialized submodules
+	NoReference []string // submodules that couldn't use reference
+}
+
+// SubmoduleUpdate runs git submodule update --init.
+// With WithSubmoduleReference, uses --reference for faster initialization.
+func (g *GitRunner) SubmoduleUpdate(ctx context.Context, opts ...SubmoduleUpdateOption) (SubmoduleUpdateResult, error) {
+	var o submoduleUpdateOptions
+	for _, opt := range opts {
+		opt(&o)
 	}
 
-	// Count initialized submodules
+	// Without reference: simple recursive init
+	if o.referencePath == "" {
+		args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
+		if _, err := g.Run(ctx, args...); err != nil {
+			return SubmoduleUpdateResult{}, fmt.Errorf("failed to initialize submodules: %w", err)
+		}
+
+		submodules, err := g.SubmoduleStatus(ctx)
+		if err != nil {
+			return SubmoduleUpdateResult{}, nil
+		}
+		var count int
+		for _, sm := range submodules {
+			if sm.State != SubmoduleStateUninitialized {
+				count++
+			}
+		}
+		return SubmoduleUpdateResult{Count: count}, nil
+	}
+
+	// With reference: init each submodule individually
 	submodules, err := g.SubmoduleStatus(ctx)
 	if err != nil {
-		return 0, nil // Initialization succeeded, but count failed
+		return SubmoduleUpdateResult{}, fmt.Errorf("failed to get submodule status: %w", err)
 	}
 
-	var count int
+	var result SubmoduleUpdateResult
 	for _, sm := range submodules {
 		if sm.State != SubmoduleStateUninitialized {
-			count++
+			result.Count++
+			continue
 		}
+
+		refPath := filepath.Join(o.referencePath, ".git", "modules", sm.Path)
+		args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init"}
+
+		if _, statErr := statFunc(refPath); statErr == nil {
+			args = append(args, "--reference", refPath)
+		} else {
+			result.NoReference = append(result.NoReference, sm.Path)
+		}
+		args = append(args, "--", sm.Path)
+
+		if _, runErr := g.Run(ctx, args...); runErr != nil {
+			g.Log.Debug("submodule init failed", "path", sm.Path, "error", runErr)
+			continue
+		}
+		result.Count++
 	}
-	return count, nil
+
+	return result, nil
 }
 
 // MainWorktreePath returns the path of the main worktree.
@@ -895,52 +951,6 @@ func (g *GitRunner) MainWorktreePath(ctx context.Context) (string, error) {
 	}
 	gitDir := strings.TrimSpace(string(out))
 	return filepath.Dir(gitDir), nil
-}
-
-// SubmoduleUpdateWithReference initializes submodules using --reference.
-// mainWorktreePath is the path to the main worktree (where .git/modules exists).
-// Each submodule is initialized individually with its corresponding reference path.
-// Returns the number of initialized submodules and a list of submodules that couldn't use reference.
-func (g *GitRunner) SubmoduleUpdateWithReference(ctx context.Context, mainWorktreePath string) (int, []string, error) {
-	submodules, err := g.SubmoduleStatus(ctx)
-	if err != nil {
-		return 0, nil, fmt.Errorf("failed to get submodule status: %w", err)
-	}
-
-	var count int
-	var noReference []string
-	for _, sm := range submodules {
-		if sm.State != SubmoduleStateUninitialized {
-			count++ // already initialized
-			continue
-		}
-
-		// Build reference path: main/.git/modules/<submodule-path>
-		refPath := filepath.Join(mainWorktreePath, ".git", "modules", sm.Path)
-
-		// Build args: submodule update --init [--reference <path>] -- <submodule-path>
-		args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init"}
-
-		// Use --reference only if the reference path exists
-		if _, statErr := statFunc(refPath); statErr == nil {
-			args = append(args, "--reference", refPath)
-		} else {
-			noReference = append(noReference, sm.Path)
-		}
-		args = append(args, "--", sm.Path)
-
-		// Initialize individual submodule
-		if _, runErr := g.Run(ctx, args...); runErr != nil {
-			// Continue with other submodules even if one fails
-			g.Log.Debug("submodule init failed",
-				"path", sm.Path,
-				"error", runErr)
-			continue
-		}
-		count++
-	}
-
-	return count, noReference, nil
 }
 
 // statFunc is a variable for testing purposes.

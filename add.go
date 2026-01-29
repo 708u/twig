@@ -249,31 +249,23 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	// Initialize submodules in new worktree (CLI flag forces enable)
 	if c.InitSubmodules || c.Config.ShouldInitSubmodules() {
 		wtGit := c.Git.InDir(wtPath)
-		var count int
-		var noRef []string
-		var subErr error
+		var opts []SubmoduleUpdateOption
 
-		useReference := c.SubmoduleReference || c.Config.ShouldUseSubmoduleReference()
-		if useReference {
-			mainPath, mainErr := c.Git.MainWorktreePath(ctx)
-			if mainErr == nil {
-				count, noRef, subErr = wtGit.SubmoduleUpdateWithReference(ctx, mainPath)
-			} else {
-				// Fallback to normal update if main worktree not found
-				count, subErr = wtGit.SubmoduleUpdate(ctx)
+		if c.SubmoduleReference || c.Config.ShouldUseSubmoduleReference() {
+			if mainPath, err := c.Git.MainWorktreePath(ctx); err == nil {
+				opts = append(opts, WithSubmoduleReference(mainPath))
 			}
-		} else {
-			count, subErr = wtGit.SubmoduleUpdate(ctx)
 		}
 
+		subResult, subErr := wtGit.SubmoduleUpdate(ctx, opts...)
 		if subErr != nil {
 			result.SubmoduleInit.Attempted = true
 			result.SubmoduleInit.Skipped = true
 			result.SubmoduleInit.Reason = subErr.Error()
-		} else if count > 0 {
+		} else if subResult.Count > 0 {
 			result.SubmoduleInit.Attempted = true
-			result.SubmoduleInit.Count = count
-			result.SubmoduleInit.NoReferenceSubmodules = noRef
+			result.SubmoduleInit.Count = subResult.Count
+			result.SubmoduleInit.NoReferenceSubmodules = subResult.NoReference
 		}
 	}
 

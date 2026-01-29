@@ -347,30 +347,23 @@ func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target 
 			result.SubmoduleInit.Attempted = true
 		} else {
 			wtGit := c.Git.InDir(target.Path)
-			var count int
-			var noRef []string
-			var subErr error
+			var updateOpts []SubmoduleUpdateOption
 
 			if opts.SubmoduleReference {
-				mainPath, mainErr := c.Git.MainWorktreePath(ctx)
-				if mainErr == nil {
-					count, noRef, subErr = wtGit.SubmoduleUpdateWithReference(ctx, mainPath)
-				} else {
-					// Fallback to normal update if main worktree not found
-					count, subErr = wtGit.SubmoduleUpdate(ctx)
+				if mainPath, err := c.Git.MainWorktreePath(ctx); err == nil {
+					updateOpts = append(updateOpts, WithSubmoduleReference(mainPath))
 				}
-			} else {
-				count, subErr = wtGit.SubmoduleUpdate(ctx)
 			}
 
+			subResult, subErr := wtGit.SubmoduleUpdate(ctx, updateOpts...)
 			if subErr != nil {
 				result.SubmoduleInit.Attempted = true
 				result.SubmoduleInit.Skipped = true
 				result.SubmoduleInit.Reason = subErr.Error()
-			} else if count > 0 {
+			} else if subResult.Count > 0 {
 				result.SubmoduleInit.Attempted = true
-				result.SubmoduleInit.Count = count
-				result.SubmoduleInit.NoReferenceSubmodules = noRef
+				result.SubmoduleInit.Count = subResult.Count
+				result.SubmoduleInit.NoReferenceSubmodules = subResult.NoReference
 			}
 		}
 	}
