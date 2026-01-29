@@ -214,22 +214,17 @@ servers are temporarily unavailable.
 
 ### Submodule Reference
 
-With `--submodule-reference`, submodule initialization uses the main
-worktree's `.git/modules` directory as a reference. This significantly speeds
-up initialization by reusing already-fetched objects instead of fetching
-from the remote again.
+With `--submodule-reference`, submodule initialization reuses objects from
+the main worktree instead of fetching from the remote. This can significantly
+reduce initialization time for large submodules.
 
 ```bash
 # Use reference for faster submodule init
 twig add feat/new --init-submodules --submodule-reference
 ```
 
-How it works:
-
-1. For each uninitialized submodule, twig checks if the main worktree has
-   the corresponding module at `.git/modules/<submodule-path>`
-2. If found, `git submodule update --init --reference <path>` is used
-3. If not found, falls back to normal `git submodule update --init`
+Prerequisite: Submodules must be initialized in the main worktree first.
+If not initialized, a warning is displayed and normal initialization is used.
 
 The behavior can be configured in `.twig/settings.toml`:
 
@@ -243,10 +238,6 @@ Priority:
 1. CLI flag `--submodule-reference` (forces enable)
 2. Config `submodule_reference`
 3. Default: disabled
-
-Performance improvement depends on submodule size and network speed.
-For large submodules, this can reduce initialization time from several
-seconds to under a second.
 
 ### Default Source Configuration
 

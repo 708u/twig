@@ -74,7 +74,7 @@ See [add subcommand](commands/add.md#submodule-initialization) for details.
 
 ### submodule_reference
 
-Use main worktree's `.git/modules` as reference when initializing submodules.
+Reuse objects from main worktree when initializing submodules.
 
 ```toml
 submodule_reference = true
@@ -82,9 +82,9 @@ submodule_reference = true
 
 Default: `false` (disabled)
 
-When enabled, submodule initialization uses `--reference` to reuse objects
-from the main worktree's already-initialized submodules. This significantly
-speeds up submodule initialization by avoiding redundant network fetches.
+When enabled, submodule initialization reuses objects from the main worktree's
+already-initialized submodules. This can significantly speed up initialization
+for large submodules.
 
 The CLI flag `--submodule-reference` forces enable regardless of this setting.
 
