@@ -887,22 +887,14 @@ func (g *GitRunner) SubmoduleUpdate(ctx context.Context) (int, error) {
 }
 
 // MainWorktreePath returns the path of the main worktree.
-// The main worktree is the first non-bare worktree in the list.
+// Uses git rev-parse --git-common-dir which returns the shared .git directory.
 func (g *GitRunner) MainWorktreePath(ctx context.Context) (string, error) {
-	worktrees, err := g.WorktreeList(ctx)
+	out, err := g.Run(ctx, GitCmdRevParse, "--path-format=absolute", "--git-common-dir")
 	if err != nil {
 		return "", err
 	}
-	if len(worktrees) == 0 {
-		return "", fmt.Errorf("no worktrees found")
-	}
-	// First non-bare worktree is main
-	for _, wt := range worktrees {
-		if !wt.Bare {
-			return wt.Path, nil
-		}
-	}
-	return "", fmt.Errorf("main worktree not found")
+	gitDir := strings.TrimSpace(string(out))
+	return filepath.Dir(gitDir), nil
 }
 
 // SubmoduleUpdateWithReference initializes submodules using --reference.
