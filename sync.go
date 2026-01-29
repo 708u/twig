@@ -18,13 +18,14 @@ type SyncCommand struct {
 
 // SyncOptions configures the sync operation.
 type SyncOptions struct {
-	Check          bool     // Show what would be synced (dry-run)
-	All            bool     // Sync all worktrees
-	Source         string   // Source branch
-	SourcePath     string   // Source worktree path
-	Symlinks       []string // Symlink patterns from source config
-	InitSubmodules bool     // Whether to init submodules from source config
-	Verbose        bool     // Verbose output
+	Check              bool     // Show what would be synced (dry-run)
+	All                bool     // Sync all worktrees
+	Source             string   // Source branch
+	SourcePath         string   // Source worktree path
+	Symlinks           []string // Symlink patterns from source config
+	InitSubmodules     bool     // Whether to init submodules from source config
+	SubmoduleReference bool     // Whether to use --reference for submodule init
+	Verbose            bool     // Verbose output
 }
 
 // SyncTargetResult holds the result of syncing a single worktree.
@@ -341,11 +342,25 @@ func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target 
 			result.SubmoduleInit.Attempted = true
 		} else {
 			wtGit := c.Git.InDir(target.Path)
-			count, err := wtGit.SubmoduleUpdate(ctx)
-			if err != nil {
+			var count int
+			var subErr error
+
+			if opts.SubmoduleReference {
+				mainPath, mainErr := c.Git.MainWorktreePath(ctx)
+				if mainErr == nil {
+					count, subErr = wtGit.SubmoduleUpdateWithReference(ctx, mainPath)
+				} else {
+					// Fallback to normal update if main worktree not found
+					count, subErr = wtGit.SubmoduleUpdate(ctx)
+				}
+			} else {
+				count, subErr = wtGit.SubmoduleUpdate(ctx)
+			}
+
+			if subErr != nil {
 				result.SubmoduleInit.Attempted = true
 				result.SubmoduleInit.Skipped = true
-				result.SubmoduleInit.Reason = err.Error()
+				result.SubmoduleInit.Reason = subErr.Error()
 			} else if count > 0 {
 				result.SubmoduleInit.Attempted = true
 				result.SubmoduleInit.Count = count

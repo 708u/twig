@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -883,4 +884,73 @@ func (g *GitRunner) SubmoduleUpdate(ctx context.Context) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+// MainWorktreePath returns the path of the main worktree.
+// The main worktree is the first non-bare worktree in the list.
+func (g *GitRunner) MainWorktreePath(ctx context.Context) (string, error) {
+	worktrees, err := g.WorktreeList(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(worktrees) == 0 {
+		return "", fmt.Errorf("no worktrees found")
+	}
+	// First non-bare worktree is main
+	for _, wt := range worktrees {
+		if !wt.Bare {
+			return wt.Path, nil
+		}
+	}
+	return "", fmt.Errorf("main worktree not found")
+}
+
+// SubmoduleUpdateWithReference initializes submodules using --reference.
+// mainWorktreePath is the path to the main worktree (where .git/modules exists).
+// Each submodule is initialized individually with its corresponding reference path.
+// Returns the number of initialized submodules.
+func (g *GitRunner) SubmoduleUpdateWithReference(ctx context.Context, mainWorktreePath string) (int, error) {
+	submodules, err := g.SubmoduleStatus(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get submodule status: %w", err)
+	}
+
+	var count int
+	for _, sm := range submodules {
+		if sm.State != SubmoduleStateUninitialized {
+			count++ // already initialized
+			continue
+		}
+
+		// Build reference path: main/.git/modules/<submodule-path>
+		refPath := filepath.Join(mainWorktreePath, ".git", "modules", sm.Path)
+
+		// Build args: submodule update --init [--reference <path>] -- <submodule-path>
+		args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init"}
+
+		// Use --reference only if the reference path exists
+		if _, statErr := statFunc(refPath); statErr == nil {
+			args = append(args, "--reference", refPath)
+		}
+		args = append(args, "--", sm.Path)
+
+		// Initialize individual submodule
+		if _, runErr := g.Run(ctx, args...); runErr != nil {
+			// Continue with other submodules even if one fails
+			g.Log.Debug("submodule init failed",
+				"path", sm.Path,
+				"error", runErr)
+			continue
+		}
+		count++
+	}
+
+	return count, nil
+}
+
+// statFunc is a variable for testing purposes.
+var statFunc = osStat
+
+func osStat(path string) (any, error) {
+	return os.Stat(path)
 }

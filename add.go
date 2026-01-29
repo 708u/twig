@@ -11,26 +11,28 @@ import (
 
 // AddCommand creates git worktrees with symlinks.
 type AddCommand struct {
-	FS             FileSystem
-	Git            *GitRunner
-	Config         *Config
-	Log            *slog.Logger
-	Sync           bool
-	CarryFrom      string
-	FilePatterns   []string
-	Lock           bool
-	LockReason     string
-	InitSubmodules bool
+	FS                 FileSystem
+	Git                *GitRunner
+	Config             *Config
+	Log                *slog.Logger
+	Sync               bool
+	CarryFrom          string
+	FilePatterns       []string
+	Lock               bool
+	LockReason         string
+	InitSubmodules     bool
+	SubmoduleReference bool
 }
 
 // AddOptions holds options for the add command.
 type AddOptions struct {
-	Sync           bool
-	CarryFrom      string   // empty: no carry, non-empty: resolved path to carry from
-	FilePatterns   []string // file patterns to carry (empty means all files)
-	Lock           bool
-	LockReason     string
-	InitSubmodules bool
+	Sync               bool
+	CarryFrom          string   // empty: no carry, non-empty: resolved path to carry from
+	FilePatterns       []string // file patterns to carry (empty means all files)
+	Lock               bool
+	LockReason         string
+	InitSubmodules     bool
+	SubmoduleReference bool
 }
 
 // NewAddCommand creates an AddCommand with explicit dependencies (for testing).
@@ -39,16 +41,17 @@ func NewAddCommand(fs FileSystem, git *GitRunner, cfg *Config, log *slog.Logger,
 		log = NewNopLogger()
 	}
 	return &AddCommand{
-		FS:             fs,
-		Git:            git,
-		Config:         cfg,
-		Log:            log,
-		Sync:           opts.Sync,
-		CarryFrom:      opts.CarryFrom,
-		FilePatterns:   opts.FilePatterns,
-		Lock:           opts.Lock,
-		LockReason:     opts.LockReason,
-		InitSubmodules: opts.InitSubmodules,
+		FS:                 fs,
+		Git:                git,
+		Config:             cfg,
+		Log:                log,
+		Sync:               opts.Sync,
+		CarryFrom:          opts.CarryFrom,
+		FilePatterns:       opts.FilePatterns,
+		Lock:               opts.Lock,
+		LockReason:         opts.LockReason,
+		InitSubmodules:     opts.InitSubmodules,
+		SubmoduleReference: opts.SubmoduleReference,
 	}
 }
 
@@ -240,11 +243,26 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	// Initialize submodules in new worktree (CLI flag forces enable)
 	if c.InitSubmodules || c.Config.ShouldInitSubmodules() {
 		wtGit := c.Git.InDir(wtPath)
-		count, err := wtGit.SubmoduleUpdate(ctx)
-		if err != nil {
+		var count int
+		var subErr error
+
+		useReference := c.SubmoduleReference || c.Config.ShouldUseSubmoduleReference()
+		if useReference {
+			mainPath, mainErr := c.Git.MainWorktreePath(ctx)
+			if mainErr == nil {
+				count, subErr = wtGit.SubmoduleUpdateWithReference(ctx, mainPath)
+			} else {
+				// Fallback to normal update if main worktree not found
+				count, subErr = wtGit.SubmoduleUpdate(ctx)
+			}
+		} else {
+			count, subErr = wtGit.SubmoduleUpdate(ctx)
+		}
+
+		if subErr != nil {
 			result.SubmoduleInit.Attempted = true
 			result.SubmoduleInit.Skipped = true
-			result.SubmoduleInit.Reason = err.Error()
+			result.SubmoduleInit.Reason = subErr.Error()
 		} else if count > 0 {
 			result.SubmoduleInit.Attempted = true
 			result.SubmoduleInit.Count = count
