@@ -908,14 +908,15 @@ func (g *GitRunner) MainWorktreePath(ctx context.Context) (string, error) {
 // SubmoduleUpdateWithReference initializes submodules using --reference.
 // mainWorktreePath is the path to the main worktree (where .git/modules exists).
 // Each submodule is initialized individually with its corresponding reference path.
-// Returns the number of initialized submodules.
-func (g *GitRunner) SubmoduleUpdateWithReference(ctx context.Context, mainWorktreePath string) (int, error) {
+// Returns the number of initialized submodules and a list of submodules that couldn't use reference.
+func (g *GitRunner) SubmoduleUpdateWithReference(ctx context.Context, mainWorktreePath string) (int, []string, error) {
 	submodules, err := g.SubmoduleStatus(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get submodule status: %w", err)
+		return 0, nil, fmt.Errorf("failed to get submodule status: %w", err)
 	}
 
 	var count int
+	var noReference []string
 	for _, sm := range submodules {
 		if sm.State != SubmoduleStateUninitialized {
 			count++ // already initialized
@@ -931,6 +932,8 @@ func (g *GitRunner) SubmoduleUpdateWithReference(ctx context.Context, mainWorktr
 		// Use --reference only if the reference path exists
 		if _, statErr := statFunc(refPath); statErr == nil {
 			args = append(args, "--reference", refPath)
+		} else {
+			noReference = append(noReference, sm.Path)
 		}
 		args = append(args, "--", sm.Path)
 
@@ -945,7 +948,7 @@ func (g *GitRunner) SubmoduleUpdateWithReference(ctx context.Context, mainWorktr
 		count++
 	}
 
-	return count, nil
+	return count, noReference, nil
 }
 
 // statFunc is a variable for testing purposes.

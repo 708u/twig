@@ -70,10 +70,11 @@ type SymlinkResult struct {
 
 // SubmoduleInitResult holds information about submodule initialization.
 type SubmoduleInitResult struct {
-	Attempted bool   // true if initialization was attempted
-	Count     int    // number of initialized submodules
-	Skipped   bool   // true if initialization failed
-	Reason    string // reason for failure (warning message)
+	Attempted             bool     // true if initialization was attempted
+	Count                 int      // number of initialized submodules
+	Skipped               bool     // true if initialization failed
+	Reason                string   // reason for failure (warning message)
+	NoReferenceSubmodules []string // submodules that couldn't use reference
 }
 
 // AddResult holds the result of an add operation.
@@ -122,6 +123,11 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 	// Output submodule init warning
 	if r.SubmoduleInit.Skipped {
 		fmt.Fprintf(&stderr, "warning: %s\n", r.SubmoduleInit.Reason)
+	}
+
+	// Output warning for submodules that couldn't use reference
+	for _, sm := range r.SubmoduleInit.NoReferenceSubmodules {
+		fmt.Fprintf(&stderr, "warning: submodule %s: reference not available, initialize in main worktree first\n", sm)
 	}
 
 	if opts.Verbose {
@@ -244,13 +250,14 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	if c.InitSubmodules || c.Config.ShouldInitSubmodules() {
 		wtGit := c.Git.InDir(wtPath)
 		var count int
+		var noRef []string
 		var subErr error
 
 		useReference := c.SubmoduleReference || c.Config.ShouldUseSubmoduleReference()
 		if useReference {
 			mainPath, mainErr := c.Git.MainWorktreePath(ctx)
 			if mainErr == nil {
-				count, subErr = wtGit.SubmoduleUpdateWithReference(ctx, mainPath)
+				count, noRef, subErr = wtGit.SubmoduleUpdateWithReference(ctx, mainPath)
 			} else {
 				// Fallback to normal update if main worktree not found
 				count, subErr = wtGit.SubmoduleUpdate(ctx)
@@ -266,6 +273,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		} else if count > 0 {
 			result.SubmoduleInit.Attempted = true
 			result.SubmoduleInit.Count = count
+			result.SubmoduleInit.NoReferenceSubmodules = noRef
 		}
 	}
 

@@ -162,6 +162,11 @@ func (r SyncResult) formatTarget(stdout, stderr *strings.Builder, t SyncTargetRe
 		fmt.Fprintf(stderr, "warning: %s\n", t.SubmoduleInit.Reason)
 	}
 
+	// Output warning for submodules that couldn't use reference
+	for _, sm := range t.SubmoduleInit.NoReferenceSubmodules {
+		fmt.Fprintf(stderr, "warning: submodule %s: reference not available, initialize in main worktree first\n", sm)
+	}
+
 	if opts.Verbose {
 		fmt.Fprintf(stdout, "Syncing from %s to %s\n", r.SourceBranch, t.Branch)
 		for _, s := range t.Symlinks {
@@ -343,12 +348,13 @@ func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target 
 		} else {
 			wtGit := c.Git.InDir(target.Path)
 			var count int
+			var noRef []string
 			var subErr error
 
 			if opts.SubmoduleReference {
 				mainPath, mainErr := c.Git.MainWorktreePath(ctx)
 				if mainErr == nil {
-					count, subErr = wtGit.SubmoduleUpdateWithReference(ctx, mainPath)
+					count, noRef, subErr = wtGit.SubmoduleUpdateWithReference(ctx, mainPath)
 				} else {
 					// Fallback to normal update if main worktree not found
 					count, subErr = wtGit.SubmoduleUpdate(ctx)
@@ -364,6 +370,7 @@ func (c *SyncCommand) syncTarget(ctx context.Context, sourcePath string, target 
 			} else if count > 0 {
 				result.SubmoduleInit.Attempted = true
 				result.SubmoduleInit.Count = count
+				result.SubmoduleInit.NoReferenceSubmodules = noRef
 			}
 		}
 	}
