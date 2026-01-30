@@ -289,6 +289,33 @@ func TestCleanResult_Format(t *testing.T) {
 			wantStdout: "skip:\n  feat/a\n    ✓ upstream gone\n    ✗ has uncommitted changes\n       M src/main.go\n\nNo worktrees to clean\n",
 			wantStderr: "",
 		},
+		// ColorEnabled tests - output should be identical when color disabled
+		{
+			name: "color_disabled_same_as_no_color",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+					{Branch: "feat/b", Skipped: true, SkipReason: SkipNotMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{ColorEnabled: false},
+			wantStdout: "clean:\n  feat/a (merged)\n",
+			wantStderr: "",
+		},
+		{
+			name: "color_disabled_verbose_same_as_no_color",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+					{Branch: "feat/b", Skipped: true, SkipReason: SkipNotMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{Verbose: true, ColorEnabled: false},
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b\n    ✗ not merged\n",
+			wantStderr: "",
+		},
 	}
 
 	for _, tt := range tests {
