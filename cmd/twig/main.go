@@ -186,6 +186,7 @@ func newRootCmd(opts ...Option) *cobra.Command {
 		cwd         string
 		originalCwd string
 		dirFlag     string
+		colorFlag   string
 	)
 
 	resolveCompletionDirectory := func(cmd *cobra.Command) (string, error) {
@@ -214,6 +215,9 @@ func newRootCmd(opts ...Option) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			// Set color mode based on flag
+			twig.SetColorMode(twig.ColorMode(colorFlag))
 
 			result, err := twig.LoadConfig(cwd)
 			if err != nil {
@@ -455,7 +459,10 @@ Safety checks (all must pass):
 
 			// If check mode or no candidates, just show output and exit
 			if check || result.CleanableCount() == 0 {
-				formatted := result.Format(twig.FormatOptions{Verbose: verbose})
+				formatted := result.Format(twig.FormatOptions{
+					Verbose:      verbose,
+					ColorEnabled: twig.IsColorEnabled(),
+				})
 				if formatted.Stderr != "" {
 					fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
 				}
@@ -464,7 +471,10 @@ Safety checks (all must pass):
 			}
 
 			// Show candidates
-			formatted := result.Format(twig.FormatOptions{Verbose: verbose})
+			formatted := result.Format(twig.FormatOptions{
+				Verbose:      verbose,
+				ColorEnabled: twig.IsColorEnabled(),
+			})
 			if formatted.Stderr != "" {
 				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
 			}
@@ -495,7 +505,10 @@ Safety checks (all must pass):
 				return err
 			}
 
-			formatted = result.Format(twig.FormatOptions{Verbose: verbose})
+			formatted = result.Format(twig.FormatOptions{
+				Verbose:      verbose,
+				ColorEnabled: twig.IsColorEnabled(),
+			})
 			if formatted.Stderr != "" {
 				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
 			}
@@ -614,6 +627,7 @@ stop processing of remaining branches.`,
 	// Register flags
 	rootCmd.PersistentFlags().StringVarP(&dirFlag, "directory", "C", "", "Run as if twig was started in <path>")
 	rootCmd.PersistentFlags().CountP("verbose", "v", "Enable verbose output (-v for verbose, -vv for debug)")
+	rootCmd.PersistentFlags().StringVar(&colorFlag, "color", "auto", "Color output: auto, always, never")
 
 	addCmd.Flags().BoolP("sync", "s", false, "Sync uncommitted changes to new worktree")
 	addCmd.Flags().StringP("carry", "c", "", "Move uncommitted changes (<branch>: from specified worktree)")
