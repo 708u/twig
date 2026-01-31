@@ -1324,4 +1324,109 @@ func TestRemoveCommand_Check_Integration(t *testing.T) {
 			t.Error("expected ChangedFiles to be populated in RemovedWorktree")
 		}
 	})
+
+	t.Run("BlocksRemovalFromNestedSubdir", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create worktree
+		testutil.RunGit(t, mainDir, "worktree", "add", filepath.Join(repoDir, "feat", "x"), "-b", "feat/x")
+		wtPath := filepath.Join(repoDir, "feat", "x")
+
+		// Create deeply nested subdirectory
+		subdir := filepath.Join(wtPath, "deep", "nested", "subdir")
+		if err := os.MkdirAll(subdir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		// Try to remove worktree while cwd is inside it
+		checkResult, err := cmd.Check(t.Context(), "feat/x", CheckOptions{
+			Cwd: subdir,
+		})
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+
+		// Should not be removable because cwd is inside
+		if checkResult.CanRemove {
+			t.Error("expected CanRemove=false when cwd is inside worktree")
+		}
+		if checkResult.SkipReason != SkipCurrentDir {
+			t.Errorf("SkipReason = %q, want %q", checkResult.SkipReason, SkipCurrentDir)
+		}
+	})
+
+	t.Run("AllowsRemovalFromSimilarPrefixPath", func(t *testing.T) {
+		t.Parallel()
+
+		// This test verifies that removal is allowed when cwd has a similar prefix
+		// but is not actually inside the worktree
+		// e.g., /repo (cwd) vs /repo-worktree/feat/x (worktree)
+		tmpDir := t.TempDir()
+		tmpDir, _ = filepath.EvalSymlinks(tmpDir)
+
+		// /tmp/repo (main)
+		mainDir := filepath.Join(tmpDir, "repo")
+		if err := os.MkdirAll(mainDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "init")
+		testutil.RunGit(t, mainDir, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, mainDir, "config", "user.name", "Test User")
+		testutil.RunGit(t, mainDir, "commit", "--allow-empty", "-m", "initial")
+		testutil.RunGit(t, mainDir, "branch", "-M", "main")
+
+		// Create settings
+		twigDir := filepath.Join(mainDir, ".twig")
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		settings := `worktree_destination_base_dir = "` + filepath.Join(tmpDir, "repo-worktree") + `"`
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// /tmp/repo-worktree/feat/x (worktree)
+		wtPath := filepath.Join(tmpDir, "repo-worktree", "feat", "x")
+		testutil.RunGit(t, mainDir, "worktree", "add", wtPath, "-b", "feat/x")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		// Try to remove feat/x while cwd is in main repo (/repo, not /repo-worktree)
+		// This should be allowed because /repo is not inside /repo-worktree/feat/x
+		checkResult, err := cmd.Check(t.Context(), "feat/x", CheckOptions{
+			Cwd: mainDir,
+		})
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+
+		// Should be removable because cwd (/repo) is not inside worktree (/repo-worktree/feat/x)
+		if !checkResult.CanRemove {
+			t.Errorf("expected CanRemove=true, got false with reason: %s", checkResult.SkipReason)
+		}
+	})
 }

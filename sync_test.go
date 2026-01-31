@@ -2,6 +2,7 @@ package twig
 
 import (
 	"io/fs"
+	"strings"
 	"testing"
 
 	"github.com/708u/twig/internal/testutil"
@@ -89,7 +90,7 @@ feat/a:
 				},
 			},
 			opts:       SyncFormatOptions{},
-			wantStdout: "Synced feat/a: 2 symlinks created, 1 submodule(s) initialized\n",
+			wantStdout: "Synced feat/a from main: 2 symlinks created, 1 submodule(s) initialized\n",
 		},
 		{
 			name: "normal_mode_verbose",
@@ -111,7 +112,7 @@ feat/a:
 			wantStdout: `Syncing from main to feat/a
 Created symlink: /repo/feat/a/.envrc -> /repo/main/.envrc
 Initialized 2 submodule(s)
-Synced feat/a: 1 symlinks created, 2 submodule(s) initialized
+Synced feat/a from main: 1 symlinks created, 2 submodule(s) initialized
 `,
 		},
 		{
@@ -166,6 +167,28 @@ Synced feat/a: 1 symlinks created, 2 submodule(s) initialized
 			opts:       SyncFormatOptions{},
 			wantStdout: "Skipped feat/a: up to date\n",
 			wantStderr: "warning: already exists\n",
+		},
+		{
+			name: "warning_submodule_no_reference",
+			result: SyncResult{
+				Check:        false,
+				SourceBranch: "main",
+				Targets: []SyncTargetResult{
+					{
+						Branch:       "feat/a",
+						WorktreePath: "/repo/feat/a",
+						SubmoduleInit: SubmoduleInitResult{
+							Attempted:             true,
+							Count:                 2,
+							NoReferenceSubmodules: []string{"sub/a", "sub/b"},
+						},
+					},
+				},
+			},
+			opts:       SyncFormatOptions{},
+			wantStdout: "Synced feat/a from main: 0 symlinks created, 2 submodule(s) initialized\n",
+			wantStderr: "warning: submodule sub/a: reference not available, initialize in main worktree first\n" +
+				"warning: submodule sub/b: reference not available, initialize in main worktree first\n",
 		},
 		{
 			name: "quiet_mode",
@@ -256,6 +279,144 @@ func TestSyncResult_Counts(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestSyncCommand_resolveTargets(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		targets      []string
+		sourceBranch string
+		cwd          string
+		all          bool
+		setupGit     func() *testutil.MockGitExecutor
+		wantBranches []string
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:         "cwd_in_worktree",
+			targets:      nil,
+			sourceBranch: "main",
+			cwd:          "/repo/feat/a/subdir",
+			all:          false,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+				}
+			},
+			wantBranches: []string{"feat/a"},
+		},
+		{
+			name:         "cwd_not_in_similar_prefix_worktree",
+			targets:      nil,
+			sourceBranch: "main",
+			cwd:          "/repo-worktree/feat/x/subdir",
+			all:          false,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo", Branch: "main"},
+						{Path: "/repo-worktree/feat/x", Branch: "feat/x"},
+					},
+				}
+			},
+			wantBranches: []string{"feat/x"},
+		},
+		{
+			name:         "cwd_in_source_worktree_error",
+			targets:      nil,
+			sourceBranch: "main",
+			cwd:          "/repo/main/subdir",
+			all:          false,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+				}
+			},
+			wantErr:     true,
+			errContains: "cannot sync source worktree to itself",
+		},
+		{
+			name:         "cwd_not_in_any_worktree",
+			targets:      nil,
+			sourceBranch: "main",
+			cwd:          "/other/path",
+			all:          false,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+					},
+				}
+			},
+			wantErr:     true,
+			errContains: "current directory is not in any worktree",
+		},
+		{
+			name:         "all_flag_excludes_main_and_source",
+			targets:      nil,
+			sourceBranch: "main",
+			cwd:          "/repo/main",
+			all:          true,
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+						{Path: "/repo/feat/b", Branch: "feat/b"},
+					},
+				}
+			},
+			wantBranches: []string{"feat/a", "feat/b"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := tt.setupGit()
+			cmd := &SyncCommand{
+				Git: &GitRunner{Executor: mockGit, Log: NewNopLogger()},
+				Log: NewNopLogger(),
+			}
+
+			targets, err := cmd.resolveTargets(t.Context(), tt.targets, tt.sourceBranch, tt.cwd, tt.all)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(targets) != len(tt.wantBranches) {
+				t.Errorf("got %d targets, want %d", len(targets), len(tt.wantBranches))
+				return
+			}
+
+			for i, wt := range targets {
+				if wt.Branch != tt.wantBranches[i] {
+					t.Errorf("target[%d].Branch = %q, want %q", i, wt.Branch, tt.wantBranches[i])
+				}
+			}
+		})
+	}
 }
 
 func TestSyncCommand_predictSymlinks(t *testing.T) {

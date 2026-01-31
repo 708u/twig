@@ -76,15 +76,66 @@ func (r CleanResult) CleanableCount() int {
 	return count
 }
 
+// lineWriter provides indented line writing for formatted output.
+type lineWriter struct {
+	w *strings.Builder
+}
+
+// Line writes a formatted line with the specified indentation level.
+// Each level adds 2 spaces of indentation.
+func (lw *lineWriter) Line(level int, format string, args ...any) {
+	fmt.Fprintf(lw.w, "%s"+format+"\n",
+		append([]any{strings.Repeat("  ", level)}, args...)...)
+}
+
 // Format formats the CleanResult for display.
 func (r CleanResult) Format(opts FormatOptions) FormatResult {
 	var stdout, stderr strings.Builder
+
+	// Color helper functions (apply color only when enabled)
+	applyClean := func(s string) string {
+		if opts.ColorEnabled {
+			return colorClean(s)
+		}
+		return s
+	}
+	applySkip := func(s string) string {
+		if opts.ColorEnabled {
+			return colorSkip(s)
+		}
+		return s
+	}
+	applySuccess := func(s string) string {
+		if opts.ColorEnabled {
+			return colorSuccess(s)
+		}
+		return s
+	}
+	applyFailure := func(s string) string {
+		if opts.ColorEnabled {
+			return colorFailure(s)
+		}
+		return s
+	}
+	applyReason := func(s string) string {
+		if opts.ColorEnabled {
+			return colorReason(s)
+		}
+		return s
+	}
+	applyError := func(s string) string {
+		if opts.ColorEnabled {
+			return colorError(s)
+		}
+		return s
+	}
 
 	// Show removal results (execution completed)
 	if !r.Check && len(r.Removed) > 0 {
 		for i := range r.Removed {
 			if r.Removed[i].Err != nil {
-				fmt.Fprintf(&stderr, "error: %s: %v\n", r.Removed[i].Branch, r.Removed[i].Err)
+				fmt.Fprintf(&stderr, "%s %s: %v\n",
+					applyError("error:"), r.Removed[i].Branch, r.Removed[i].Err)
 				continue
 			}
 			if opts.Verbose {
@@ -105,15 +156,20 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 	}
 
 	// No cleanable candidates
+	lw := &lineWriter{w: &stdout}
 	if len(cleanable) == 0 {
 		if opts.Verbose && len(skipped) > 0 {
-			fmt.Fprintln(&stdout, "skip:")
+			lw.Line(0, "%s", applySkip("skip:"))
 			for _, c := range skipped {
-				fmt.Fprintf(&stdout, "  %s (%s)\n", c.Branch, c.SkipReason)
+				lw.Line(1, "%s", c.Branch)
+				if c.CleanReason != "" {
+					lw.Line(2, "%s %s", applySuccess("✓"), c.CleanReason)
+				}
+				lw.Line(2, "%s %s", applyFailure("✗"), c.SkipReason.Format(r.TargetBranch))
 				if (c.SkipReason == SkipHasChanges || c.SkipReason == SkipDirtySubmodule) &&
 					len(c.ChangedFiles) > 0 {
 					for _, f := range c.ChangedFiles {
-						fmt.Fprintf(&stdout, "    %s %s\n", f.Status, f.Path)
+						lw.Line(3, "%s %s", f.Status, f.Path)
 					}
 				}
 			}
@@ -124,25 +180,29 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 	}
 
 	// Output cleanable candidates with group header and reasons
-	fmt.Fprintln(&stdout, "clean:")
+	lw.Line(0, "%s", applyClean("clean:"))
 	for _, c := range cleanable {
 		reason := string(c.CleanReason)
 		if c.Prunable {
 			reason = "prunable, " + reason
 		}
-		fmt.Fprintf(&stdout, "  %s (%s)\n", c.Branch, reason)
+		lw.Line(1, "%s %s", c.Branch, applyReason("("+reason+")"))
 	}
 
 	// Output skipped candidates with group header (verbose only)
 	if opts.Verbose && len(skipped) > 0 {
 		fmt.Fprintln(&stdout)
-		fmt.Fprintln(&stdout, "skip:")
+		lw.Line(0, "%s", applySkip("skip:"))
 		for _, c := range skipped {
-			fmt.Fprintf(&stdout, "  %s (%s)\n", c.Branch, c.SkipReason)
+			lw.Line(1, "%s", c.Branch)
+			if c.CleanReason != "" {
+				lw.Line(2, "%s %s", applySuccess("✓"), c.CleanReason)
+			}
+			lw.Line(2, "%s %s", applyFailure("✗"), c.SkipReason.Format(r.TargetBranch))
 			if (c.SkipReason == SkipHasChanges || c.SkipReason == SkipDirtySubmodule) &&
 				len(c.ChangedFiles) > 0 {
 				for _, f := range c.ChangedFiles {
-					fmt.Fprintf(&stdout, "    %s %s\n", f.Status, f.Path)
+					lw.Line(3, "%s %s", f.Status, f.Path)
 				}
 			}
 		}

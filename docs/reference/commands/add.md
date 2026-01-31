@@ -14,17 +14,18 @@ twig add <name> [flags]
 
 ## Flags
 
-| Flag                  | Short | Description                                        |
-|-----------------------|-------|----------------------------------------------------|
-| `--sync`              | `-s`  | Sync uncommitted changes to new worktree           |
-| `--carry [<branch>]`  | `-c`  | Carry uncommitted changes (optionally from branch) |
-| `--file <pattern>`    | `-F`  | File patterns to carry (requires `--carry`)        |
-| `--quiet`             | `-q`  | Output only the worktree path                      |
-| `--verbose`           | `-v`  | Enable verbose output                              |
-| `--source <branch>`   |       | Use specified branch's worktree as source          |
-| `--lock`              |       | Lock the worktree after creation                   |
-| `--reason <string>`   |       | Reason for locking (requires `--lock`)             |
-| `--init-submodules`   |       | Initialize submodules in new worktree              |
+| Flag                    | Short | Description                                        |
+|-------------------------|-------|----------------------------------------------------|
+| `--sync`                | `-s`  | Sync uncommitted changes to new worktree           |
+| `--carry [<branch>]`    | `-c`  | Carry uncommitted changes (optionally from branch) |
+| `--file <pattern>`      | `-F`  | File patterns to carry (requires `--carry`)        |
+| `--quiet`               | `-q`  | Output only the worktree path                      |
+| `--verbose`             | `-v`  | Enable verbose output                              |
+| `--source <branch>`     |       | Use specified branch's worktree as source          |
+| `--lock`                |       | Lock the worktree after creation                   |
+| `--reason <string>`     |       | Reason for locking (requires `--lock`)             |
+| `--init-submodules`     |       | Initialize submodules in new worktree              |
+| `--submodule-reference` |       | Use main worktree as reference for submodule init  |
 
 ## Behavior
 
@@ -210,6 +211,33 @@ init_submodules = false
 If submodule initialization fails, a warning is displayed but the worktree
 creation succeeds. This ensures the worktree is usable even if submodule
 servers are temporarily unavailable.
+
+### Submodule Reference
+
+With `--submodule-reference`, submodule initialization reuses objects from
+the main worktree instead of fetching from the remote. This can significantly
+reduce initialization time for large submodules.
+
+```bash
+# Use reference for faster submodule init
+twig add feat/new --init-submodules --submodule-reference
+```
+
+Prerequisite: Submodules must be initialized in the main worktree first.
+If not initialized, a warning is displayed and normal initialization is used.
+
+The behavior can be configured in `.twig/settings.toml`:
+
+```toml
+init_submodules = true
+submodule_reference = true
+```
+
+Priority:
+
+1. CLI flag `--submodule-reference` (forces enable)
+2. Config `submodule_reference`
+3. Default: disabled
 
 ### Default Source Configuration
 

@@ -915,6 +915,24 @@ func TestRemoveCommand_Check(t *testing.T) {
 			wantSkip:      SkipCurrentDir,
 		},
 		{
+			name:   "cwd_similar_prefix_not_within_worktree",
+			branch: "main",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "",
+				Cwd:    "/repo-worktree/feat/x/subdir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo", Branch: "main"},
+					},
+				}
+			},
+			wantCanRemove: true,
+		},
+		{
 			name:   "skip_locked",
 			branch: "feat/a",
 			opts: CheckOptions{
@@ -994,6 +1012,117 @@ func TestRemoveCommand_Check(t *testing.T) {
 			},
 			wantCanRemove: false,
 			wantSkip:      SkipDirtySubmodule,
+			wantClean:     CleanMerged, // CleanReason is set for non-merge-related skip reasons
+		},
+		// Skip candidates with CleanReason (merged but skipped for other reasons)
+		{
+			name:   "skip_has_changes_with_clean_reason",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{"main": {"feat/a"}},
+					HasChanges:     true,
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipHasChanges,
+			wantClean:     CleanMerged, // merged but has uncommitted changes
+		},
+		{
+			name:   "skip_locked_with_clean_reason",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+					},
+					MergedBranches: map[string][]string{"main": {"feat/a"}},
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipLocked,
+			wantClean:     CleanMerged, // merged but locked
+		},
+		{
+			name:   "skip_current_dir_with_clean_reason",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/repo/feat/a/subdir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{"main": {"feat/a"}},
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipCurrentDir,
+			wantClean:     CleanMerged, // merged but current directory
+		},
+		{
+			name:   "skip_upstream_gone_with_uncommitted_changes",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches:       map[string][]string{"main": {}},
+					UpstreamGoneBranches: []string{"feat/a"},
+					HasChanges:           true,
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipHasChanges,
+			wantClean:     CleanUpstreamGone, // upstream gone but has uncommitted changes
+		},
+		// Skip candidates without CleanReason (merge-related skip reasons)
+		{
+			name:   "skip_not_merged_no_clean_reason",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{"main": {}},
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipNotMerged,
+			wantClean:     "", // no CleanReason for merge-related skip reasons
 		},
 		// Force level: Unclean (-f)
 		{

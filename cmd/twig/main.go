@@ -187,6 +187,7 @@ func newRootCmd(opts ...Option) *cobra.Command {
 		cwd         string
 		originalCwd string
 		dirFlag     string
+		colorFlag   string
 	)
 
 	resolveCompletionDirectory := func(cmd *cobra.Command) (string, error) {
@@ -215,6 +216,9 @@ func newRootCmd(opts ...Option) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			// Set color mode based on flag
+			twig.SetColorMode(twig.ColorMode(colorFlag))
 
 			result, err := twig.LoadConfig(cwd)
 			if err != nil {
@@ -318,6 +322,9 @@ Use --file with --sync or --carry to target specific files:
 			// --init-submodules forces enable, otherwise use config
 			initSubmodules := cmd.Flags().Changed("init-submodules")
 
+			// --submodule-reference forces enable, otherwise use config
+			submoduleReference := cmd.Flags().Changed("submodule-reference")
+
 			// --reason requires --lock
 			if lockReason != "" && !lock {
 				return fmt.Errorf("--reason requires --lock")
@@ -346,12 +353,13 @@ Use --file with --sync or --carry to target specific files:
 				addCmd = o.addCommander
 			} else {
 				addCmd = twig.NewDefaultAddCommand(cfg, log, twig.AddOptions{
-					Sync:           sync,
-					CarryFrom:      carryFrom,
-					FilePatterns:   filePatterns,
-					Lock:           lock,
-					LockReason:     lockReason,
-					InitSubmodules: initSubmodules,
+					Sync:               sync,
+					CarryFrom:          carryFrom,
+					FilePatterns:       filePatterns,
+					Lock:               lock,
+					LockReason:         lockReason,
+					InitSubmodules:     initSubmodules,
+					SubmoduleReference: submoduleReference,
 				})
 			}
 			result, err := addCmd.Run(cmd.Context(), args[0])
@@ -452,7 +460,10 @@ Safety checks (all must pass):
 
 			// If check mode or no candidates, just show output and exit
 			if check || result.CleanableCount() == 0 {
-				formatted := result.Format(twig.FormatOptions{Verbose: verbose})
+				formatted := result.Format(twig.FormatOptions{
+					Verbose:      verbose,
+					ColorEnabled: twig.IsColorEnabled(),
+				})
 				if formatted.Stderr != "" {
 					fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
 				}
@@ -461,7 +472,10 @@ Safety checks (all must pass):
 			}
 
 			// Show candidates
-			formatted := result.Format(twig.FormatOptions{Verbose: verbose})
+			formatted := result.Format(twig.FormatOptions{
+				Verbose:      verbose,
+				ColorEnabled: twig.IsColorEnabled(),
+			})
 			if formatted.Stderr != "" {
 				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
 			}
@@ -492,7 +506,10 @@ Safety checks (all must pass):
 				return err
 			}
 
-			formatted = result.Format(twig.FormatOptions{Verbose: verbose})
+			formatted = result.Format(twig.FormatOptions{
+				Verbose:      verbose,
+				ColorEnabled: twig.IsColorEnabled(),
+			})
 			if formatted.Stderr != "" {
 				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
 			}
@@ -611,6 +628,7 @@ stop processing of remaining branches.`,
 	// Register flags
 	rootCmd.PersistentFlags().StringVarP(&dirFlag, "directory", "C", "", "Run as if twig was started in <path>")
 	rootCmd.PersistentFlags().CountP("verbose", "v", "Enable verbose output (-v for verbose, -vv for debug)")
+	rootCmd.PersistentFlags().StringVar(&colorFlag, "color", "auto", "Color output: auto, always, never")
 
 	addCmd.Flags().BoolP("sync", "s", false, "Sync uncommitted changes to new worktree")
 	addCmd.Flags().StringP("carry", "c", "", "Move uncommitted changes (<branch>: from specified worktree)")
@@ -621,6 +639,7 @@ stop processing of remaining branches.`,
 	addCmd.Flags().String("reason", "", "Reason for locking (requires --lock)")
 	addCmd.Flags().StringArrayP("file", "F", nil, "File patterns to sync/carry (requires --sync or --carry)")
 	addCmd.Flags().Bool("init-submodules", false, "Initialize submodules in new worktree")
+	addCmd.Flags().Bool("submodule-reference", false, "Use main worktree as reference for submodule init")
 	addCmd.RegisterFlagCompletionFunc("file", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		// Resolve target directory from -C flag
 		dir, err := resolveCompletionDirectory(cmd)
@@ -870,13 +889,14 @@ Examples:
 			}
 
 			result, err := syncCmdRunner.Run(cmd.Context(), args, cwd, twig.SyncOptions{
-				Check:          check,
-				All:            all,
-				Source:         source,
-				SourcePath:     sourcePath,
-				Symlinks:       sourceCfg.Symlinks,
-				InitSubmodules: sourceCfg.ShouldInitSubmodules(),
-				Verbose:        verbose,
+				Check:              check,
+				All:                all,
+				Source:             source,
+				SourcePath:         sourcePath,
+				Symlinks:           sourceCfg.Symlinks,
+				InitSubmodules:     sourceCfg.ShouldInitSubmodules(),
+				SubmoduleReference: sourceCfg.ShouldUseSubmoduleReference(),
+				Verbose:            verbose,
 			})
 			if err != nil {
 				return err

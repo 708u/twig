@@ -2,7 +2,8 @@ package twig
 
 // FormatOptions configures output formatting.
 type FormatOptions struct {
-	Verbose bool
+	Verbose      bool
+	ColorEnabled bool // Enable color output (--color=auto/always)
 }
 
 // FormatResult holds formatted output strings.

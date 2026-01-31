@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -850,27 +851,111 @@ func (g *GitRunner) CheckSubmoduleCleanStatus(ctx context.Context) (SubmoduleCle
 	return SubmoduleCleanStatusClean, nil
 }
 
-// SubmoduleUpdate runs git submodule update --init --recursive.
-// Returns the number of initialized submodules.
-func (g *GitRunner) SubmoduleUpdate(ctx context.Context) (int, error) {
-	args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
-
-	_, err := g.Run(ctx, args...)
+// WorktreeRoot returns the root path of the worktree containing the current directory.
+// Uses git rev-parse --show-toplevel which returns the path git internally uses.
+func (g *GitRunner) WorktreeRoot(ctx context.Context) (string, error) {
+	out, err := g.Run(ctx, GitCmdRevParse, "--show-toplevel")
 	if err != nil {
-		return 0, fmt.Errorf("failed to initialize submodules: %w", err)
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// SubmoduleUpdateOption configures SubmoduleUpdate behavior.
+type SubmoduleUpdateOption func(*submoduleUpdateOptions)
+
+type submoduleUpdateOptions struct {
+	referencePath string
+}
+
+// WithSubmoduleReference enables --reference optimization using main worktree's modules.
+func WithSubmoduleReference(mainWorktreePath string) SubmoduleUpdateOption {
+	return func(o *submoduleUpdateOptions) {
+		o.referencePath = mainWorktreePath
+	}
+}
+
+// SubmoduleUpdateResult holds the result of SubmoduleUpdate.
+type SubmoduleUpdateResult struct {
+	Count       int      // number of initialized submodules
+	NoReference []string // submodules that couldn't use reference
+}
+
+// SubmoduleUpdate runs git submodule update --init.
+// With WithSubmoduleReference, uses --reference for faster initialization.
+func (g *GitRunner) SubmoduleUpdate(ctx context.Context, opts ...SubmoduleUpdateOption) (SubmoduleUpdateResult, error) {
+	var o submoduleUpdateOptions
+	for _, opt := range opts {
+		opt(&o)
 	}
 
-	// Count initialized submodules
+	// Without reference: simple recursive init
+	if o.referencePath == "" {
+		args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init", "--recursive"}
+		if _, err := g.Run(ctx, args...); err != nil {
+			return SubmoduleUpdateResult{}, fmt.Errorf("failed to initialize submodules: %w", err)
+		}
+
+		submodules, err := g.SubmoduleStatus(ctx)
+		if err != nil {
+			return SubmoduleUpdateResult{}, nil
+		}
+		var count int
+		for _, sm := range submodules {
+			if sm.State != SubmoduleStateUninitialized {
+				count++
+			}
+		}
+		return SubmoduleUpdateResult{Count: count}, nil
+	}
+
+	// With reference: init each submodule individually
 	submodules, err := g.SubmoduleStatus(ctx)
 	if err != nil {
-		return 0, nil // Initialization succeeded, but count failed
+		return SubmoduleUpdateResult{}, fmt.Errorf("failed to get submodule status: %w", err)
 	}
 
-	var count int
+	var result SubmoduleUpdateResult
 	for _, sm := range submodules {
 		if sm.State != SubmoduleStateUninitialized {
-			count++
+			result.Count++
+			continue
 		}
+
+		refPath := filepath.Join(o.referencePath, ".git", "modules", sm.Path)
+		args := []string{GitCmdSubmodule, GitSubmoduleUpdate, "--init"}
+
+		if _, statErr := statFunc(refPath); statErr == nil {
+			args = append(args, "--reference", refPath)
+		} else {
+			result.NoReference = append(result.NoReference, sm.Path)
+		}
+		args = append(args, "--", sm.Path)
+
+		if _, runErr := g.Run(ctx, args...); runErr != nil {
+			g.Log.Debug("submodule init failed", "path", sm.Path, "error", runErr)
+			continue
+		}
+		result.Count++
 	}
-	return count, nil
+
+	return result, nil
+}
+
+// MainWorktreePath returns the path of the main worktree.
+// Uses git rev-parse --git-common-dir which returns the shared .git directory.
+func (g *GitRunner) MainWorktreePath(ctx context.Context) (string, error) {
+	out, err := g.Run(ctx, GitCmdRevParse, "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return "", err
+	}
+	gitDir := strings.TrimSpace(string(out))
+	return filepath.Dir(gitDir), nil
+}
+
+// statFunc is a variable for testing purposes.
+var statFunc = osStat
+
+func osStat(path string) (any, error) {
+	return os.Stat(path)
 }

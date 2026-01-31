@@ -22,13 +22,22 @@ type Config struct {
 	WorktreeDestBaseDir string   `toml:"worktree_destination_base_dir"`
 	DefaultSource       string   `toml:"default_source"`
 	WorktreeSourceDir   string   // Set by LoadConfig to the config load directory
-	InitSubmodules      *bool    `toml:"init_submodules"` // nil=unset, true=enable, false=disable
+	InitSubmodules      *bool    `toml:"init_submodules"`     // nil=unset, true=enable, false=disable
+	SubmoduleReference  *bool    `toml:"submodule_reference"` // nil=unset, true=enable, false=disable
 }
 
 // ShouldInitSubmodules returns whether submodule initialization is enabled.
 func (c *Config) ShouldInitSubmodules() bool {
 	if c.InitSubmodules != nil {
 		return *c.InitSubmodules
+	}
+	return false
+}
+
+// ShouldUseSubmoduleReference returns whether to use --reference for submodule init.
+func (c *Config) ShouldUseSubmoduleReference() bool {
+	if c.SubmoduleReference != nil {
+		return *c.SubmoduleReference
 	}
 	return false
 }
@@ -129,6 +138,15 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 		initSubmodules = localCfg.InitSubmodules
 	}
 
+	// submodule_reference: local overrides project
+	var submoduleReference *bool
+	if projCfg != nil && projCfg.SubmoduleReference != nil {
+		submoduleReference = projCfg.SubmoduleReference
+	}
+	if localCfg != nil && localCfg.SubmoduleReference != nil {
+		submoduleReference = localCfg.SubmoduleReference
+	}
+
 	return &LoadConfigResult{
 		Config: &Config{
 			Symlinks:            symlinks,
@@ -137,6 +155,7 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 			DefaultSource:       defaultSource,
 			WorktreeSourceDir:   srcDir,
 			InitSubmodules:      initSubmodules,
+			SubmoduleReference:  submoduleReference,
 		},
 		Warnings: warnings,
 	}, nil

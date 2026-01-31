@@ -96,7 +96,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b (not merged)\n",
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b\n    ✗ not merged\n",
 			wantStderr: "",
 		},
 		{
@@ -184,7 +184,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "clean:\n  feat/a (merged)\n  feat/prunable (prunable, merged)\n\nskip:\n  feat/wip (not merged)\n",
+			wantStdout: "clean:\n  feat/a (merged)\n  feat/prunable (prunable, merged)\n\nskip:\n  feat/wip\n    ✗ not merged\n",
 			wantStderr: "",
 		},
 		{
@@ -206,9 +206,10 @@ func TestCleanResult_Format(t *testing.T) {
 				Candidates: []CleanCandidate{
 					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
 					{
-						Branch:     "feat/wip",
-						Skipped:    true,
-						SkipReason: SkipHasChanges,
+						Branch:      "feat/wip",
+						Skipped:     true,
+						SkipReason:  SkipHasChanges,
+						CleanReason: CleanMerged, // merged but has uncommitted changes
 						ChangedFiles: []FileStatus{
 							{Status: " M", Path: "src/main.go"},
 							{Status: "??", Path: "tmp/debug.log"},
@@ -218,7 +219,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/wip (has uncommitted changes)\n     M src/main.go\n    ?? tmp/debug.log\n",
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/wip\n    ✓ merged\n    ✗ has uncommitted changes\n       M src/main.go\n      ?? tmp/debug.log\n",
 			wantStderr: "",
 		},
 		{
@@ -226,9 +227,10 @@ func TestCleanResult_Format(t *testing.T) {
 			result: CleanResult{
 				Candidates: []CleanCandidate{
 					{
-						Branch:     "feat/submod",
-						Skipped:    true,
-						SkipReason: SkipDirtySubmodule,
+						Branch:      "feat/submod",
+						Skipped:     true,
+						SkipReason:  SkipDirtySubmodule,
+						CleanReason: CleanMerged, // merged but dirty submodule
 						ChangedFiles: []FileStatus{
 							{Status: " M", Path: "submodule/file.go"},
 						},
@@ -237,7 +239,7 @@ func TestCleanResult_Format(t *testing.T) {
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "skip:\n  feat/submod (submodule has uncommitted changes)\n     M submodule/file.go\n\nNo worktrees to clean\n",
+			wantStdout: "skip:\n  feat/submod\n    ✓ merged\n    ✗ submodule has uncommitted changes\n       M submodule/file.go\n\nNo worktrees to clean\n",
 			wantStderr: "",
 		},
 		{
@@ -245,12 +247,73 @@ func TestCleanResult_Format(t *testing.T) {
 			result: CleanResult{
 				Candidates: []CleanCandidate{
 					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
-					{Branch: "feat/locked", Skipped: true, SkipReason: SkipLocked},
+					{Branch: "feat/locked", Skipped: true, SkipReason: SkipLocked, CleanReason: CleanMerged},
 				},
 				Check: true,
 			},
 			opts:       FormatOptions{Verbose: true},
-			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/locked (locked)\n",
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/locked\n    ✓ merged\n    ✗ locked\n",
+			wantStderr: "",
+		},
+		// Skip without CleanReason (merge-related skip reasons)
+		{
+			name: "verbose_skip_not_merged_no_clean_reason",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+					{Branch: "feat/wip", Skipped: true, SkipReason: SkipNotMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/wip\n    ✗ not merged\n",
+			wantStderr: "",
+		},
+		{
+			name: "verbose_skip_upstream_gone_with_uncommitted_changes",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{
+						Branch:      "feat/a",
+						Skipped:     true,
+						SkipReason:  SkipHasChanges,
+						CleanReason: CleanUpstreamGone,
+						ChangedFiles: []FileStatus{
+							{Status: " M", Path: "src/main.go"},
+						},
+					},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "skip:\n  feat/a\n    ✓ upstream gone\n    ✗ has uncommitted changes\n       M src/main.go\n\nNo worktrees to clean\n",
+			wantStderr: "",
+		},
+		// ColorEnabled tests - output should be identical when color disabled
+		{
+			name: "color_disabled_same_as_no_color",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+					{Branch: "feat/b", Skipped: true, SkipReason: SkipNotMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{ColorEnabled: false},
+			wantStdout: "clean:\n  feat/a (merged)\n",
+			wantStderr: "",
+		},
+		{
+			name: "color_disabled_verbose_same_as_no_color",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+					{Branch: "feat/b", Skipped: true, SkipReason: SkipNotMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{Verbose: true, ColorEnabled: false},
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b\n    ✗ not merged\n",
 			wantStderr: "",
 		},
 	}

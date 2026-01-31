@@ -14,6 +14,7 @@ type SkipReason string
 
 const (
 	SkipNotMerged      SkipReason = "not merged"
+	SkipSameCommit     SkipReason = "same commit"
 	SkipHasChanges     SkipReason = "has uncommitted changes"
 	SkipLocked         SkipReason = "locked"
 	SkipCurrentDir     SkipReason = "current directory"
@@ -28,6 +29,15 @@ type SkipError struct {
 
 func (e *SkipError) Error() string {
 	return fmt.Sprintf("cannot remove: %s", e.Reason)
+}
+
+// Format returns the display string for a SkipReason.
+// For SkipSameCommit, it appends the target branch name.
+func (r SkipReason) Format(target string) string {
+	if r == SkipSameCommit && target != "" {
+		return fmt.Sprintf("same commit as %s", target)
+	}
+	return string(r)
 }
 
 // CleanReason describes why a branch is cleanable.
@@ -530,9 +540,15 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 		if reason := c.checkSkipReason(ctx, wt, opts, changedFiles); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
+			// Calculate CleanReason for skip candidates (except merge-related skip reasons)
+			isMergeRelated := reason == SkipNotMerged || reason == SkipSameCommit
+			if opts.Target != "" && !isMergeRelated {
+				result.CleanReason = c.getCleanReason(ctx, branch, opts.Target)
+			}
 			c.Log.DebugContext(ctx, "skip",
 				"category", LogCategoryRemove,
 				"reason", reason,
+				"cleanReason", result.CleanReason,
 				"branch", branch)
 			return result, nil
 		}
@@ -562,7 +578,8 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts C
 	}
 
 	// Check current directory (never bypassed)
-	if strings.HasPrefix(opts.Cwd, wt.Path) {
+	// Use git rev-parse --show-toplevel to get the worktree root of cwd
+	if root, err := c.Git.InDir(opts.Cwd).WorktreeRoot(ctx); err == nil && root == wt.Path {
 		return SkipCurrentDir
 	}
 
@@ -616,7 +633,7 @@ func (c *RemoveCommand) checkMergedSkipReason(ctx context.Context, branch, targe
 			return "" // merged, can remove
 		}
 		if mergeStatus.SameCommit[branch] {
-			return SkipReason(fmt.Sprintf("same commit as %s", target))
+			return SkipSameCommit
 		}
 		return SkipNotMerged
 	}
