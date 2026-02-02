@@ -54,6 +54,7 @@ type CleanCandidate struct {
 	SkipReason   SkipReason
 	CleanReason  CleanReason
 	ChangedFiles []FileStatus
+	checkResult  *CheckResult // cached Check result for Run reuse (internal)
 }
 
 // CleanResult aggregates results from clean operations.
@@ -339,6 +340,7 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 				SkipReason:   checkResult.SkipReason,
 				CleanReason:  checkResult.CleanReason,
 				ChangedFiles: checkResult.ChangedFiles,
+				checkResult:  &checkResult,
 			}
 
 			c.Log.DebugContext(ctx, "check completed",
@@ -403,8 +405,9 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 				"branch", candidate.Branch)
 
 			wt, err := removeCmd.Run(ctx, candidate.Branch, cwd, RemoveOptions{
-				Force: opts.Force,
-				Check: false,
+				Force:      opts.Force,
+				Check:      false,
+				PreChecked: candidate.checkResult,
 			})
 			if err != nil {
 				c.Log.DebugContext(ctx, "removal failed",
