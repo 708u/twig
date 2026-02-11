@@ -35,7 +35,7 @@ type CleanCommander interface {
 
 // ListCommander defines the interface for list operations.
 type ListCommander interface {
-	Run(ctx context.Context) (twig.ListResult, error)
+	Run(ctx context.Context, opts twig.ListOptions) (twig.ListResult, error)
 }
 
 // RemoveCommander defines the interface for remove operations.
@@ -385,6 +385,7 @@ Use --file with --sync or --carry to target specific files:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			quiet, _ := cmd.Flags().GetBool("quiet")
 			verbosity, _ := cmd.Flags().GetCount("verbose")
+			verbose := verbosity >= 1 && !quiet
 
 			idGen := twig.GenerateCommandID
 			if o.commandIDGenerator != nil {
@@ -398,12 +399,18 @@ Use --file with --sync or --carry to target specific files:
 			} else {
 				listCmd = twig.NewDefaultListCommand(cwd, log)
 			}
-			result, err := listCmd.Run(cmd.Context())
+			result, err := listCmd.Run(cmd.Context(), twig.ListOptions{
+				Verbose: verbose,
+			})
 			if err != nil {
 				return err
 			}
 
-			formatted := result.Format(twig.ListFormatOptions{Quiet: quiet})
+			formatted := result.Format(twig.FormatOptions{
+				Quiet:        quiet,
+				Verbose:      verbose,
+				ColorEnabled: twig.IsColorEnabled(),
+			})
 			fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
 			return nil
 		},

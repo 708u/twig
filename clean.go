@@ -76,18 +76,6 @@ func (r CleanResult) CleanableCount() int {
 	return count
 }
 
-// lineWriter provides indented line writing for formatted output.
-type lineWriter struct {
-	w *strings.Builder
-}
-
-// Line writes a formatted line with the specified indentation level.
-// Each level adds 2 spaces of indentation.
-func (lw *lineWriter) Line(level int, format string, args ...any) {
-	fmt.Fprintf(lw.w, "%s"+format+"\n",
-		append([]any{strings.Repeat("  ", level)}, args...)...)
-}
-
 // Format formats the CleanResult for display.
 func (r CleanResult) Format(opts FormatOptions) FormatResult {
 	var stdout, stderr strings.Builder

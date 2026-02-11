@@ -3,6 +3,7 @@
 package twig
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -26,7 +27,7 @@ func TestListCommand_Integration(t *testing.T) {
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/b", wtPathB)
 
 		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
-		result, err := cmd.Run(t.Context())
+		result, err := cmd.Run(t.Context(), ListOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -59,7 +60,7 @@ func TestListCommand_Integration(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t)
 
 		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
-		result, err := cmd.Run(t.Context())
+		result, err := cmd.Run(t.Context(), ListOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -87,12 +88,12 @@ func TestListCommand_Integration(t *testing.T) {
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/test", wtPath)
 
 		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
-		result, err := cmd.Run(t.Context())
+		result, err := cmd.Run(t.Context(), ListOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
 
-		formatted := result.Format(ListFormatOptions{})
+		formatted := result.Format(FormatOptions{})
 
 		// Should contain full paths and branch names
 		if formatted.Stdout == "" {
@@ -122,7 +123,7 @@ func TestListCommand_Integration(t *testing.T) {
 		_, mainDir := testutil.SetupTestRepo(t)
 
 		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
-		result, err := cmd.Run(t.Context())
+		result, err := cmd.Run(t.Context(), ListOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -146,12 +147,12 @@ func TestListCommand_Integration(t *testing.T) {
 		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/quiet-test", wtPath)
 
 		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
-		result, err := cmd.Run(t.Context())
+		result, err := cmd.Run(t.Context(), ListOptions{})
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
 
-		formatted := result.Format(ListFormatOptions{Quiet: true})
+		formatted := result.Format(FormatOptions{Quiet: true})
 
 		lines := strings.Split(strings.TrimSpace(formatted.Stdout), "\n")
 
@@ -175,6 +176,128 @@ func TestListCommand_Integration(t *testing.T) {
 			if !slices.Contains(lines, wt.Path) {
 				t.Errorf("quiet output should contain path %s", wt.Path)
 			}
+		}
+	})
+
+	t.Run("VerboseShowsChangedFiles", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a worktree with uncommitted changes
+		wtPath := filepath.Join(repoDir, "feature", "verbose-test")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/verbose-test", wtPath)
+
+		// Create uncommitted changes in the worktree
+		if err := os.WriteFile(filepath.Join(wtPath, "new-file.txt"), []byte("new"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(wtPath, "initial.txt"), []byte("modified"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
+		result, err := cmd.Run(t.Context(), ListOptions{Verbose: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Find the verbose-test worktree
+		var verboseWT *ListWorktreeInfo
+		for i, wt := range result.Worktrees {
+			if wt.Branch == "feature/verbose-test" {
+				verboseWT = &result.Worktrees[i]
+				break
+			}
+		}
+
+		if verboseWT == nil {
+			t.Fatal("feature/verbose-test worktree not found")
+		}
+
+		if len(verboseWT.ChangedFiles) == 0 {
+			t.Error("expected changed files in verbose mode")
+		}
+
+		// Verify format includes changed files
+		formatted := result.Format(FormatOptions{Verbose: true})
+		if !strings.Contains(formatted.Stdout, "new-file.txt") {
+			t.Errorf("verbose output should contain new-file.txt, got %q", formatted.Stdout)
+		}
+	})
+
+	t.Run("VerboseShowsLockReason", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a locked worktree
+		wtPath := filepath.Join(repoDir, "feature", "locked-test")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/locked-test", wtPath)
+		testutil.RunGit(t, mainDir, "worktree", "lock", "--reason", "USB drive work", wtPath)
+
+		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
+		result, err := cmd.Run(t.Context(), ListOptions{Verbose: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Find the locked worktree
+		var lockedWT *ListWorktreeInfo
+		for i, wt := range result.Worktrees {
+			if wt.Branch == "feature/locked-test" {
+				lockedWT = &result.Worktrees[i]
+				break
+			}
+		}
+
+		if lockedWT == nil {
+			t.Fatal("feature/locked-test worktree not found")
+		}
+
+		if !lockedWT.Locked {
+			t.Error("worktree should be locked")
+		}
+
+		if lockedWT.LockReason != "USB drive work" {
+			t.Errorf("lock reason = %q, want %q", lockedWT.LockReason, "USB drive work")
+		}
+
+		// Verify format includes lock reason
+		formatted := result.Format(FormatOptions{Verbose: true})
+		if !strings.Contains(formatted.Stdout, "lock reason: USB drive work") {
+			t.Errorf("verbose output should contain lock reason, got %q", formatted.Stdout)
+		}
+	})
+
+	t.Run("VerboseCleanWorktreeNoDetailLines", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		// Commit .twig/ directory so it doesn't appear as untracked
+		testutil.RunGit(t, mainDir, "add", ".twig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
+
+		cmd := NewDefaultListCommand(mainDir, NewNopLogger())
+		result, err := cmd.Run(t.Context(), ListOptions{Verbose: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Main worktree should have no changed files
+		if len(result.Worktrees[0].ChangedFiles) != 0 {
+			t.Errorf("clean worktree should have no changed files, got %d",
+				len(result.Worktrees[0].ChangedFiles))
+		}
+
+		// Verbose format should be same as default for clean worktrees
+		verboseFormatted := result.Format(FormatOptions{Verbose: true})
+		defaultFormatted := result.Format(FormatOptions{})
+
+		if verboseFormatted.Stdout != defaultFormatted.Stdout {
+			t.Errorf("verbose output for clean worktree should match default\nverbose: %q\ndefault: %q",
+				verboseFormatted.Stdout, defaultFormatted.Stdout)
 		}
 	})
 }
