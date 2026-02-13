@@ -296,11 +296,13 @@ func (m *mockAddCommander) Run(ctx context.Context, name string) (twig.AddResult
 
 // mockListCommander is a test double for ListCommander interface.
 type mockListCommander struct {
-	result twig.ListResult
-	err    error
+	result     twig.ListResult
+	err        error
+	calledOpts twig.ListOptions
 }
 
-func (m *mockListCommander) Run(ctx context.Context) (twig.ListResult, error) {
+func (m *mockListCommander) Run(ctx context.Context, opts twig.ListOptions) (twig.ListResult, error) {
+	m.calledOpts = opts
 	return m.result, m.err
 }
 
@@ -308,20 +310,21 @@ func TestListCmd(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		args       []string
-		result     twig.ListResult
-		err        error
-		wantStdout string
-		wantErr    bool
+		name        string
+		args        []string
+		result      twig.ListResult
+		err         error
+		wantStdout  string
+		wantErr     bool
+		wantVerbose bool
 	}{
 		{
 			name: "default output",
 			args: []string{"list"},
 			result: twig.ListResult{
-				Worktrees: []twig.Worktree{
-					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
-					{Path: "/repo/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
+				Worktrees: []twig.ListWorktreeInfo{
+					{Worktree: twig.Worktree{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"}},
+					{Worktree: twig.Worktree{Path: "/repo/feat-a", Branch: "feat/a", HEAD: "def5678901234"}},
 				},
 			},
 			wantStdout: "/repo/main    abc1234 [main]\n/repo/feat-a  def5678 [feat/a]\n",
@@ -330,9 +333,9 @@ func TestListCmd(t *testing.T) {
 			name: "quiet flag outputs paths only",
 			args: []string{"list", "--quiet"},
 			result: twig.ListResult{
-				Worktrees: []twig.Worktree{
-					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
-					{Path: "/repo/feat-a", Branch: "feat/a", HEAD: "def5678901234"},
+				Worktrees: []twig.ListWorktreeInfo{
+					{Worktree: twig.Worktree{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"}},
+					{Worktree: twig.Worktree{Path: "/repo/feat-a", Branch: "feat/a", HEAD: "def5678901234"}},
 				},
 			},
 			wantStdout: "/repo/main\n/repo/feat-a\n",
@@ -341,8 +344,8 @@ func TestListCmd(t *testing.T) {
 			name: "short flag -q",
 			args: []string{"list", "-q"},
 			result: twig.ListResult{
-				Worktrees: []twig.Worktree{
-					{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"},
+				Worktrees: []twig.ListWorktreeInfo{
+					{Worktree: twig.Worktree{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"}},
 				},
 			},
 			wantStdout: "/repo/main\n",
@@ -351,7 +354,7 @@ func TestListCmd(t *testing.T) {
 			name: "empty list",
 			args: []string{"list"},
 			result: twig.ListResult{
-				Worktrees: []twig.Worktree{},
+				Worktrees: []twig.ListWorktreeInfo{},
 			},
 			wantStdout: "",
 		},
@@ -360,6 +363,28 @@ func TestListCmd(t *testing.T) {
 			args:    []string{"list"},
 			err:     errors.New("git error"),
 			wantErr: true,
+		},
+		{
+			name: "verbose flag sets ListOptions",
+			args: []string{"list", "-v"},
+			result: twig.ListResult{
+				Worktrees: []twig.ListWorktreeInfo{
+					{Worktree: twig.Worktree{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"}},
+				},
+			},
+			wantStdout:  "/repo/main  abc1234 [main]\n",
+			wantVerbose: true,
+		},
+		{
+			name: "quiet overrides verbose in ListOptions",
+			args: []string{"list", "-v", "-q"},
+			result: twig.ListResult{
+				Worktrees: []twig.ListWorktreeInfo{
+					{Worktree: twig.Worktree{Path: "/repo/main", Branch: "main", HEAD: "abc1234567890"}},
+				},
+			},
+			wantStdout:  "/repo/main\n",
+			wantVerbose: false,
 		},
 	}
 
@@ -393,6 +418,10 @@ func TestListCmd(t *testing.T) {
 
 			if stdout.String() != tt.wantStdout {
 				t.Errorf("stdout = %q, want %q", stdout.String(), tt.wantStdout)
+			}
+
+			if mock.calledOpts.Verbose != tt.wantVerbose {
+				t.Errorf("Verbose = %v, want %v", mock.calledOpts.Verbose, tt.wantVerbose)
 			}
 		})
 	}
