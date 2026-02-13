@@ -735,8 +735,10 @@ const (
 type SubmoduleCleanStatus int
 
 const (
+	// SubmoduleCleanStatusUnknown: status not yet checked (zero value).
+	SubmoduleCleanStatusUnknown SubmoduleCleanStatus = iota
 	// SubmoduleCleanStatusNone: no initialized submodules exist.
-	SubmoduleCleanStatusNone SubmoduleCleanStatus = iota
+	SubmoduleCleanStatusNone
 	// SubmoduleCleanStatusClean: submodules exist but all are clean.
 	SubmoduleCleanStatusClean
 	// SubmoduleCleanStatusDirty: submodules have uncommitted changes or are at different commits.
