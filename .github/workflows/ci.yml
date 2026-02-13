@@ -35,7 +35,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.5"
+          go-version: "1.26.0"
           cache: true
 
       - name: Check go mod tidy
@@ -63,7 +63,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.5"
+          go-version: "1.26.0"
           cache: true
 
       - name: Run integration tests
@@ -79,7 +79,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.5"
+          go-version: "1.26.0"
           cache: true
 
       - name: Build twig
