@@ -50,13 +50,14 @@ const (
 
 // CheckResult holds the result of checking whether a worktree can be removed.
 type CheckResult struct {
-	CanRemove    bool         // Whether the worktree can be removed
-	SkipReason   SkipReason   // Reason if cannot be removed
-	CleanReason  CleanReason  // Reason if can be removed (for clean command display)
-	Prunable     bool         // Whether worktree is prunable (directory was deleted externally)
-	WorktreePath string       // Path to the worktree
-	Branch       string       // Branch name
-	ChangedFiles []FileStatus // Uncommitted changes (for verbose output)
+	CanRemove       bool                 // Whether the worktree can be removed
+	SkipReason      SkipReason           // Reason if cannot be removed
+	CleanReason     CleanReason          // Reason if can be removed (for clean command display)
+	Prunable        bool                 // Whether worktree is prunable (directory was deleted externally)
+	WorktreePath    string               // Path to the worktree
+	Branch          string               // Branch name
+	ChangedFiles    []FileStatus         // Uncommitted changes (for verbose output)
+	SubmoduleStatus SubmoduleCleanStatus // Cached submodule clean status (for Run reuse)
 }
 
 // CheckOptions configures the check operation.
@@ -80,8 +81,9 @@ type RemoveCommand struct {
 type RemoveOptions struct {
 	// Force specifies the force level.
 	// Matches git worktree behavior: -f for unclean, -f -f for locked.
-	Force WorktreeForceLevel
-	Check bool // Show what would be removed without making changes
+	Force      WorktreeForceLevel
+	Check      bool         // Show what would be removed without making changes
+	PreChecked *CheckResult // Pre-fetched Check result (skips Check if set)
 }
 
 // NewRemoveCommand creates a RemoveCommand with explicit dependencies.
@@ -258,19 +260,34 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 		"category", LogCategoryRemove,
 		"branch", branch,
 		"check", opts.Check,
-		"force", opts.Force)
+		"force", opts.Force,
+		"preChecked", opts.PreChecked != nil)
 
 	var result RemovedWorktree
 	result.Branch = branch
 	result.Check = opts.Check
 
-	// Check removal eligibility first
-	checkResult, err := c.Check(ctx, branch, CheckOptions{
-		Force: opts.Force,
-		Cwd:   cwd,
-	})
-	if err != nil {
-		return result, err
+	// Use pre-fetched check result or run check
+	var checkResult CheckResult
+	if opts.PreChecked != nil {
+		checkResult = *opts.PreChecked
+		c.Log.DebugContext(ctx, "using pre-checked result",
+			"category", LogCategoryRemove,
+			"canRemove", checkResult.CanRemove,
+			"branch", branch)
+	} else {
+		var err error
+		checkResult, err = c.Check(ctx, branch, CheckOptions{
+			Force: opts.Force,
+			Cwd:   cwd,
+		})
+		if err != nil {
+			return result, err
+		}
+		c.Log.DebugContext(ctx, "check completed",
+			"category", LogCategoryRemove,
+			"canRemove", checkResult.CanRemove,
+			"branch", branch)
 	}
 
 	// Copy check results
@@ -279,11 +296,6 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	result.CanRemove = checkResult.CanRemove
 	result.SkipReason = checkResult.SkipReason
 	result.ChangedFiles = checkResult.ChangedFiles
-
-	c.Log.DebugContext(ctx, "check completed",
-		"category", LogCategoryRemove,
-		"canRemove", checkResult.CanRemove,
-		"branch", branch)
 
 	if !checkResult.CanRemove {
 		return result, &SkipError{Reason: checkResult.SkipReason}
@@ -301,8 +313,16 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	// Clean submodules require auto-force for git worktree remove,
 	// but this is safe since Check() already verified no dirty submodules.
 	effectiveForce := opts.Force
-	smStatus, err := c.Git.InDir(checkResult.WorktreePath).CheckSubmoduleCleanStatus(ctx)
-	if err == nil && smStatus == SubmoduleCleanStatusClean {
+	smStatus := checkResult.SubmoduleStatus
+	if smStatus == SubmoduleCleanStatusUnknown {
+		// SubmoduleStatus not cached, check now
+		var err error
+		smStatus, err = c.Git.InDir(checkResult.WorktreePath).CheckSubmoduleCleanStatus(ctx)
+		if err != nil {
+			smStatus = SubmoduleCleanStatusUnknown
+		}
+	}
+	if smStatus == SubmoduleCleanStatusClean {
 		if effectiveForce < WorktreeForceLevelUnclean {
 			effectiveForce = WorktreeForceLevelUnclean
 		}
@@ -537,7 +557,15 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 			return result, fmt.Errorf("failed to check uncommitted changes: %w", err)
 		}
 		result.ChangedFiles = changedFiles
-		if reason := c.checkSkipReason(ctx, wt, opts, changedFiles); reason != "" {
+
+		// Check submodule status (cache for Run() reuse)
+		smStatus, err := c.Git.InDir(wtInfo.Path).CheckSubmoduleCleanStatus(ctx)
+		if err != nil {
+			smStatus = SubmoduleCleanStatusUnknown
+		}
+		result.SubmoduleStatus = smStatus
+
+		if reason := c.checkSkipReason(ctx, wt, opts, changedFiles, smStatus); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
 			// Calculate CleanReason for skip candidates (except merge-related skip reasons)
@@ -570,8 +598,8 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 
 // checkSkipReason checks if worktree should be skipped and returns the reason.
 // force level controls which conditions can be bypassed (matches git worktree behavior).
-// changedFiles is pre-fetched to avoid redundant git status calls.
-func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts CheckOptions, changedFiles []FileStatus) SkipReason {
+// changedFiles and smStatus are pre-fetched to avoid redundant git calls.
+func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts CheckOptions, changedFiles []FileStatus, smStatus SubmoduleCleanStatus) SkipReason {
 	// Check detached HEAD (never bypassed)
 	if wt.Detached {
 		return SkipDetached
@@ -590,8 +618,7 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts C
 
 	// Check dirty submodule and uncommitted changes
 	if opts.Force < WorktreeForceLevelUnclean {
-		smStatus, err := c.Git.InDir(wt.Path).CheckSubmoduleCleanStatus(ctx)
-		if err == nil && smStatus == SubmoduleCleanStatusDirty {
+		if smStatus == SubmoduleCleanStatusDirty {
 			return SkipDirtySubmodule
 		}
 
