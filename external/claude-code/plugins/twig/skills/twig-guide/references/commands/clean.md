@@ -89,17 +89,25 @@ The clean command detects merged branches using:
 1. `git branch --merged` - traditional merge commits
 2. Upstream gone status - squash/rebase merges via PR
 
-**Limitation:** Local-only fast-forward merges are not detected. When a branch
-is fast-forward merged locally (without `--no-ff`), both the branch and target
-point to the same commit. This is indistinguishable from a newly created branch
-that was never worked on.
+**Limitation:** Squash and rebase merge detection relies on
+upstream gone status. If the remote branch is not deleted after
+merging the PR, the branch is reported as "not merged". Enable
+GitHub's "Automatically delete head branches" repository setting
+to ensure remote branches are cleaned up after PR merge.
 
-| Merge Type              | Detection Method     | Detected |
-|-------------------------|----------------------|----------|
-| Merge commit (`--no-ff`)| `git branch --merged`| Yes      |
-| Squash merge (PR)       | Upstream gone        | Yes      |
-| Rebase merge (PR)       | Upstream gone        | Yes      |
-| Local fast-forward      | (none)               | No       |
+**Limitation:** Local-only fast-forward merges are not detected.
+When a branch is fast-forward merged locally (without `--no-ff`),
+both the branch and target point to the same commit. This is
+indistinguishable from a newly created branch that was never
+worked on.
+
+| Merge Type                              | Detection Method      | Detected |
+|-----------------------------------------|-----------------------|----------|
+| Merge commit (`--no-ff`)                | `git branch --merged` | Yes      |
+| Squash merge (PR)                       | Upstream gone         | Yes      |
+| Rebase merge (PR)                       | Upstream gone         | Yes      |
+| Squash merge (PR, branch not deleted)   | (none)                | No       |
+| Local fast-forward                      | (none)                | No       |
 
 To clean local fast-forward merged branches, use `--force`:
 
