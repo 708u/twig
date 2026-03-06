@@ -16,6 +16,7 @@ twig clean [flags]
 | `--check`         |       | Show candidates without prompting                      |
 | `--target`        |       | Target branch for merge check                          |
 | `--force`         | `-f`  | Force clean (can be specified twice, see below)        |
+| `--stale`         |       | Remove merged/upstream-gone even with changes          |
 | `--verbose`       | `-v`  | Enable verbose output (use `-vv` for debug)            |
 
 ## Behavior
@@ -138,6 +139,42 @@ twig clean -f --yes
 
 # Also force clean locked worktrees
 twig clean -ff --yes
+```
+
+### Stale Option
+
+With `--stale`, merged or upstream-gone branches are cleaned even if
+they have uncommitted changes or dirty submodules. This is safer than
+`--force` because it only bypasses the changes check for branches
+that are already merged or have upstream gone status.
+
+| Condition          | `--stale` | `--force` |
+|--------------------|-----------|-----------|
+| Uncommitted changes (merged)     | Bypassed  | Bypassed  |
+| Dirty submodule (merged)         | Bypassed  | Bypassed  |
+| Uncommitted changes (not merged) | Kept      | Bypassed  |
+| Not merged                       | Kept      | Bypassed  |
+| Locked                           | Kept      | Kept (`-ff` bypasses) |
+| Current directory                | Kept      | Kept      |
+
+Use `--stale` when you want to clean up merged branches that still
+have local experiments or debug files, without risking deletion of
+unmerged work.
+
+```bash
+# Clean merged branches even with uncommitted changes
+twig clean --stale --yes
+
+# Preview stale candidates
+twig clean --stale --check
+```
+
+Stale candidates are marked with "stale" in the output:
+
+```txt
+clean:
+  feat/dirty (merged, stale)
+  feat/gone (upstream gone, stale)
 ```
 
 ### Target Branch Detection

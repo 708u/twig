@@ -177,11 +177,13 @@ func TestResolveCarryFrom(t *testing.T) {
 
 // mockCleanCommander is a test double for CleanCommander interface.
 type mockCleanCommander struct {
-	result twig.CleanResult
-	err    error
+	result   twig.CleanResult
+	err      error
+	lastOpts twig.CleanOptions
 }
 
 func (m *mockCleanCommander) Run(ctx context.Context, cwd string, opts twig.CleanOptions) (twig.CleanResult, error) {
+	m.lastOpts = opts
 	return m.result, m.err
 }
 
@@ -229,6 +231,18 @@ func TestCleanCmd(t *testing.T) {
 				Check: true,
 			},
 			wantStdout: "clean:\n  feat/a (merged)\n\nProceed? [y/N]: ",
+		},
+		{
+			name:  "stale_flag_passed",
+			args:  []string{"clean", "--check", "--stale"},
+			stdin: "",
+			result: twig.CleanResult{
+				Candidates: []twig.CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: twig.CleanMerged, StaleOverride: true},
+				},
+				Check: true,
+			},
+			wantStdout: "clean:\n  feat/a (merged, stale)\n",
 		},
 		{
 			name:  "verbose_shows_skipped",
@@ -279,6 +293,34 @@ func TestCleanCmd(t *testing.T) {
 				t.Errorf("stdout = %q, want %q", stdout.String(), tt.wantStdout)
 			}
 		})
+	}
+}
+
+func TestCleanCmd_StaleFlag(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockCleanCommander{
+		result: twig.CleanResult{
+			Candidates: []twig.CleanCandidate{},
+			Check:      true,
+		},
+	}
+
+	cmd := newRootCmd(WithCleanCommander(mock))
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs([]string{"clean", "--check", "--stale"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !mock.lastOpts.Stale {
+		t.Error("expected Stale to be true in CleanOptions")
 	}
 }
 

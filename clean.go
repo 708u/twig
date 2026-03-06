@@ -24,6 +24,7 @@ type CleanOptions struct {
 	Target  string             // Target branch for merge check (auto-detect if empty)
 	Verbose bool               // Show skip reasons
 	Force   WorktreeForceLevel // Force level: -f for unclean, -ff for locked
+	Stale   bool               // Bypass changes check for merged/upstream-gone branches
 }
 
 // NewCleanCommand creates a new CleanCommand with explicit dependencies.
@@ -47,13 +48,14 @@ func NewDefaultCleanCommand(cfg *Config, log *slog.Logger) *CleanCommand {
 
 // CleanCandidate represents a worktree that can be cleaned.
 type CleanCandidate struct {
-	Branch       string
-	WorktreePath string
-	Prunable     bool
-	Skipped      bool
-	SkipReason   SkipReason
-	CleanReason  CleanReason
-	ChangedFiles []FileStatus
+	Branch        string
+	WorktreePath  string
+	Prunable      bool
+	Skipped       bool
+	SkipReason    SkipReason
+	CleanReason   CleanReason
+	ChangedFiles  []FileStatus
+	StaleOverride bool // Changes check bypassed via --stale for merged/upstream-gone
 }
 
 // CleanResult aggregates results from clean operations.
@@ -185,6 +187,9 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 		reason := string(c.CleanReason)
 		if c.Prunable {
 			reason = "prunable, " + reason
+		}
+		if c.StaleOverride {
+			reason += ", stale"
 		}
 		lw.Line(1, "%s %s", c.Branch, applyReason("("+reason+")"))
 	}
@@ -367,6 +372,25 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		result.Candidates = append(result.Candidates, ic.candidate)
 	}
 
+	// Apply stale override: bypass changes check for merged/upstream-gone branches
+	if opts.Stale {
+		for i := range result.Candidates {
+			cand := &result.Candidates[i]
+			if !cand.Skipped || cand.CleanReason == "" {
+				continue
+			}
+			if cand.SkipReason == SkipHasChanges || cand.SkipReason == SkipDirtySubmodule {
+				cand.Skipped = false
+				cand.StaleOverride = true
+				c.Log.DebugContext(ctx, "stale override applied",
+					LogAttrKeyCategory.String(), LogCategoryClean,
+					"branch", cand.Branch,
+					"skipReason", string(cand.SkipReason),
+					"cleanReason", string(cand.CleanReason))
+			}
+		}
+	}
+
 	// If check mode, just return candidates (no execution)
 	if result.Check {
 		c.Log.DebugContext(ctx, "run completed (check mode)",
@@ -402,8 +426,12 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 				LogAttrKeyCategory.String(), LogCategoryClean,
 				"branch", candidate.Branch)
 
+			effectiveForce := opts.Force
+			if candidate.StaleOverride && effectiveForce < WorktreeForceLevelUnclean {
+				effectiveForce = WorktreeForceLevelUnclean
+			}
 			wt, err := removeCmd.Run(ctx, candidate.Branch, cwd, RemoveOptions{
-				Force: opts.Force,
+				Force: effectiveForce,
 				Check: false,
 			})
 			if err != nil {
