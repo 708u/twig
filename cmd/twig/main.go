@@ -432,6 +432,7 @@ Safety checks (all must pass):
 			check, _ := cmd.Flags().GetBool("check")
 			target, _ := cmd.Flags().GetString("target")
 			forceCount, _ := cmd.Flags().GetCount("force")
+			stale, _ := cmd.Flags().GetBool("stale")
 
 			idGen := twig.GenerateCommandID
 			if o.commandIDGenerator != nil {
@@ -452,6 +453,7 @@ Safety checks (all must pass):
 				Target:  target,
 				Verbose: verbose,
 				Force:   twig.WorktreeForceLevel(forceCount),
+				Stale:   stale,
 			})
 			if err != nil {
 				return err
@@ -500,6 +502,7 @@ Safety checks (all must pass):
 				Target:  target,
 				Verbose: verbose,
 				Force:   twig.WorktreeForceLevel(forceCount),
+				Stale:   stale,
 			})
 			if err != nil {
 				return err
@@ -709,6 +712,7 @@ stop processing of remaining branches.`,
 	cleanCmd.Flags().Bool("check", false, "Show candidates without prompting or removing")
 	cleanCmd.Flags().String("target", "", "Target branch for merge check (default: auto-detect)")
 	cleanCmd.Flags().CountP("force", "f", "Force clean (-f: unmerged/uncommitted, -ff: also locked)")
+	cleanCmd.Flags().Bool("stale", false, "Remove merged/upstream-gone worktrees even with uncommitted changes")
 	cleanCmd.RegisterFlagCompletionFunc("target", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		dir, err := resolveCompletionDirectory(cmd)
 		if err != nil {
