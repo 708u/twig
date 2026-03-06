@@ -1488,6 +1488,120 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("StaleDoesNotOverrideWIPOnFirstParentLineage", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a worktree (no new commits - branch HEAD is ancestor of main)
+		wtPath := filepath.Join(repoDir, "feature", "wip-stale")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/wip-stale", wtPath)
+
+		// Advance main with a new commit so feature/wip-stale is "merged"
+		// via git branch --merged (its HEAD is an ancestor of main)
+		testFile := filepath.Join(mainDir, "advance.txt")
+		if err := os.WriteFile(testFile, []byte("advance"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", "advance.txt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "advance main")
+
+		// Create uncommitted changes in the worktree
+		dirtyFile := filepath.Join(wtPath, "dirty.txt")
+		if err := os.WriteFile(dirtyFile, []byte("wip"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		// With stale, WIP branch should still be skipped
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+
+		if !result.Candidates[0].Skipped {
+			t.Error("with stale, WIP branch on first-parent lineage should still be skipped")
+		}
+
+		// Worktree should still exist
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Error("worktree should still exist")
+		}
+	})
+
+	t.Run("StaleStillOverridesGenuinelyMergedBranch", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a branch with a commit
+		wtPath := filepath.Join(repoDir, "feature", "genuine-merge")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/genuine-merge", wtPath)
+
+		// Make a commit on the branch
+		testFile := filepath.Join(wtPath, "feature.txt")
+		if err := os.WriteFile(testFile, []byte("feature"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "feature.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "feature commit")
+
+		// Merge the branch to main with --no-ff
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/genuine-merge", "feature/genuine-merge")
+
+		// Create uncommitted changes in the worktree
+		dirtyFile := filepath.Join(wtPath, "dirty.txt")
+		if err := os.WriteFile(dirtyFile, []byte("dirty"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		// With stale, genuinely merged branch should be a clean candidate
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+
+		if result.Candidates[0].Skipped {
+			t.Errorf("with stale, genuinely merged branch should not be skipped, reason: %s",
+				result.Candidates[0].SkipReason)
+		}
+
+		if !result.Candidates[0].StaleOverride {
+			t.Error("candidate should have StaleOverride set")
+		}
+	})
+
 	// Known limitation: local-only fast-forward merges are not detected as merged.
 	// This is a tradeoff to prevent false positives on newly created branches.
 	// See: https://github.com/708u/twig/pull/104

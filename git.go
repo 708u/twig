@@ -42,6 +42,7 @@ const (
 	GitCmdDiff       = "diff"
 	GitCmdFetch      = "fetch"
 	GitCmdForEachRef = "for-each-ref"
+	GitCmdRevList    = "rev-list"
 )
 
 // Git worktree subcommands.
@@ -951,6 +952,44 @@ func (g *GitRunner) MainWorktreePath(ctx context.Context) (string, error) {
 	}
 	gitDir := strings.TrimSpace(string(out))
 	return filepath.Dir(gitDir), nil
+}
+
+// IsFirstParentAncestor checks if commit is on the first-parent lineage of target.
+// This distinguishes WIP branches (ancestor on first-parent line) from genuinely
+// merged branches (reachable only via merge commit second parent).
+func (g *GitRunner) IsFirstParentAncestor(ctx context.Context, commit, target string) (bool, error) {
+	// Get the parent of commit to use as exclusion boundary
+	parentOut, err := g.Run(ctx, GitCmdRevParse, commit+"^")
+	isRoot := err != nil // root commit has no parent
+
+	if isRoot {
+		// Root commit: check if commit appears in first-parent list of target
+		out, err := g.Run(ctx, GitCmdRevList, "--first-parent", target)
+		if err != nil {
+			return false, fmt.Errorf("failed to list first-parent commits: %w", err)
+		}
+		for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+			if line == commit {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	parent := strings.TrimSpace(string(parentOut))
+
+	// List commits on first-parent lineage of target that are NOT ancestors of parent.
+	// If commit appears in this list, it means commit itself is on the first-parent line.
+	out, err := g.Run(ctx, GitCmdRevList, "--first-parent", target, "--not", parent)
+	if err != nil {
+		return false, fmt.Errorf("failed to list first-parent commits: %w", err)
+	}
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		if line == commit {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // statFunc is a variable for testing purposes.

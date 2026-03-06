@@ -712,6 +712,56 @@ func TestCleanCommand_Run(t *testing.T) {
 			wantSkipped:    1, // locked, stale does not override
 		},
 		{
+			name: "stale_does_not_override_wip_on_first_parent",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true, Stale: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a", HEAD: "wip-commit"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+					HasChanges: true,
+					FirstParentAncestors: map[string][]string{
+						"main": {"wip-commit"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1, // WIP on first-parent: CleanReason cleared, stale does not override
+		},
+		{
+			name: "stale_overrides_genuinely_merged_not_first_parent",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true, Stale: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a", HEAD: "merged-commit"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+					HasChanges: true,
+					// FirstParentAncestors not set -> not on first-parent -> genuinely merged
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0, // genuinely merged: stale override applies
+		},
+		{
 			name: "skips_new_branch_pointing_to_same_commit_as_target",
 			cwd:  "/other/dir",
 			opts: CleanOptions{},
