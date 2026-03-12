@@ -24,6 +24,7 @@ type Config struct {
 	WorktreeSourceDir   string   // Set by LoadConfig to the config load directory
 	InitSubmodules      *bool    `toml:"init_submodules"`     // nil=unset, true=enable, false=disable
 	SubmoduleReference  *bool    `toml:"submodule_reference"` // nil=unset, true=enable, false=disable
+	CleanStale          *bool    `toml:"clean_stale"`         // nil=unset, true=enable, false=disable
 }
 
 // ShouldInitSubmodules returns whether submodule initialization is enabled.
@@ -38,6 +39,14 @@ func (c *Config) ShouldInitSubmodules() bool {
 func (c *Config) ShouldUseSubmoduleReference() bool {
 	if c.SubmoduleReference != nil {
 		return *c.SubmoduleReference
+	}
+	return false
+}
+
+// ShouldCleanStale returns whether --stale behavior is enabled by default for clean.
+func (c *Config) ShouldCleanStale() bool {
+	if c.CleanStale != nil {
+		return *c.CleanStale
 	}
 	return false
 }
@@ -147,6 +156,15 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 		submoduleReference = localCfg.SubmoduleReference
 	}
 
+	// clean_stale: local overrides project
+	var cleanStale *bool
+	if projCfg != nil && projCfg.CleanStale != nil {
+		cleanStale = projCfg.CleanStale
+	}
+	if localCfg != nil && localCfg.CleanStale != nil {
+		cleanStale = localCfg.CleanStale
+	}
+
 	return &LoadConfigResult{
 		Config: &Config{
 			Symlinks:            symlinks,
@@ -156,6 +174,7 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 			WorktreeSourceDir:   srcDir,
 			InitSubmodules:      initSubmodules,
 			SubmoduleReference:  submoduleReference,
+			CleanStale:          cleanStale,
 		},
 		Warnings: warnings,
 	}, nil

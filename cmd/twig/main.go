@@ -433,6 +433,7 @@ Safety checks (all must pass):
 			target, _ := cmd.Flags().GetString("target")
 			forceCount, _ := cmd.Flags().GetCount("force")
 			stale, _ := cmd.Flags().GetBool("stale")
+			stale = stale || cfg.ShouldCleanStale()
 
 			idGen := twig.GenerateCommandID
 			if o.commandIDGenerator != nil {

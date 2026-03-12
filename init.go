@@ -28,6 +28,9 @@ symlinks = []
 
 # Reuse objects from main worktree for faster submodule init (default: false)
 # submodule_reference = true
+
+# Always enable --stale for clean command (default: false)
+# clean_stale = true
 `
 
 // InitCommand initializes twig configuration in a directory.

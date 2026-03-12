@@ -296,6 +296,88 @@ func TestCleanCmd(t *testing.T) {
 	}
 }
 
+func TestCleanCmd_StaleFromConfig(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockCleanCommander{
+		result: twig.CleanResult{
+			Candidates: []twig.CleanCandidate{},
+			Check:      true,
+		},
+	}
+
+	// Create a real git repo with clean_stale = true in config
+	_, mainDir := testutil.SetupTestRepo(t)
+	twigDir := filepath.Join(mainDir, ".twig")
+	if err := os.MkdirAll(twigDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	settingsContent := fmt.Sprintf("worktree_destination_base_dir = %q\nclean_stale = true\n", filepath.Dir(mainDir))
+	if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunGit(t, mainDir, "add", ".twig")
+	testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
+
+	cmd := newRootCmd(WithCleanCommander(mock))
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs([]string{"-C", mainDir, "clean", "--check"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !mock.lastOpts.Stale {
+		t.Error("expected Stale to be true from config")
+	}
+}
+
+func TestCleanCmd_StaleFlagOverridesConfig(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockCleanCommander{
+		result: twig.CleanResult{
+			Candidates: []twig.CleanCandidate{},
+			Check:      true,
+		},
+	}
+
+	// Create a real git repo WITHOUT clean_stale in config
+	_, mainDir := testutil.SetupTestRepo(t)
+	twigDir := filepath.Join(mainDir, ".twig")
+	if err := os.MkdirAll(twigDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	settingsContent := fmt.Sprintf("worktree_destination_base_dir = %q\n", filepath.Dir(mainDir))
+	if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settingsContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunGit(t, mainDir, "add", ".twig")
+	testutil.RunGit(t, mainDir, "commit", "-m", "add twig settings")
+
+	cmd := newRootCmd(WithCleanCommander(mock))
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs([]string{"-C", mainDir, "clean", "--check", "--stale"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !mock.lastOpts.Stale {
+		t.Error("expected Stale to be true from CLI flag")
+	}
+}
+
 func TestCleanCmd_StaleFlag(t *testing.T) {
 	t.Parallel()
 

@@ -448,6 +448,33 @@ func TestConfig_ShouldInitSubmodules(t *testing.T) {
 	}
 }
 
+func TestConfig_ShouldCleanStale(t *testing.T) {
+	t.Parallel()
+
+	boolPtr := func(b bool) *bool { return &b }
+
+	tests := []struct {
+		name       string
+		cleanStale *bool
+		want       bool
+	}{
+		{"nil returns false", nil, false},
+		{"true returns true", boolPtr(true), true},
+		{"false returns false", boolPtr(false), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &Config{CleanStale: tt.cleanStale}
+			if got := cfg.ShouldCleanStale(); got != tt.want {
+				t.Errorf("ShouldCleanStale() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestConfig_ShouldUseSubmoduleReference(t *testing.T) {
 	t.Parallel()
 
@@ -473,4 +500,113 @@ func TestConfig_ShouldUseSubmoduleReference(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadConfig_CleanStale(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ProjectOnly", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		projectSettings := `clean_stale = true
+`
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(tmpDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if result.Config.CleanStale == nil || *result.Config.CleanStale != true {
+			t.Errorf("CleanStale = %v, want true", result.Config.CleanStale)
+		}
+	})
+
+	t.Run("LocalOverridesProject", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		projectSettings := `clean_stale = true
+`
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		localSettings := `clean_stale = false
+`
+		if err := os.WriteFile(filepath.Join(twigDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(tmpDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if result.Config.CleanStale == nil || *result.Config.CleanStale != false {
+			t.Errorf("CleanStale = %v, want false", result.Config.CleanStale)
+		}
+	})
+
+	t.Run("NilWhenUnset", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		projectSettings := ``
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(tmpDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if result.Config.CleanStale != nil {
+			t.Errorf("CleanStale = %v, want nil", result.Config.CleanStale)
+		}
+	})
+
+	t.Run("HelperMethodMatchesValue", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		projectSettings := `clean_stale = true
+`
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(tmpDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !result.Config.ShouldCleanStale() {
+			t.Error("ShouldCleanStale() = false, want true")
+		}
+	})
 }
