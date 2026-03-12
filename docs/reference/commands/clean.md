@@ -176,6 +176,20 @@ twig clean --stale --yes
 twig clean --stale --check
 ```
 
+The behavior can be configured in `.twig/settings.toml`:
+
+```toml
+clean_stale = true
+```
+
+Priority:
+
+1. CLI flag `--stale` (forces enable)
+2. Config `clean_stale`
+3. Default: disabled
+
+See [Configuration](../configuration.md#clean_stale) for details.
+
 Stale candidates are marked with "stale" in the output:
 
 ```txt

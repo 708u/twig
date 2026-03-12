@@ -90,6 +90,22 @@ The CLI flag `--submodule-reference` forces enable regardless of this setting.
 
 See [add subcommand](commands/add.md#submodule-reference) for details.
 
+### clean_stale
+
+Always enable `--stale` behavior for the clean command.
+
+```toml
+clean_stale = true
+```
+
+Default: `false` (disabled)
+
+When enabled, `twig clean` treats merged or upstream-gone branches
+as stale even if they have uncommitted changes or dirty submodules.
+The CLI flag `--stale` forces enable regardless of this setting.
+
+See [clean subcommand](commands/clean.md#stale-option) for details.
+
 ## Merge Rules
 
 When both files exist, settings are merged:
@@ -102,6 +118,7 @@ When both files exist, settings are merged:
 | `extra_symlinks`                | Collected from both     | `[]`                           |
 | `init_submodules`               | Local overrides project | `false`                        |
 | `submodule_reference`           | Local overrides project | `false`                        |
+| `clean_stale`                   | Local overrides project | `false`                        |
 
 ## symlinks vs extra_symlinks
 
@@ -140,6 +157,7 @@ default_source = "main"
 symlinks = [".envrc", ".tool-versions", "config/**"]
 init_submodules = true
 submodule_reference = true
+clean_stale = true
 ```
 
 ```toml
