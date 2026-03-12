@@ -148,14 +148,21 @@ they have uncommitted changes or dirty submodules. This is safer than
 `--force` because it only bypasses the changes check for branches
 that are already merged or have upstream gone status.
 
-| Condition          | `--stale` | `--force` |
-|--------------------|-----------|-----------|
-| Uncommitted changes (merged)     | Bypassed  | Bypassed  |
-| Dirty submodule (merged)         | Bypassed  | Bypassed  |
-| Uncommitted changes (not merged) | Kept      | Bypassed  |
-| Not merged                       | Kept      | Bypassed  |
-| Locked                           | Kept      | Kept (`-ff` bypasses) |
-| Current directory                | Kept      | Kept      |
+**WIP branch protection:** Branches with no new commits (HEAD is a
+direct ancestor of target via first-parent lineage) are treated as
+work-in-progress even if `git branch --merged` reports them as
+merged. `--stale` does not remove these branches.
+
+| Condition            | `--stale` | `--force` |
+|----------------------|-----------|-----------|
+| Changes (merged)     | Bypassed  | Bypassed  |
+| Changes (WIP)        | Kept      | Bypassed  |
+| Dirty submod (merged)| Bypassed  | Bypassed  |
+| Dirty submod (WIP)   | Kept      | Bypassed  |
+| Changes (not merged) | Kept      | Bypassed  |
+| Not merged           | Kept      | Bypassed  |
+| Locked               | Kept      | `-ff`     |
+| Current directory    | Kept      | Kept      |
 
 Use `--stale` when you want to clean up merged branches that still
 have local experiments or debug files, without risking deletion of

@@ -544,6 +544,19 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 			isMergeRelated := reason == SkipNotMerged || reason == SkipSameCommit
 			if opts.Target != "" && !isMergeRelated {
 				result.CleanReason = c.getCleanReason(ctx, branch, opts.Target)
+				// Clear CleanMerged for WIP branches on first-parent lineage.
+				// A branch with no new commits whose HEAD is a direct ancestor
+				// of target via first-parent is WIP, not genuinely merged.
+				if result.CleanReason == CleanMerged &&
+					(reason == SkipHasChanges || reason == SkipDirtySubmodule) {
+					isWIP, fpErr := c.Git.IsFirstParentAncestor(
+						ctx, wtInfo.HEAD, opts.Target,
+					)
+					// fail-closed: on error, treat as WIP to prevent accidental deletion
+					if fpErr != nil || isWIP {
+						result.CleanReason = ""
+					}
+				}
 			}
 			c.Log.DebugContext(ctx, "skip",
 				"category", LogCategoryRemove,
