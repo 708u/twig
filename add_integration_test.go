@@ -58,7 +58,7 @@ func TestAddCommand_Integration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to read symlink: %v", err)
 		}
-		expectedTarget := filepath.Join(mainDir, ".envrc")
+		expectedTarget, _ := filepath.Rel(filepath.Dir(envrcPath), filepath.Join(mainDir, ".envrc"))
 		if target != expectedTarget {
 			t.Errorf("symlink target = %q, want %q", target, expectedTarget)
 		}
@@ -665,7 +665,7 @@ worktree_destination_base_dir = %q
 				t.Errorf("failed to read symlink %s: %v", rel, err)
 				continue
 			}
-			expectedTarget := filepath.Join(mainDir, rel)
+			expectedTarget, _ := filepath.Rel(filepath.Dir(linkPath), filepath.Join(mainDir, rel))
 			if target != expectedTarget {
 				t.Errorf("symlink target = %q, want %q", target, expectedTarget)
 			}

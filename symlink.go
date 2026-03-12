@@ -28,6 +28,7 @@ func createSymlinks(fsys FileSystem, srcDir, dstDir string, patterns []string) (
 		for _, match := range matches {
 			src := filepath.Join(srcDir, match)
 			dst := filepath.Join(dstDir, match)
+			dstParent := filepath.Dir(dst)
 
 			// Check if destination already exists
 			if info, err := fsys.Lstat(dst); err == nil && info != nil {
@@ -49,13 +50,17 @@ func createSymlinks(fsys FileSystem, srcDir, dstDir string, patterns []string) (
 				}
 			}
 
-			if dir := filepath.Dir(dst); dir != dstDir {
-				if err := fsys.MkdirAll(dir, 0755); err != nil {
+			if dstParent != dstDir {
+				if err := fsys.MkdirAll(dstParent, 0755); err != nil {
 					return nil, fmt.Errorf("failed to create directory for %s: %w", match, err)
 				}
 			}
 
-			if err := fsys.Symlink(src, dst); err != nil {
+			relSrc, err := filepath.Rel(dstParent, src)
+			if err != nil {
+				return nil, fmt.Errorf("failed to compute relative path for %s: %w", match, err)
+			}
+			if err := fsys.Symlink(relSrc, dst); err != nil {
 				return nil, fmt.Errorf("failed to create symlink for %s: %w", match, err)
 			}
 
