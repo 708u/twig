@@ -549,9 +549,11 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 				// of target via first-parent is WIP, not genuinely merged.
 				if result.CleanReason == CleanMerged &&
 					(reason == SkipHasChanges || reason == SkipDirtySubmodule) {
-					if isWIP, fpErr := c.Git.IsFirstParentAncestor(
+					isWIP, fpErr := c.Git.IsFirstParentAncestor(
 						ctx, wtInfo.HEAD, opts.Target,
-					); fpErr == nil && isWIP {
+					)
+					// fail-closed: on error, treat as WIP to prevent accidental deletion
+					if fpErr != nil || isWIP {
 						result.CleanReason = ""
 					}
 				}
