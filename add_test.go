@@ -3,6 +3,7 @@ package twig
 import (
 	"errors"
 	"io/fs"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -1078,6 +1079,67 @@ func TestCreateSymlinks(t *testing.T) {
 			}
 			if created != tt.wantCreated {
 				t.Errorf("got %d created, want %d", created, tt.wantCreated)
+			}
+		})
+	}
+}
+
+func TestCreateSymlinks_RelativePath(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		pattern     string
+		match       string
+		wantRelBase string // filepath.Dir(dst) for computing expected relative path
+		wantAbsSrc  string // expected absolute SymlinkResult.Src
+	}{
+		{
+			name:        "root_level",
+			pattern:     ".envrc",
+			match:       ".envrc",
+			wantRelBase: "/dst",
+			wantAbsSrc:  "/src/.envrc",
+		},
+		{
+			name:        "nested_glob",
+			pattern:     "config/**/*.toml",
+			match:       "config/app.toml",
+			wantRelBase: "/dst/config",
+			wantAbsSrc:  "/src/config/app.toml",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var capturedOldname string
+			mockFS := &testutil.MockFS{
+				GlobResults: map[string][]string{
+					tt.pattern: {tt.match},
+				},
+				SymlinkFunc: func(oldname, newname string) error {
+					capturedOldname = oldname
+					return nil
+				},
+			}
+
+			results, err := createSymlinks(mockFS, "/src", "/dst", []string{tt.pattern})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			wantRel, _ := filepath.Rel(tt.wantRelBase, tt.wantAbsSrc)
+			if capturedOldname != wantRel {
+				t.Errorf("Symlink oldname = %q, want relative %q", capturedOldname, wantRel)
+			}
+
+			if len(results) != 1 {
+				t.Fatalf("expected 1 result, got %d", len(results))
+			}
+			if results[0].Src != tt.wantAbsSrc {
+				t.Errorf("SymlinkResult.Src = %q, want absolute %q", results[0].Src, tt.wantAbsSrc)
 			}
 		})
 	}

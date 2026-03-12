@@ -1102,6 +1102,57 @@ func TestRemoveCommand_Check(t *testing.T) {
 			wantSkip:      SkipHasChanges,
 			wantClean:     CleanUpstreamGone, // upstream gone but has uncommitted changes
 		},
+		// WIP branch detection (first-parent lineage)
+		{
+			name:   "skip_wip_on_first_parent_clears_clean_reason",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a", HEAD: "wip-commit"},
+					},
+					MergedBranches: map[string][]string{"main": {"feat/a"}},
+					HasChanges:     true,
+					FirstParentAncestors: map[string][]string{
+						"main": {"wip-commit"},
+					},
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipHasChanges,
+			wantClean:     "", // WIP on first-parent: CleanReason cleared
+		},
+		{
+			name:   "skip_wip_dirty_submodule_clears_clean_reason",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main"},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a", HEAD: "wip-commit"},
+					},
+					MergedBranches:        map[string][]string{"main": {"feat/a"}},
+					SubmoduleStatusOutput: "+abc123 submodule-path (v1.0.0)\n",
+					FirstParentAncestors: map[string][]string{
+						"main": {"wip-commit"},
+					},
+				}
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipDirtySubmodule,
+			wantClean:     "", // WIP on first-parent: CleanReason cleared
+		},
 		// Skip candidates without CleanReason (merge-related skip reasons)
 		{
 			name:   "skip_not_merged_no_clean_reason",

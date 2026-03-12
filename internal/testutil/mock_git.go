@@ -117,6 +117,13 @@ type MockGitExecutor struct {
 	// WorktreeRootMap maps directory to its worktree root.
 	// Used by rev-parse --show-toplevel to return the worktree root for a directory.
 	WorktreeRootMap map[string]string
+
+	// FirstParentAncestors maps target branch to commit hashes on its first-parent lineage.
+	// Used by rev-list --first-parent to detect WIP branches.
+	FirstParentAncestors map[string][]string
+
+	// RootCommits is a list of commits that have no parent (root commits).
+	RootCommits []string
 }
 
 func (m *MockGitExecutor) Run(ctx context.Context, args ...string) ([]byte, error) {
@@ -166,6 +173,8 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 		return m.handleFetch(args)
 	case "submodule":
 		return m.handleSubmodule(args)
+	case "rev-list":
+		return m.handleRevList(args)
 	}
 	return nil, nil
 }
@@ -197,6 +206,16 @@ func (m *MockGitExecutor) handleRevParse(args []string, dir string) ([]byte, err
 			hash = "abc123def456"
 		}
 		return []byte(hash + "\n"), nil
+	}
+
+	// Handle rev-parse <commit>^ for parent lookup (IsFirstParentAncestor)
+	if len(args) == 2 && strings.HasSuffix(args[1], "^") {
+		commit := strings.TrimSuffix(args[1], "^")
+		if slices.Contains(m.RootCommits, commit) {
+			return nil, &MockExitError{Code: 128}
+		}
+		// Return a synthetic parent hash
+		return []byte("parent-of-" + commit + "\n"), nil
 	}
 
 	// Handle rev-parse <branch> (without --verify) for commit hash lookup
@@ -491,4 +510,31 @@ func (m *MockGitExecutor) handleSubmodule(args []string) ([]byte, error) {
 		return nil, m.SubmoduleUpdateErr
 	}
 	return nil, nil
+}
+
+func (m *MockGitExecutor) handleRevList(args []string) ([]byte, error) {
+	// args: ["rev-list", "--first-parent", "<target>"] or
+	// args: ["rev-list", "--first-parent", "<target>", "--not", "<parent>"]
+	if len(args) < 3 {
+		return nil, nil
+	}
+
+	// Find the target (first non-flag arg after "rev-list")
+	target := ""
+	for _, arg := range args[1:] {
+		if !strings.HasPrefix(arg, "--") {
+			target = arg
+			break
+		}
+	}
+
+	if target == "" || m.FirstParentAncestors == nil {
+		return []byte{}, nil
+	}
+
+	commits := m.FirstParentAncestors[target]
+	if len(commits) == 0 {
+		return []byte{}, nil
+	}
+	return []byte(strings.Join(commits, "\n") + "\n"), nil
 }

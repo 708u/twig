@@ -16,6 +16,7 @@ twig clean [flags]
 | `--check`         |       | Show candidates without prompting                      |
 | `--target`        |       | Target branch for merge check                          |
 | `--force`         | `-f`  | Force clean (can be specified twice, see below)        |
+| `--stale`         |       | Remove merged/upstream-gone even with changes          |
 | `--verbose`       | `-v`  | Enable verbose output (use `-vv` for debug)            |
 
 ## Behavior
@@ -89,17 +90,25 @@ The clean command detects merged branches using:
 1. `git branch --merged` - traditional merge commits
 2. Upstream gone status - squash/rebase merges via PR
 
-**Limitation:** Local-only fast-forward merges are not detected. When a branch
-is fast-forward merged locally (without `--no-ff`), both the branch and target
-point to the same commit. This is indistinguishable from a newly created branch
-that was never worked on.
+**Limitation:** Squash and rebase merge detection relies on
+upstream gone status. If the remote branch is not deleted after
+merging the PR, the branch is reported as "not merged". Enable
+GitHub's "Automatically delete head branches" repository setting
+to ensure remote branches are cleaned up after PR merge.
 
-| Merge Type              | Detection Method     | Detected |
-|-------------------------|----------------------|----------|
-| Merge commit (`--no-ff`)| `git branch --merged`| Yes      |
-| Squash merge (PR)       | Upstream gone        | Yes      |
-| Rebase merge (PR)       | Upstream gone        | Yes      |
-| Local fast-forward      | (none)               | No       |
+**Limitation:** Local-only fast-forward merges are not detected.
+When a branch is fast-forward merged locally (without `--no-ff`),
+both the branch and target point to the same commit. This is
+indistinguishable from a newly created branch that was never
+worked on.
+
+| Merge Type                              | Detection Method      | Detected |
+|-----------------------------------------|-----------------------|----------|
+| Merge commit (`--no-ff`)                | `git branch --merged` | Yes      |
+| Squash merge (PR)                       | Upstream gone         | Yes      |
+| Rebase merge (PR)                       | Upstream gone         | Yes      |
+| Squash merge (PR, branch not deleted)   | (none)                | No       |
+| Local fast-forward                      | (none)                | No       |
 
 To clean local fast-forward merged branches, use `--force`:
 
@@ -130,6 +139,49 @@ twig clean -f --yes
 
 # Also force clean locked worktrees
 twig clean -ff --yes
+```
+
+### Stale Option
+
+With `--stale`, merged or upstream-gone branches are cleaned even if
+they have uncommitted changes or dirty submodules. This is safer than
+`--force` because it only bypasses the changes check for branches
+that are already merged or have upstream gone status.
+
+**WIP branch protection:** Branches with no new commits (HEAD is a
+direct ancestor of target via first-parent lineage) are treated as
+work-in-progress even if `git branch --merged` reports them as
+merged. `--stale` does not remove these branches.
+
+| Condition            | `--stale` | `--force` |
+|----------------------|-----------|-----------|
+| Changes (merged)     | Bypassed  | Bypassed  |
+| Changes (WIP)        | Kept      | Bypassed  |
+| Dirty submod (merged)| Bypassed  | Bypassed  |
+| Dirty submod (WIP)   | Kept      | Bypassed  |
+| Changes (not merged) | Kept      | Bypassed  |
+| Not merged           | Kept      | Bypassed  |
+| Locked               | Kept      | `-ff`     |
+| Current directory    | Kept      | Kept      |
+
+Use `--stale` when you want to clean up merged branches that still
+have local experiments or debug files, without risking deletion of
+unmerged work.
+
+```bash
+# Clean merged branches even with uncommitted changes
+twig clean --stale --yes
+
+# Preview stale candidates
+twig clean --stale --check
+```
+
+Stale candidates are marked with "stale" in the output:
+
+```txt
+clean:
+  feat/dirty (merged, stale)
+  feat/gone (upstream gone, stale)
 ```
 
 ### Target Branch Detection

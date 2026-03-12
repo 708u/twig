@@ -175,6 +175,68 @@ func TestGitRunner_IsBranchUpstreamGone(t *testing.T) {
 	}
 }
 
+func TestGitRunner_IsFirstParentAncestor(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                 string
+		commit               string
+		target               string
+		firstParentAncestors map[string][]string
+		rootCommits          []string
+		want                 bool
+	}{
+		{
+			name:   "on first-parent lineage",
+			commit: "commit-abc",
+			target: "main",
+			firstParentAncestors: map[string][]string{
+				"main": {"commit-abc", "commit-def"},
+			},
+			want: true,
+		},
+		{
+			name:   "not on first-parent lineage",
+			commit: "commit-xyz",
+			target: "main",
+			firstParentAncestors: map[string][]string{
+				"main": {"commit-abc", "commit-def"},
+			},
+			want: false,
+		},
+		{
+			name:   "root commit on first-parent lineage",
+			commit: "root-commit",
+			target: "main",
+			firstParentAncestors: map[string][]string{
+				"main": {"root-commit", "commit-abc"},
+			},
+			rootCommits: []string{"root-commit"},
+			want:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := &testutil.MockGitExecutor{
+				FirstParentAncestors: tt.firstParentAncestors,
+				RootCommits:          tt.rootCommits,
+			}
+			runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
+
+			got, err := runner.IsFirstParentAncestor(t.Context(), tt.commit, tt.target)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 	t.Parallel()
 

@@ -289,6 +289,57 @@ func TestCleanResult_Format(t *testing.T) {
 			wantStdout: "skip:\n  feat/a\n    ✓ upstream gone\n    ✗ has uncommitted changes\n       M src/main.go\n\nNo worktrees to clean\n",
 			wantStderr: "",
 		},
+		// StaleOverride tests
+		{
+			name: "stale_override_merged",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/dirty", Skipped: false, CleanReason: CleanMerged, StaleOverride: true},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "clean:\n  feat/dirty (merged, stale)\n",
+			wantStderr: "",
+		},
+		{
+			name: "stale_override_upstream_gone",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/gone", Skipped: false, CleanReason: CleanUpstreamGone, StaleOverride: true},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "clean:\n  feat/gone (upstream gone, stale)\n",
+			wantStderr: "",
+		},
+		{
+			name: "stale_override_prunable",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/prunable", Prunable: true, Skipped: false, CleanReason: CleanMerged, StaleOverride: true},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "clean:\n  feat/prunable (prunable, merged, stale)\n",
+			wantStderr: "",
+		},
+		{
+			name: "stale_override_mixed_with_normal",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+					{Branch: "feat/dirty", Skipped: false, CleanReason: CleanMerged, StaleOverride: true},
+					{Branch: "feat/wip", Skipped: true, SkipReason: SkipNotMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "clean:\n  feat/a (merged)\n  feat/dirty (merged, stale)\n\nskip:\n  feat/wip\n    ✗ not merged\n",
+			wantStderr: "",
+		},
 		// ColorEnabled tests - output should be identical when color disabled
 		{
 			name: "color_disabled_same_as_no_color",
@@ -591,6 +642,124 @@ func TestCleanCommand_Run(t *testing.T) {
 			},
 			wantCandidates: 2,
 			wantSkipped:    0,
+		},
+		{
+			name: "stale_overrides_has_changes_when_merged",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true, Stale: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+					HasChanges: true,
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0, // stale overrides SkipHasChanges
+		},
+		{
+			name: "stale_does_not_override_not_merged",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true, Stale: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main"},
+					},
+					HasChanges: true,
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1, // not merged, stale does not override
+		},
+		{
+			name: "stale_does_not_override_locked",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true, Stale: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1, // locked, stale does not override
+		},
+		{
+			name: "stale_does_not_override_wip_on_first_parent",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true, Stale: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a", HEAD: "wip-commit"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+					HasChanges: true,
+					FirstParentAncestors: map[string][]string{
+						"main": {"wip-commit"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1, // WIP on first-parent: CleanReason cleared, stale does not override
+		},
+		{
+			name: "stale_overrides_genuinely_merged_not_first_parent",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true, Stale: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a", HEAD: "merged-commit"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+					HasChanges: true,
+					// FirstParentAncestors not set -> not on first-parent -> genuinely merged
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0, // genuinely merged: stale override applies
 		},
 		{
 			name: "skips_new_branch_pointing_to_same_commit_as_target",

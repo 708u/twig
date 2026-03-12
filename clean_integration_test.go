@@ -1246,6 +1246,362 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("StaleOverridesMergedWithChanges", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a branch with a commit
+		wtPath := filepath.Join(repoDir, "feature", "stale-dirty")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/stale-dirty", wtPath)
+
+		// Make a commit on the branch
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/stale-dirty", "feature/stale-dirty")
+
+		// Create uncommitted changes
+		dirtyFile := filepath.Join(wtPath, "dirty.txt")
+		if err := os.WriteFile(dirtyFile, []byte("dirty"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		// Without stale, should skip due to changes
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if !result.Candidates[0].Skipped {
+			t.Error("without stale, branch with changes should be skipped")
+		}
+
+		// With stale, should not skip (merged + changes = stale override)
+		result, err = cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if result.Candidates[0].Skipped {
+			t.Error("with stale, merged branch with changes should not be skipped")
+		}
+		if !result.Candidates[0].StaleOverride {
+			t.Error("candidate should have StaleOverride set")
+		}
+
+		// Execute with stale
+		result, err = cmd.Run(t.Context(), mainDir, CleanOptions{Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Worktree should be removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed with --stale: %s", wtPath)
+		}
+
+		// Branch should be deleted
+		out := testutil.RunGit(t, mainDir, "branch", "--list", "feature/stale-dirty")
+		if strings.TrimSpace(out) != "" {
+			t.Errorf("branch should be deleted, got: %s", out)
+		}
+	})
+
+	t.Run("StaleOverridesUpstreamGoneWithChanges", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a bare remote repository
+		remoteDir := filepath.Join(repoDir, "remote.git")
+		testutil.RunGit(t, repoDir, "init", "--bare", remoteDir)
+
+		// Add remote to main
+		testutil.RunGit(t, mainDir, "remote", "add", "origin", remoteDir)
+		testutil.RunGit(t, mainDir, "push", "-u", "origin", "main")
+
+		// Create a feature branch worktree
+		wtPath := filepath.Join(repoDir, "feature", "stale-gone")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/stale-gone", wtPath)
+
+		// Make a commit and push
+		testFile := filepath.Join(wtPath, "feature.txt")
+		if err := os.WriteFile(testFile, []byte("feature"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "feature.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "add feature")
+		testutil.RunGit(t, wtPath, "push", "-u", "origin", "feature/stale-gone")
+
+		// Simulate squash merge
+		testutil.RunGit(t, mainDir, "merge", "--squash", "feature/stale-gone")
+		testutil.RunGit(t, mainDir, "commit", "-m", "feat: squash merge")
+		testutil.RunGit(t, mainDir, "push", "origin", "main")
+		testutil.RunGit(t, mainDir, "push", "origin", "--delete", "feature/stale-gone")
+		testutil.RunGit(t, wtPath, "fetch", "--prune")
+
+		// Create uncommitted changes
+		dirtyFile := filepath.Join(wtPath, "dirty.txt")
+		if err := os.WriteFile(dirtyFile, []byte("dirty"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		// Without stale, should skip due to changes
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if !result.Candidates[0].Skipped {
+			t.Error("without stale, upstream-gone branch with changes should be skipped")
+		}
+
+		// With stale, should not skip
+		result, err = cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if result.Candidates[0].Skipped {
+			t.Error("with stale, upstream-gone branch with changes should not be skipped")
+		}
+
+		// Execute with stale
+		result, err = cmd.Run(t.Context(), mainDir, CleanOptions{Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Worktree should be removed
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed with --stale: %s", wtPath)
+		}
+	})
+
+	t.Run("StaleDoesNotOverrideUnmergedWithChanges", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create an unmerged worktree with changes
+		wtPath := filepath.Join(repoDir, "feature", "stale-unmerged")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/stale-unmerged", wtPath)
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "unmerged commit")
+
+		// Create uncommitted changes
+		dirtyFile := filepath.Join(wtPath, "dirty.txt")
+		if err := os.WriteFile(dirtyFile, []byte("dirty"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		// With stale, should still skip (not merged)
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if !result.Candidates[0].Skipped {
+			t.Error("with stale, unmerged branch should still be skipped")
+		}
+
+		// Worktree should still exist
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Error("worktree should still exist")
+		}
+	})
+
+	t.Run("StaleDoesNotOverrideLocked", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		wtPath := filepath.Join(repoDir, "feature", "stale-locked")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/stale-locked", wtPath)
+
+		// Lock the worktree
+		testutil.RunGit(t, mainDir, "worktree", "lock", wtPath)
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		// With stale, should still skip (locked is never bypassed by stale)
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if !result.Candidates[0].Skipped {
+			t.Error("with stale, locked worktree should still be skipped")
+		}
+		if result.Candidates[0].SkipReason != SkipLocked {
+			t.Errorf("skip reason should be %s, got %s", SkipLocked, result.Candidates[0].SkipReason)
+		}
+	})
+
+	t.Run("StaleDoesNotOverrideWIPOnFirstParentLineage", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a worktree (no new commits - branch HEAD is ancestor of main)
+		wtPath := filepath.Join(repoDir, "feature", "wip-stale")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/wip-stale", wtPath)
+
+		// Advance main with a new commit so feature/wip-stale is "merged"
+		// via git branch --merged (its HEAD is an ancestor of main)
+		testFile := filepath.Join(mainDir, "advance.txt")
+		if err := os.WriteFile(testFile, []byte("advance"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", "advance.txt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "advance main")
+
+		// Create uncommitted changes in the worktree
+		dirtyFile := filepath.Join(wtPath, "dirty.txt")
+		if err := os.WriteFile(dirtyFile, []byte("wip"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		// With stale, WIP branch should still be skipped
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+
+		if !result.Candidates[0].Skipped {
+			t.Error("with stale, WIP branch on first-parent lineage should still be skipped")
+		}
+
+		// Worktree should still exist
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Error("worktree should still exist")
+		}
+	})
+
+	t.Run("StaleStillOverridesGenuinelyMergedBranch", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a branch with a commit
+		wtPath := filepath.Join(repoDir, "feature", "genuine-merge")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/genuine-merge", wtPath)
+
+		// Make a commit on the branch
+		testFile := filepath.Join(wtPath, "feature.txt")
+		if err := os.WriteFile(testFile, []byte("feature"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "feature.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "feature commit")
+
+		// Merge the branch to main with --no-ff
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/genuine-merge", "feature/genuine-merge")
+
+		// Create uncommitted changes in the worktree
+		dirtyFile := filepath.Join(wtPath, "dirty.txt")
+		if err := os.WriteFile(dirtyFile, []byte("dirty"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		// With stale, genuinely merged branch should be a clean candidate
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+
+		if result.Candidates[0].Skipped {
+			t.Errorf("with stale, genuinely merged branch should not be skipped, reason: %s",
+				result.Candidates[0].SkipReason)
+		}
+
+		if !result.Candidates[0].StaleOverride {
+			t.Error("candidate should have StaleOverride set")
+		}
+	})
+
 	// Known limitation: local-only fast-forward merges are not detected as merged.
 	// This is a tradeoff to prevent false positives on newly created branches.
 	// See: https://github.com/708u/twig/pull/104
