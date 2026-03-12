@@ -117,6 +117,10 @@ type MockGitExecutor struct {
 	// WorktreeRootMap maps directory to its worktree root.
 	// Used by rev-parse --show-toplevel to return the worktree root for a directory.
 	WorktreeRootMap map[string]string
+
+	// StatusByDir maps directory to status output for that directory.
+	// Used when git status is called with -C <dir> to return per-worktree status.
+	StatusByDir map[string]string
 }
 
 func (m *MockGitExecutor) Run(ctx context.Context, args ...string) ([]byte, error) {
@@ -157,7 +161,7 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 	case "branch":
 		return m.handleBranch(args)
 	case "status":
-		return m.handleStatus(args)
+		return m.handleStatus(args, dir)
 	case "stash":
 		return m.handleStash(args)
 	case "for-each-ref":
@@ -313,9 +317,15 @@ func (m *MockGitExecutor) handleBranch(args []string) ([]byte, error) {
 	return nil, nil
 }
 
-func (m *MockGitExecutor) handleStatus(args []string) ([]byte, error) {
-	// args: ["status", "--porcelain"]
+func (m *MockGitExecutor) handleStatus(args []string, dir string) ([]byte, error) {
+	// args: ["status", "--porcelain", ...]
 	if len(args) >= 2 && args[1] == "--porcelain" {
+		// Check per-directory status first
+		if dir != "" && m.StatusByDir != nil {
+			if output, ok := m.StatusByDir[dir]; ok {
+				return []byte(output), nil
+			}
+		}
 		// Use StatusOutput if set (allows custom status output)
 		if m.StatusOutput != "" {
 			return []byte(m.StatusOutput), nil

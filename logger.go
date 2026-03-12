@@ -164,6 +164,7 @@ const (
 	LogCategoryRemove = "remove"
 	LogCategoryClean  = "clean"
 	LogCategorySync   = "sync"
+	LogCategoryList   = "list"
 )
 
 // Command ID generation settings.
