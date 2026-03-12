@@ -79,7 +79,7 @@ func TestAddCommand_SourceFlag_Integration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to read symlink: %v", err)
 		}
-		expectedTarget := filepath.Join(mainDir, ".envrc")
+		expectedTarget, _ := filepath.Rel(filepath.Dir(envrcPath), filepath.Join(mainDir, ".envrc"))
 		if target != expectedTarget {
 			t.Errorf("symlink target = %q, want %q", target, expectedTarget)
 		}
@@ -254,7 +254,7 @@ func TestAddCommand_DefaultSource_Integration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to read symlink: %v", err)
 		}
-		expectedTarget := filepath.Join(mainDir, ".envrc")
+		expectedTarget, _ := filepath.Rel(filepath.Dir(envrcPath), filepath.Join(mainDir, ".envrc"))
 		if target != expectedTarget {
 			t.Errorf("symlink target = %q, want %q", target, expectedTarget)
 		}
