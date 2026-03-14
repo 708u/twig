@@ -58,13 +58,34 @@ type CleanCandidate struct {
 	StaleOverride bool // Changes check bypassed via --stale for merged/upstream-gone
 }
 
+// IntegrityInfo holds worktree integrity check results.
+type IntegrityInfo struct {
+	OrphanBranches    []string
+	LockedWorktrees   []LockedWorktreeInfo
+	DetachedWorktrees []DetachedWorktreeInfo
+}
+
+// LockedWorktreeInfo represents a locked worktree with its reason.
+type LockedWorktreeInfo struct {
+	Branch     string
+	Path       string
+	LockReason string
+}
+
+// DetachedWorktreeInfo represents a worktree with detached HEAD.
+type DetachedWorktreeInfo struct {
+	Path string
+	HEAD string
+}
+
 // CleanResult aggregates results from clean operations.
 type CleanResult struct {
 	Candidates   []CleanCandidate
 	Removed      []RemovedWorktree
 	TargetBranch string
 	Pruned       bool
-	Check        bool // --check mode (show candidates only, no prompt)
+	Check        bool          // --check mode (show candidates only, no prompt)
+	Integrity    IntegrityInfo // worktree integrity check results
 }
 
 // CleanableCount returns the number of worktrees that can be cleaned.
@@ -131,6 +152,56 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 		}
 		return s
 	}
+	applyInfo := func(s string) string {
+		if opts.ColorEnabled {
+			return colorInfo(s)
+		}
+		return s
+	}
+	applyWarning := func(s string) string {
+		if opts.ColorEnabled {
+			return colorWarning(s)
+		}
+		return s
+	}
+
+	// formatIntegrity appends integrity check sections to stdout.
+	formatIntegrity := func(lw *lineWriter) {
+		// Detached worktrees (always shown)
+		if len(r.Integrity.DetachedWorktrees) > 0 {
+			fmt.Fprintln(&stdout)
+			lw.Line(0, "%s", applyWarning("detached:"))
+			for _, d := range r.Integrity.DetachedWorktrees {
+				lw.Line(1, "%s %s", d.Path, applyReason("(HEAD at "+d.HEAD+")"))
+			}
+		}
+
+		if !opts.Verbose {
+			return
+		}
+
+		// Orphan branches (verbose only)
+		if len(r.Integrity.OrphanBranches) > 0 {
+			fmt.Fprintln(&stdout)
+			lw.Line(0, "%s", applyInfo("orphan branches:"))
+			for _, b := range r.Integrity.OrphanBranches {
+				lw.Line(1, "%s %s", b, applyReason("(no worktree)"))
+			}
+		}
+
+		// Locked worktrees (verbose only)
+		if len(r.Integrity.LockedWorktrees) > 0 {
+			fmt.Fprintln(&stdout)
+			lw.Line(0, "%s", applyInfo("locked:"))
+			for _, l := range r.Integrity.LockedWorktrees {
+				reason := "(locked)"
+				if l.LockReason != "" {
+					reason = "(reason: " + l.LockReason + ")"
+				}
+				lw.Line(1, "%s %s", l.Branch, applyReason(reason))
+			}
+		}
+	}
 
 	// Show removal results (execution completed)
 	if !r.Check && len(r.Removed) > 0 {
@@ -178,6 +249,7 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 			fmt.Fprintln(&stdout)
 		}
 		fmt.Fprintln(&stdout, "No worktrees to clean")
+		formatIntegrity(lw)
 		return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	}
 
@@ -212,6 +284,8 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 			}
 		}
 	}
+
+	formatIntegrity(lw)
 
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 }
@@ -296,6 +370,13 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			c.Log.DebugContext(ctx, "skipping detached worktree",
 				LogAttrKeyCategory.String(), LogCategoryClean,
 				"path", wt.Path)
+
+			// Collect detached info for integrity report
+			result.Integrity.DetachedWorktrees = append(result.Integrity.DetachedWorktrees, DetachedWorktreeInfo{
+				Path: wt.Path,
+				HEAD: wt.ShortHEAD(),
+			})
+
 			candidates = append(candidates, indexedCandidate{
 				index: candidateIndex,
 				candidate: CleanCandidate{
@@ -307,6 +388,15 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			})
 			candidateIndex++
 			continue
+		}
+
+		// Collect locked worktree info for integrity report
+		if wt.Locked {
+			result.Integrity.LockedWorktrees = append(result.Integrity.LockedWorktrees, LockedWorktreeInfo{
+				Branch:     wt.Branch,
+				Path:       wt.Path,
+				LockReason: wt.LockReason,
+			})
 		}
 
 		// Launch parallel check.
@@ -391,6 +481,22 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		}
 	}
 
+	// Find orphan branches (local branches without worktrees)
+	orphans, err := c.findOrphanBranches(ctx, worktrees)
+	if err != nil {
+		c.Log.DebugContext(ctx, "failed to find orphan branches",
+			LogAttrKeyCategory.String(), LogCategoryClean,
+			"error", err.Error())
+	} else {
+		result.Integrity.OrphanBranches = orphans
+	}
+
+	c.Log.DebugContext(ctx, "integrity check completed",
+		LogAttrKeyCategory.String(), LogCategoryClean,
+		"orphanBranches", len(result.Integrity.OrphanBranches),
+		"lockedWorktrees", len(result.Integrity.LockedWorktrees),
+		"detachedWorktrees", len(result.Integrity.DetachedWorktrees))
+
 	// If check mode, just return candidates (no execution)
 	if result.Check {
 		c.Log.DebugContext(ctx, "run completed (check mode)",
@@ -470,6 +576,29 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		"removed", len(result.Removed))
 
 	return result, nil
+}
+
+// findOrphanBranches finds local branches that are not checked out in any worktree.
+func (c *CleanCommand) findOrphanBranches(ctx context.Context, worktrees []Worktree) ([]string, error) {
+	branches, err := c.Git.BranchList(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list branches: %w", err)
+	}
+
+	wtBranches := make(map[string]bool)
+	for _, wt := range worktrees {
+		if wt.Branch != "" {
+			wtBranches[wt.Branch] = true
+		}
+	}
+
+	var orphans []string
+	for _, b := range branches {
+		if !wtBranches[b] {
+			orphans = append(orphans, b)
+		}
+	}
+	return orphans, nil
 }
 
 // resolveTarget resolves the target branch for merge checking.

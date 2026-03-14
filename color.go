@@ -13,8 +13,10 @@ const (
 
 var (
 	// Section headers
-	colorClean = color.New(color.FgGreen, color.Bold).SprintFunc()
-	colorSkip  = color.New(color.FgYellow, color.Bold).SprintFunc()
+	colorClean   = color.New(color.FgGreen, color.Bold).SprintFunc()
+	colorSkip    = color.New(color.FgYellow, color.Bold).SprintFunc()
+	colorInfo    = color.New(color.FgCyan, color.Bold).SprintFunc()
+	colorWarning = colorSkip // same styling as skip for now
 
 	// Status markers
 	colorSuccess = color.New(color.FgGreen).SprintFunc() // ✓

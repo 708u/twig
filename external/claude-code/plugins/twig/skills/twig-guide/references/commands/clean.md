@@ -230,6 +230,15 @@ skip:
   feat/submod
     ✓ merged
     ✗ submodule has uncommitted changes
+
+detached:
+  /path/to/detached-worktree (HEAD at abc1234)
+
+orphan branches:
+  feat/old-experiment (no worktree)
+
+locked:
+  feat/usb-work (reason: USB drive work)
 ```
 
 - `clean:` shows worktrees and prunable branches that will be removed
@@ -249,6 +258,42 @@ skip:
        M src/main.go
       ?? tmp/debug.log
 ```
+
+### Integrity Checks
+
+The command reports worktree integrity information after the
+clean/skip sections.
+
+**Detached HEAD worktrees** are always shown:
+
+```txt
+detached:
+  /path/to/worktree (HEAD at abc1234)
+```
+
+With `--verbose`, additional integrity information is shown:
+
+**Orphan branches** (local branches without a worktree):
+
+```txt
+orphan branches:
+  feat/old-experiment (no worktree)
+  fix/abandoned-work (no worktree)
+```
+
+**Locked worktrees** with lock reasons:
+
+```txt
+locked:
+  feat/usb-work (reason: USB drive work)
+  feat/network-share (locked)
+```
+
+| Section            | Visibility          |
+|--------------------|---------------------|
+| `detached:`        | Always              |
+| `orphan branches:` | `--verbose` only    |
+| `locked:`          | `--verbose` only    |
 
 Clean reasons:
 

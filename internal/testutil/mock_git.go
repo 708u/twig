@@ -124,6 +124,10 @@ type MockGitExecutor struct {
 
 	// RootCommits is a list of commits that have no parent (root commits).
 	RootCommits []string
+
+	// LocalBranches lists all local branches. Used by git branch --format.
+	// If nil, branches are derived from Worktrees and ExistingBranches.
+	LocalBranches []string
 }
 
 func (m *MockGitExecutor) Run(ctx context.Context, args ...string) ([]byte, error) {
@@ -327,6 +331,29 @@ func (m *MockGitExecutor) handleBranch(args []string) ([]byte, error) {
 	if len(args) >= 3 && args[1] == "--merged" {
 		target := args[2]
 		branches := m.MergedBranches[target]
+		return []byte(strings.Join(branches, "\n")), nil
+	}
+	// args: ["branch", "--format=%(refname:short)"] (BranchList)
+	// The --merged case is already handled above, so only --format= reaches here.
+	if len(args) >= 2 && strings.HasPrefix(args[1], "--format=") {
+		if m.LocalBranches != nil {
+			return []byte(strings.Join(m.LocalBranches, "\n")), nil
+		}
+		// Derive from worktrees and existing branches
+		var branches []string
+		seen := make(map[string]bool)
+		for _, wt := range m.Worktrees {
+			if !wt.Bare && !wt.Detached && wt.Branch != "" && !seen[wt.Branch] {
+				branches = append(branches, wt.Branch)
+				seen[wt.Branch] = true
+			}
+		}
+		for _, b := range m.ExistingBranches {
+			if !seen[b] {
+				branches = append(branches, b)
+				seen[b] = true
+			}
+		}
 		return []byte(strings.Join(branches, "\n")), nil
 	}
 	return nil, nil
