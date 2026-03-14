@@ -367,6 +367,158 @@ func TestCleanResult_Format(t *testing.T) {
 			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b\n    ✗ not merged\n",
 			wantStderr: "",
 		},
+		// Integrity info tests
+		{
+			name: "detached_always_shown",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+				},
+				Check: true,
+				Integrity: IntegrityInfo{
+					DetachedWorktrees: []DetachedWorktreeInfo{
+						{Path: "/repo/detached", HEAD: "abc1234"},
+					},
+				},
+			},
+			opts:       FormatOptions{},
+			wantStdout: "clean:\n  feat/a (merged)\n\ndetached:\n  /repo/detached (HEAD at abc1234)\n",
+			wantStderr: "",
+		},
+		{
+			name: "orphan_branches_verbose_only",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+				},
+				Check: true,
+				Integrity: IntegrityInfo{
+					OrphanBranches: []string{"feat/old", "fix/abandoned"},
+				},
+			},
+			opts:       FormatOptions{},
+			wantStdout: "clean:\n  feat/a (merged)\n",
+			wantStderr: "",
+		},
+		{
+			name: "orphan_branches_shown_in_verbose",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+				},
+				Check: true,
+				Integrity: IntegrityInfo{
+					OrphanBranches: []string{"feat/old", "fix/abandoned"},
+				},
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "clean:\n  feat/a (merged)\n\norphan branches:\n  feat/old (no worktree)\n  fix/abandoned (no worktree)\n",
+			wantStderr: "",
+		},
+		{
+			name: "locked_verbose_only",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+				},
+				Check: true,
+				Integrity: IntegrityInfo{
+					LockedWorktrees: []LockedWorktreeInfo{
+						{Branch: "feat/usb", Path: "/repo/feat/usb", LockReason: "USB drive work"},
+					},
+				},
+			},
+			opts:       FormatOptions{},
+			wantStdout: "clean:\n  feat/a (merged)\n",
+			wantStderr: "",
+		},
+		{
+			name: "locked_shown_in_verbose",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+				},
+				Check: true,
+				Integrity: IntegrityInfo{
+					LockedWorktrees: []LockedWorktreeInfo{
+						{Branch: "feat/usb", Path: "/repo/feat/usb", LockReason: "USB drive work"},
+					},
+				},
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "clean:\n  feat/a (merged)\n\nlocked:\n  feat/usb (reason: USB drive work)\n",
+			wantStderr: "",
+		},
+		{
+			name: "locked_without_reason",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+				},
+				Check: true,
+				Integrity: IntegrityInfo{
+					LockedWorktrees: []LockedWorktreeInfo{
+						{Branch: "feat/locked", Path: "/repo/feat/locked"},
+					},
+				},
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "clean:\n  feat/a (merged)\n\nlocked:\n  feat/locked (locked)\n",
+			wantStderr: "",
+		},
+		{
+			name: "all_integrity_sections_verbose",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+				},
+				Check: true,
+				Integrity: IntegrityInfo{
+					DetachedWorktrees: []DetachedWorktreeInfo{
+						{Path: "/repo/detached", HEAD: "abc1234"},
+					},
+					OrphanBranches: []string{"feat/old"},
+					LockedWorktrees: []LockedWorktreeInfo{
+						{Branch: "feat/usb", Path: "/repo/feat/usb", LockReason: "USB drive"},
+					},
+				},
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "clean:\n  feat/a (merged)\n\ndetached:\n  /repo/detached (HEAD at abc1234)\n\norphan branches:\n  feat/old (no worktree)\n\nlocked:\n  feat/usb (reason: USB drive)\n",
+			wantStderr: "",
+		},
+		{
+			name: "integrity_with_no_candidates",
+			result: CleanResult{
+				Candidates: []CleanCandidate{},
+				Check:      true,
+				Integrity: IntegrityInfo{
+					DetachedWorktrees: []DetachedWorktreeInfo{
+						{Path: "/repo/detached", HEAD: "abc1234"},
+					},
+				},
+			},
+			opts:       FormatOptions{},
+			wantStdout: "No worktrees to clean\n\ndetached:\n  /repo/detached (HEAD at abc1234)\n",
+			wantStderr: "",
+		},
+		{
+			name: "integrity_not_shown_in_removal_results",
+			result: CleanResult{
+				Removed: []RemovedWorktree{
+					{Branch: "feat/a"},
+				},
+				Check: false,
+				Integrity: IntegrityInfo{
+					DetachedWorktrees: []DetachedWorktreeInfo{
+						{Path: "/repo/detached", HEAD: "abc1234"},
+					},
+				},
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "Removed worktree and branch: feat/a\n",
+			wantStderr: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -396,6 +548,10 @@ func TestCleanCommand_Run(t *testing.T) {
 		errContains    string
 		wantCandidates int
 		wantSkipped    int
+		wantOrphans    int
+		wantLocked     int
+		wantDetached   int
+		checkIntegrity func(t *testing.T, integrity IntegrityInfo)
 	}{
 		{
 			name: "finds_merged_candidates",
@@ -432,7 +588,7 @@ func TestCleanCommand_Run(t *testing.T) {
 				return &testutil.MockGitExecutor{
 					Worktrees: []testutil.MockWorktree{
 						{Path: "/repo/main", Branch: "main"},
-						{Path: "/repo/feat/a", Branch: "feat/a", Locked: true},
+						{Path: "/repo/feat/a", Branch: "feat/a", Locked: true, LockReason: "USB drive"},
 					},
 					MergedBranches: map[string][]string{
 						"main": {"main", "feat/a"},
@@ -441,6 +597,16 @@ func TestCleanCommand_Run(t *testing.T) {
 			},
 			wantCandidates: 1,
 			wantSkipped:    1,
+			wantLocked:     1,
+			checkIntegrity: func(t *testing.T, integrity IntegrityInfo) {
+				t.Helper()
+				if integrity.LockedWorktrees[0].Branch != "feat/a" {
+					t.Errorf("locked branch = %q, want %q", integrity.LockedWorktrees[0].Branch, "feat/a")
+				}
+				if integrity.LockedWorktrees[0].LockReason != "USB drive" {
+					t.Errorf("lock reason = %q, want %q", integrity.LockedWorktrees[0].LockReason, "USB drive")
+				}
+			},
 		},
 		{
 			name: "skips_current_directory",
@@ -499,7 +665,7 @@ func TestCleanCommand_Run(t *testing.T) {
 				return &testutil.MockGitExecutor{
 					Worktrees: []testutil.MockWorktree{
 						{Path: "/repo/main", Branch: "main"},
-						{Path: "/repo/feat/a", Detached: true},
+						{Path: "/repo/feat/a", Detached: true, HEAD: "deadbeef1234567"},
 					},
 					MergedBranches: map[string][]string{
 						"main": {"main"},
@@ -508,6 +674,16 @@ func TestCleanCommand_Run(t *testing.T) {
 			},
 			wantCandidates: 1,
 			wantSkipped:    1,
+			wantDetached:   1,
+			checkIntegrity: func(t *testing.T, integrity IntegrityInfo) {
+				t.Helper()
+				if integrity.DetachedWorktrees[0].Path != "/repo/feat/a" {
+					t.Errorf("detached path = %q, want %q", integrity.DetachedWorktrees[0].Path, "/repo/feat/a")
+				}
+				if integrity.DetachedWorktrees[0].HEAD != "deadbee" {
+					t.Errorf("detached HEAD = %q, want %q", integrity.DetachedWorktrees[0].HEAD, "deadbee")
+				}
+			},
 		},
 		{
 			name: "uses_target_flag",
@@ -710,6 +886,7 @@ func TestCleanCommand_Run(t *testing.T) {
 			},
 			wantCandidates: 1,
 			wantSkipped:    1, // locked, stale does not override
+			wantLocked:     1,
 		},
 		{
 			name: "stale_does_not_override_wip_on_first_parent",
@@ -783,6 +960,97 @@ func TestCleanCommand_Run(t *testing.T) {
 			wantCandidates: 1,
 			wantSkipped:    1, // feat/new should be skipped because same commit as main
 		},
+		// Integrity tests
+		{
+			name: "detects_orphan_branches",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+					LocalBranches: []string{"main", "feat/a", "feat/orphan1", "fix/orphan2"},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0,
+			wantOrphans:    2,
+			checkIntegrity: func(t *testing.T, integrity IntegrityInfo) {
+				t.Helper()
+				if integrity.OrphanBranches[0] != "feat/orphan1" {
+					t.Errorf("orphan[0] = %q, want %q", integrity.OrphanBranches[0], "feat/orphan1")
+				}
+				if integrity.OrphanBranches[1] != "fix/orphan2" {
+					t.Errorf("orphan[1] = %q, want %q", integrity.OrphanBranches[1], "fix/orphan2")
+				}
+			},
+		},
+		{
+			name: "no_orphan_branches_when_all_have_worktrees",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a"},
+					},
+					LocalBranches: []string{"main", "feat/a"},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0,
+			wantOrphans:    0,
+		},
+		{
+			name: "collects_multiple_locked_worktrees",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Check: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/feat/a", Branch: "feat/a", Locked: true, LockReason: "reason A"},
+						{Path: "/repo/feat/b", Branch: "feat/b", Locked: true},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main", "feat/a", "feat/b"},
+					},
+				}
+			},
+			wantCandidates: 2,
+			wantSkipped:    2,
+			wantLocked:     2,
+			checkIntegrity: func(t *testing.T, integrity IntegrityInfo) {
+				t.Helper()
+				if integrity.LockedWorktrees[0].LockReason != "reason A" {
+					t.Errorf("locked[0] reason = %q, want %q", integrity.LockedWorktrees[0].LockReason, "reason A")
+				}
+				if integrity.LockedWorktrees[1].LockReason != "" {
+					t.Errorf("locked[1] reason = %q, want empty", integrity.LockedWorktrees[1].LockReason)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -826,6 +1094,19 @@ func TestCleanCommand_Run(t *testing.T) {
 			}
 			if skippedCount != tt.wantSkipped {
 				t.Errorf("got %d skipped, want %d", skippedCount, tt.wantSkipped)
+			}
+
+			if len(result.Integrity.OrphanBranches) != tt.wantOrphans {
+				t.Errorf("got %d orphan branches, want %d", len(result.Integrity.OrphanBranches), tt.wantOrphans)
+			}
+			if len(result.Integrity.LockedWorktrees) != tt.wantLocked {
+				t.Errorf("got %d locked worktrees, want %d", len(result.Integrity.LockedWorktrees), tt.wantLocked)
+			}
+			if len(result.Integrity.DetachedWorktrees) != tt.wantDetached {
+				t.Errorf("got %d detached worktrees, want %d", len(result.Integrity.DetachedWorktrees), tt.wantDetached)
+			}
+			if tt.checkIntegrity != nil {
+				tt.checkIntegrity(t, result.Integrity)
 			}
 		})
 	}
@@ -895,6 +1176,80 @@ func TestCleanCommand_ResolveTarget(t *testing.T) {
 
 			if got != tt.wantTarget {
 				t.Errorf("got %q, want %q", got, tt.wantTarget)
+			}
+		})
+	}
+}
+
+func TestCleanCommand_FindOrphanBranches(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		worktrees []Worktree
+		branches  []string
+		want      []string
+	}{
+		{
+			name: "finds_orphans",
+			worktrees: []Worktree{
+				{Path: "/repo/main", Branch: "main"},
+				{Path: "/repo/feat/a", Branch: "feat/a"},
+			},
+			branches: []string{"main", "feat/a", "feat/orphan", "fix/old"},
+			want:     []string{"feat/orphan", "fix/old"},
+		},
+		{
+			name: "no_orphans",
+			worktrees: []Worktree{
+				{Path: "/repo/main", Branch: "main"},
+				{Path: "/repo/feat/a", Branch: "feat/a"},
+			},
+			branches: []string{"main", "feat/a"},
+			want:     nil,
+		},
+		{
+			name: "ignores_detached_worktrees",
+			worktrees: []Worktree{
+				{Path: "/repo/main", Branch: "main"},
+				{Path: "/repo/detached", Branch: ""},
+			},
+			branches: []string{"main", "feat/orphan"},
+			want:     []string{"feat/orphan"},
+		},
+		{
+			name:      "empty_branches",
+			worktrees: []Worktree{{Path: "/repo/main", Branch: "main"}},
+			branches:  []string{},
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := &testutil.MockGitExecutor{
+				LocalBranches: tt.branches,
+			}
+
+			cmd := &CleanCommand{
+				Git: &GitRunner{Executor: mockGit, Log: NewNopLogger()},
+				Log: NewNopLogger(),
+			}
+
+			got, err := cmd.findOrphanBranches(t.Context(), tt.worktrees)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %d orphans, want %d: %v", len(got), len(tt.want), got)
+			}
+			for i, g := range got {
+				if g != tt.want[i] {
+					t.Errorf("orphan[%d] = %q, want %q", i, g, tt.want[i])
+				}
 			}
 		})
 	}

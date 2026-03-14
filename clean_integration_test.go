@@ -1665,3 +1665,213 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 	})
 }
+
+func TestCleanCommand_Integrity_Integration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("DetectsOrphanBranches", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		// Create branches without worktrees (orphan branches)
+		testutil.RunGit(t, mainDir, "branch", "feat/orphan1")
+		testutil.RunGit(t, mainDir, "branch", "fix/orphan2")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Integrity.OrphanBranches) != 2 {
+			t.Fatalf("expected 2 orphan branches, got %d: %v",
+				len(result.Integrity.OrphanBranches), result.Integrity.OrphanBranches)
+		}
+
+		// Verify orphan branch names (order depends on git branch output)
+		orphans := make(map[string]bool)
+		for _, b := range result.Integrity.OrphanBranches {
+			orphans[b] = true
+		}
+		if !orphans["feat/orphan1"] {
+			t.Error("expected feat/orphan1 in orphan branches")
+		}
+		if !orphans["fix/orphan2"] {
+			t.Error("expected fix/orphan2 in orphan branches")
+		}
+	})
+
+	t.Run("NoOrphansWhenAllBranchesHaveWorktrees", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a worktree (all branches have worktrees)
+		wtPath := filepath.Join(repoDir, "feature", "a")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/a", wtPath)
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Integrity.OrphanBranches) != 0 {
+			t.Errorf("expected 0 orphan branches, got %d: %v",
+				len(result.Integrity.OrphanBranches), result.Integrity.OrphanBranches)
+		}
+	})
+
+	t.Run("DetectsLockedWorktrees", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a locked worktree with reason
+		wtPath := filepath.Join(repoDir, "feature", "locked")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/locked", wtPath)
+		testutil.RunGit(t, mainDir, "worktree", "lock", "--reason", "USB drive", wtPath)
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Integrity.LockedWorktrees) != 1 {
+			t.Fatalf("expected 1 locked worktree, got %d",
+				len(result.Integrity.LockedWorktrees))
+		}
+
+		locked := result.Integrity.LockedWorktrees[0]
+		if locked.Branch != "feature/locked" {
+			t.Errorf("locked branch = %q, want %q", locked.Branch, "feature/locked")
+		}
+		if locked.LockReason != "USB drive" {
+			t.Errorf("lock reason = %q, want %q", locked.LockReason, "USB drive")
+		}
+	})
+
+	t.Run("DetectsDetachedHeadWorktrees", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a worktree, then detach HEAD
+		wtPath := filepath.Join(repoDir, "detached")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "temp-branch", wtPath)
+		// Get HEAD commit and checkout it directly to create detached HEAD
+		head := strings.TrimSpace(testutil.RunGit(t, wtPath, "rev-parse", "HEAD"))
+		testutil.RunGit(t, wtPath, "checkout", "--detach", head)
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Integrity.DetachedWorktrees) != 1 {
+			t.Fatalf("expected 1 detached worktree, got %d",
+				len(result.Integrity.DetachedWorktrees))
+		}
+
+		detached := result.Integrity.DetachedWorktrees[0]
+		if detached.Path != wtPath {
+			t.Errorf("detached path = %q, want %q", detached.Path, wtPath)
+		}
+		if detached.HEAD == "" {
+			t.Error("detached HEAD should not be empty")
+		}
+		if len(detached.HEAD) != 7 {
+			t.Errorf("detached HEAD should be 7 chars (short), got %d: %q",
+				len(detached.HEAD), detached.HEAD)
+		}
+	})
+
+	t.Run("IntegrityFormatOutput", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		// Create orphan branches
+		testutil.RunGit(t, mainDir, "branch", "feat/orphan")
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Format with verbose to show orphan branches
+		formatted := result.Format(FormatOptions{Verbose: true})
+
+		if !strings.Contains(formatted.Stdout, "orphan branches:") {
+			t.Error("expected 'orphan branches:' in verbose output")
+		}
+		if !strings.Contains(formatted.Stdout, "feat/orphan (no worktree)") {
+			t.Errorf("expected 'feat/orphan (no worktree)' in output, got:\n%s", formatted.Stdout)
+		}
+
+		// Format without verbose should not show orphan branches
+		formatted = result.Format(FormatOptions{})
+		if strings.Contains(formatted.Stdout, "orphan branches:") {
+			t.Error("orphan branches should not appear without verbose")
+		}
+	})
+}
