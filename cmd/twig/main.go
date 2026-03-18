@@ -175,6 +175,17 @@ func createLogger(w io.Writer, verbosity int, idGen func() string) *slog.Logger 
 	return slog.New(handlerWithID)
 }
 
+// loadConfigWithMainWorktree loads config and resolves WorktreeDestBaseDir
+// relative to the main worktree root. Falls back to dir-based resolution
+// if main worktree cannot be determined (e.g., outside a git repo).
+func loadConfigWithMainWorktree(ctx context.Context, dir string) (*twig.LoadConfigResult, error) {
+	git := twig.NewGitRunner(dir)
+	if mainPath, err := git.MainWorktreePath(ctx); err == nil {
+		return twig.LoadConfig(dir, twig.WithMainWorktreeDir(mainPath))
+	}
+	return twig.LoadConfig(dir)
+}
+
 func newRootCmd(opts ...Option) *cobra.Command {
 	o := &options{}
 	for _, opt := range opts {
@@ -219,7 +230,7 @@ func newRootCmd(opts ...Option) *cobra.Command {
 			// Set color mode based on flag
 			twig.SetColorMode(twig.ColorMode(colorFlag))
 
-			result, err := twig.LoadConfig(cwd)
+			result, err := loadConfigWithMainWorktree(cmd.Context(), cwd)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -291,7 +302,7 @@ Use --file with --sync or --carry to target specific files:
 
 			// Load config from source worktree
 			cwd = sourceWT.Path
-			result, err := twig.LoadConfig(cwd)
+			result, err := loadConfigWithMainWorktree(cmd.Context(), cwd)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -875,7 +886,7 @@ Examples:
 				}
 				sourcePath = sourceWT.Path
 
-				configResult, err := twig.LoadConfig(sourcePath)
+				configResult, err := loadConfigWithMainWorktree(cmd.Context(), sourcePath)
 				if err != nil {
 					return fmt.Errorf("failed to load config from source worktree: %w", err)
 				}
