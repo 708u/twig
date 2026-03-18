@@ -421,6 +421,102 @@ func TestLoadConfig_WorktreeDirs(t *testing.T) {
 	})
 }
 
+func TestLoadConfig_WithMainWorktreeDir(t *testing.T) {
+	t.Parallel()
+
+	t.Run("RelativeDestBaseDirResolvedFromMainWorktree", func(t *testing.T) {
+		t.Parallel()
+
+		// Simulate: mainDir is /tmp/xxx/repo, worktreeDir is /tmp/xxx/repo-worktree/feat-a
+		baseDir := t.TempDir()
+		baseDir, _ = filepath.EvalSymlinks(baseDir)
+
+		mainDir := filepath.Join(baseDir, "repo")
+		worktreeDir := filepath.Join(baseDir, "repo-worktree", "feat-a")
+
+		// Create config in worktreeDir
+		twigDir := filepath.Join(worktreeDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settings := `worktree_destination_base_dir = ".claude/worktrees"
+`
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(worktreeDir, WithMainWorktreeDir(mainDir))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Should resolve relative to mainDir, not worktreeDir
+		expected := filepath.Join(mainDir, ".claude", "worktrees")
+		if result.Config.WorktreeDestBaseDir != expected {
+			t.Errorf("WorktreeDestBaseDir = %q, want %q", result.Config.WorktreeDestBaseDir, expected)
+		}
+	})
+
+	t.Run("DefaultDestBaseDirUsesMainWorktree", func(t *testing.T) {
+		t.Parallel()
+
+		baseDir := t.TempDir()
+		baseDir, _ = filepath.EvalSymlinks(baseDir)
+
+		mainDir := filepath.Join(baseDir, "my-project")
+		worktreeDir := filepath.Join(baseDir, "my-project-worktree", "feat-a")
+
+		// Create config in worktreeDir with no worktree_destination_base_dir
+		twigDir := filepath.Join(worktreeDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(""), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(worktreeDir, WithMainWorktreeDir(mainDir))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Default should be ../<mainDir-basename>-worktree resolved from mainDir
+		expected := filepath.Join(baseDir, "my-project-worktree")
+		if result.Config.WorktreeDestBaseDir != expected {
+			t.Errorf("WorktreeDestBaseDir = %q, want %q", result.Config.WorktreeDestBaseDir, expected)
+		}
+	})
+
+	t.Run("WithoutMainWorktreeDirFallsBackToSrcDir", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		tmpDir, _ = filepath.EvalSymlinks(tmpDir)
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		settings := `worktree_destination_base_dir = "worktrees"
+`
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// No WithMainWorktreeDir option - should resolve from srcDir (tmpDir)
+		result, err := LoadConfig(tmpDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expected := filepath.Join(tmpDir, "worktrees")
+		if result.Config.WorktreeDestBaseDir != expected {
+			t.Errorf("WorktreeDestBaseDir = %q, want %q", result.Config.WorktreeDestBaseDir, expected)
+		}
+	})
+}
+
 func TestConfig_ShouldInitSubmodules(t *testing.T) {
 	t.Parallel()
 

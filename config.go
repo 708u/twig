@@ -57,7 +57,28 @@ type LoadConfigResult struct {
 	Warnings []string
 }
 
-func LoadConfig(dir string) (*LoadConfigResult, error) {
+type loadConfigOptions struct {
+	mainWorktreeDir string
+}
+
+// LoadConfigOption configures LoadConfig behavior.
+type LoadConfigOption func(*loadConfigOptions)
+
+// WithMainWorktreeDir sets the main worktree directory used as the base
+// for resolving relative WorktreeDestBaseDir paths and the default path.
+// Without this option, the config load directory (dir) is used as fallback.
+func WithMainWorktreeDir(dir string) LoadConfigOption {
+	return func(o *loadConfigOptions) {
+		o.mainWorktreeDir = dir
+	}
+}
+
+func LoadConfig(dir string, opts ...LoadConfigOption) (*LoadConfigResult, error) {
+	var o loadConfigOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	var warnings []string
 
 	projCfg, err := loadConfigFile(filepath.Join(dir, configDir, configFileName))
@@ -125,13 +146,21 @@ func LoadConfig(dir string) (*LoadConfigResult, error) {
 	if localCfg != nil && localCfg.WorktreeDestBaseDir != "" {
 		destBaseDirConfig = localCfg.WorktreeDestBaseDir
 	}
+
+	// Resolve relative/default WorktreeDestBaseDir from main worktree root
+	// so the result is consistent regardless of which worktree loads config.
+	// Falls back to srcDir when main worktree dir is not provided.
+	resolveBase := srcDir
+	if o.mainWorktreeDir != "" {
+		resolveBase = o.mainWorktreeDir
+	}
+
 	destBaseDir := destBaseDirConfig
 	if destBaseDir == "" {
-		repoName := filepath.Base(srcDir)
-		destBaseDir = filepath.Join(srcDir, "..", repoName+"-worktree")
+		repoName := filepath.Base(resolveBase)
+		destBaseDir = filepath.Join(resolveBase, "..", repoName+"-worktree")
 	} else if !filepath.IsAbs(destBaseDir) {
-		// Resolve relative paths based on the config file directory
-		destBaseDir = filepath.Join(srcDir, destBaseDir)
+		destBaseDir = filepath.Join(resolveBase, destBaseDir)
 	}
 	destBaseDir, err = filepath.Abs(destBaseDir)
 	if err != nil {
