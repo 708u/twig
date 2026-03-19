@@ -226,6 +226,179 @@ func TestOverlay_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("ForceOverlayOnDirtyTarget", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		writeFile(t, mainDir, "file.txt", "original")
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add file")
+
+		testutil.RunGit(t, mainDir, "checkout", "-b", "feat/f")
+		writeFile(t, mainDir, "file.txt", "feature")
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "feature change")
+
+		testutil.RunGit(t, mainDir, "checkout", "main")
+
+		// Make target dirty
+		writeFile(t, mainDir, "file.txt", "dirty local edit")
+
+		git := NewGitRunner(mainDir)
+		cmd := NewOverlayCommand(osFS{}, git, nil)
+
+		// Without --force: should refuse
+		_, err := cmd.Run(t.Context(), "feat/f", mainDir, OverlayOptions{})
+		if err == nil {
+			t.Fatal("expected error for dirty target")
+		}
+		if !strings.Contains(err.Error(), "uncommitted changes") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// With --force: should succeed
+		_, err = cmd.Run(t.Context(), "feat/f", mainDir, OverlayOptions{Force: true})
+		if err != nil {
+			t.Fatalf("force apply failed: %v", err)
+		}
+
+		// Verify overlay applied
+		content := readFile(t, mainDir, "file.txt")
+		if content != "feature" {
+			t.Errorf("file.txt = %q after overlay, want 'feature'", content)
+		}
+
+		// Restore should work
+		_, err = cmd.Run(t.Context(), "", mainDir, OverlayOptions{Restore: true})
+		if err != nil {
+			t.Fatalf("restore failed: %v", err)
+		}
+
+		// file.txt restored to committed state (dirty edit is lost,
+		// which is the expected --force trade-off)
+		content = readFile(t, mainDir, "file.txt")
+		if content != "original" {
+			t.Errorf("file.txt = %q after restore, want 'original'", content)
+		}
+	})
+
+	t.Run("HeadMovedDuringOverlay", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		writeFile(t, mainDir, "file.txt", "main")
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add file")
+
+		testutil.RunGit(t, mainDir, "checkout", "-b", "feat/h")
+		writeFile(t, mainDir, "file.txt", "feature")
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "feature")
+
+		testutil.RunGit(t, mainDir, "checkout", "main")
+
+		git := NewGitRunner(mainDir)
+		cmd := NewOverlayCommand(osFS{}, git, nil)
+
+		// Apply overlay
+		_, err := cmd.Run(t.Context(), "feat/h", mainDir, OverlayOptions{})
+		if err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+
+		// Simulate accidental commit (empty commit moves HEAD)
+		testutil.RunGit(t, mainDir, "commit", "--allow-empty", "-m", "accidental")
+
+		// Restore without --force: should detect HEAD movement
+		_, err = cmd.Run(t.Context(), "", mainDir, OverlayOptions{Restore: true})
+		if err == nil {
+			t.Fatal("expected error for HEAD movement")
+		}
+		if !strings.Contains(err.Error(), "HEAD has moved") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Restore with --force: should succeed
+		_, err = cmd.Run(t.Context(), "", mainDir, OverlayOptions{Restore: true, Force: true})
+		if err != nil {
+			t.Fatalf("force restore failed: %v", err)
+		}
+
+		// File should be restored
+		content := readFile(t, mainDir, "file.txt")
+		if content != "main" {
+			t.Errorf("file.txt = %q after force restore, want 'main'", content)
+		}
+
+		// State file should be removed
+		gitDirOut := strings.TrimSpace(testutil.RunGit(t, mainDir, "rev-parse", "--path-format=absolute", "--git-dir"))
+		statePath := filepath.Join(gitDirOut, "twig-overlay")
+		if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+			t.Error("state file should be removed after force restore")
+		}
+	})
+
+	t.Run("OverlayStackingBlocked", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t)
+
+		writeFile(t, mainDir, "file.txt", "main")
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add file")
+
+		testutil.RunGit(t, mainDir, "checkout", "-b", "feat/s1")
+		writeFile(t, mainDir, "file.txt", "s1")
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "s1")
+
+		testutil.RunGit(t, mainDir, "checkout", "main")
+		testutil.RunGit(t, mainDir, "checkout", "-b", "feat/s2")
+		writeFile(t, mainDir, "file.txt", "s2")
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "s2")
+
+		testutil.RunGit(t, mainDir, "checkout", "main")
+
+		git := NewGitRunner(mainDir)
+		cmd := NewOverlayCommand(osFS{}, git, nil)
+
+		// First overlay
+		_, err := cmd.Run(t.Context(), "feat/s1", mainDir, OverlayOptions{})
+		if err != nil {
+			t.Fatalf("first overlay failed: %v", err)
+		}
+
+		// Second overlay with same source: blocked
+		_, err = cmd.Run(t.Context(), "feat/s1", mainDir, OverlayOptions{})
+		if err == nil {
+			t.Fatal("expected error for stacking same source")
+		}
+		if !strings.Contains(err.Error(), "overlay already active") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Second overlay with different source: also blocked
+		_, err = cmd.Run(t.Context(), "feat/s2", mainDir, OverlayOptions{})
+		if err == nil {
+			t.Fatal("expected error for stacking different source")
+		}
+
+		// Even with --force: stacking blocked
+		_, err = cmd.Run(t.Context(), "feat/s2", mainDir, OverlayOptions{Force: true})
+		if err == nil {
+			t.Fatal("expected error for stacking with --force")
+		}
+
+		// Clean up: restore first overlay
+		_, err = cmd.Run(t.Context(), "", mainDir, OverlayOptions{Restore: true})
+		if err != nil {
+			t.Fatalf("restore failed: %v", err)
+		}
+	})
+
 	t.Run("StateFilePersistence", func(t *testing.T) {
 		t.Parallel()
 
