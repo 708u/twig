@@ -1,0 +1,10 @@
+{
+  "name": "twig-worktree-hooks",
+  "version": "0.1.0",
+  "description": "Delegate Claude Code worktree lifecycle to twig CLI (requires twig installed)",
+  "author": {
+    "name": "708u"
+  },
+  "license": "MIT",
+  "keywords": ["git", "worktree", "twig", "hooks"]
+}
