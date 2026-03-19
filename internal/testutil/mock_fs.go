@@ -41,6 +41,7 @@ type MockFS struct {
 	ReadDirFunc    func(name string) ([]os.DirEntry, error)
 	RemoveFunc     func(name string) error
 	WriteFileFunc  func(name string, data []byte, perm fs.FileMode) error
+	ReadFileFunc   func(name string) ([]byte, error)
 
 	// ExistingPaths is a list of paths that exist (Stat returns nil, nil).
 	ExistingPaths []string
@@ -71,6 +72,12 @@ type MockFS struct {
 
 	// WrittenFiles records files written by WriteFile.
 	WrittenFiles map[string][]byte
+
+	// ReadFileResults maps path to file content.
+	ReadFileResults map[string][]byte
+
+	// ReadFileErr is returned by ReadFile if set.
+	ReadFileErr error
 }
 
 func (m *MockFS) Stat(name string) (fs.FileInfo, error) {
@@ -157,4 +164,24 @@ func (m *MockFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
 		m.WrittenFiles[name] = data
 	}
 	return m.WriteFileErr
+}
+
+func (m *MockFS) ReadFile(name string) ([]byte, error) {
+	if m.ReadFileFunc != nil {
+		return m.ReadFileFunc(name)
+	}
+	if m.ReadFileErr != nil {
+		return nil, m.ReadFileErr
+	}
+	if m.ReadFileResults != nil {
+		if data, ok := m.ReadFileResults[name]; ok {
+			return data, nil
+		}
+	}
+	if m.WrittenFiles != nil {
+		if data, ok := m.WrittenFiles[name]; ok {
+			return data, nil
+		}
+	}
+	return nil, fs.ErrNotExist
 }

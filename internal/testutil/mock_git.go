@@ -124,6 +124,20 @@ type MockGitExecutor struct {
 
 	// RootCommits is a list of commits that have no parent (root commits).
 	RootCommits []string
+
+	// GitDirMap maps worktree directory to its git directory path.
+	// Used by rev-parse --git-dir.
+	GitDirMap map[string]string
+
+	// DiffNameOnlyOutput maps "filter:fromRef:toRef" to file list output.
+	// Used by git diff --name-only --diff-filter=X.
+	DiffNameOnlyOutput map[string]string
+
+	// CheckoutErr is returned when checkout is called.
+	CheckoutErr error
+
+	// ResetErr is returned when reset is called.
+	ResetErr error
 }
 
 func (m *MockGitExecutor) Run(ctx context.Context, args ...string) ([]byte, error) {
@@ -175,11 +189,33 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 		return m.handleSubmodule(args)
 	case "rev-list":
 		return m.handleRevList(args)
+	case "checkout":
+		return m.handleCheckout(args)
+	case "reset":
+		return m.handleReset(args)
+	case "diff":
+		return m.handleDiff(args)
 	}
 	return nil, nil
 }
 
 func (m *MockGitExecutor) handleRevParse(args []string, dir string) ([]byte, error) {
+	// Handle --git-dir for GitDir
+	for _, arg := range args[1:] {
+		if arg == "--git-dir" {
+			if m.GitDirMap != nil && dir != "" {
+				if gitDir, ok := m.GitDirMap[dir]; ok {
+					return []byte(gitDir + "\n"), nil
+				}
+			}
+			// Default: <dir>/.git
+			if dir != "" {
+				return []byte(dir + "/.git\n"), nil
+			}
+			return []byte(".git\n"), nil
+		}
+	}
+
 	// Handle --show-toplevel for WorktreeRoot
 	if len(args) >= 2 && args[1] == "--show-toplevel" {
 		// Look up the worktree root for the given directory
@@ -221,6 +257,20 @@ func (m *MockGitExecutor) handleRevParse(args []string, dir string) ([]byte, err
 	// Handle rev-parse <branch> (without --verify) for commit hash lookup
 	if len(args) == 2 && args[1] != "--verify" {
 		branch := args[1]
+
+		// Handle "HEAD" by finding the worktree for the current dir
+		if branch == "HEAD" && dir != "" {
+			for _, wt := range m.Worktrees {
+				if wt.Path == dir || strings.HasPrefix(dir, wt.Path+"/") {
+					head := wt.HEAD
+					if head == "" {
+						head = "commit-" + wt.Branch
+					}
+					return []byte(head + "\n"), nil
+				}
+			}
+		}
+
 		if m.BranchHEADs != nil {
 			if hash, ok := m.BranchHEADs[branch]; ok {
 				return []byte(hash + "\n"), nil
@@ -537,4 +587,43 @@ func (m *MockGitExecutor) handleRevList(args []string) ([]byte, error) {
 		return []byte{}, nil
 	}
 	return []byte(strings.Join(commits, "\n") + "\n"), nil
+}
+
+func (m *MockGitExecutor) handleCheckout(args []string) ([]byte, error) {
+	if m.CapturedArgs != nil {
+		*m.CapturedArgs = append(*m.CapturedArgs, args...)
+	}
+	return nil, m.CheckoutErr
+}
+
+func (m *MockGitExecutor) handleReset(args []string) ([]byte, error) {
+	if m.CapturedArgs != nil {
+		*m.CapturedArgs = append(*m.CapturedArgs, args...)
+	}
+	return nil, m.ResetErr
+}
+
+func (m *MockGitExecutor) handleDiff(args []string) ([]byte, error) {
+	if m.DiffNameOnlyOutput == nil {
+		return []byte{}, nil
+	}
+	// Build key from diff-filter and refs
+	// Expected args: ["diff", "--name-only", "--diff-filter=X", "from", "to"]
+	var filter, fromRef, toRef string
+	for _, arg := range args[1:] {
+		if strings.HasPrefix(arg, "--diff-filter=") {
+			filter = strings.TrimPrefix(arg, "--diff-filter=")
+		} else if !strings.HasPrefix(arg, "--") {
+			if fromRef == "" {
+				fromRef = arg
+			} else {
+				toRef = arg
+			}
+		}
+	}
+	key := filter + ":" + fromRef + ":" + toRef
+	if output, ok := m.DiffNameOnlyOutput[key]; ok {
+		return []byte(output), nil
+	}
+	return []byte{}, nil
 }

@@ -43,6 +43,8 @@ const (
 	GitCmdFetch      = "fetch"
 	GitCmdForEachRef = "for-each-ref"
 	GitCmdRevList    = "rev-list"
+	GitCmdCheckout   = "checkout"
+	GitCmdReset      = "reset"
 )
 
 // Git worktree subcommands.
@@ -941,6 +943,16 @@ func (g *GitRunner) SubmoduleUpdate(ctx context.Context, opts ...SubmoduleUpdate
 	}
 
 	return result, nil
+}
+
+// GitDir returns the worktree-specific git directory.
+// For the main worktree this is .git, for linked worktrees .git/worktrees/<name>.
+func (g *GitRunner) GitDir(ctx context.Context) (string, error) {
+	out, err := g.Run(ctx, GitCmdRevParse, "--path-format=absolute", "--git-dir")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // MainWorktreePath returns the path of the main worktree.

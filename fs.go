@@ -18,6 +18,7 @@ type FileSystem interface {
 	ReadDir(name string) ([]os.DirEntry, error)
 	Remove(name string) error
 	WriteFile(name string, data []byte, perm fs.FileMode) error
+	ReadFile(name string) ([]byte, error)
 }
 
 type osFS struct{}
@@ -35,3 +36,4 @@ func (osFS) Remove(name string) error                     { return os.Remove(nam
 func (osFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
 	return os.WriteFile(name, data, perm)
 }
+func (osFS) ReadFile(name string) ([]byte, error) { return os.ReadFile(name) }
