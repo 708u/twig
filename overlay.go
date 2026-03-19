@@ -123,7 +123,7 @@ func (c *OverlayCommand) apply(ctx context.Context, sourceBranch string, cwd str
 			return result, fmt.Errorf("failed to check uncommitted changes: %w", err)
 		}
 		if hasChanges {
-			return result, fmt.Errorf("target worktree has uncommitted changes\nhint: use --force to proceed anyway")
+			return result, fmt.Errorf("target worktree has uncommitted changes\nhint: use --force to proceed (uncommitted changes will be lost)")
 		}
 	}
 

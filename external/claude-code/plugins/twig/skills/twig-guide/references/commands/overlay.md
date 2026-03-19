@@ -84,6 +84,11 @@ in the git history (user can `git reset` if needed).
 | Restore         | Proceeds even if HEAD has moved         |
 | Overlay stacked | Always refused (restore first)          |
 
+**Warning:** With `--force` on apply, uncommitted changes in tracked
+files are overwritten and cannot be recovered by `--restore`.
+Restore returns files to the last committed state, not the dirty
+state before overlay.
+
 ### Check Mode
 
 With `--check`, shows what would happen without making changes:
