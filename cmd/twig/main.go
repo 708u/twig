@@ -53,14 +53,20 @@ type SyncCommander interface {
 	Run(ctx context.Context, targets []string, cwd string, opts twig.SyncOptions) (twig.SyncResult, error)
 }
 
+// OverlayCommander defines the interface for overlay operations.
+type OverlayCommander interface {
+	Run(ctx context.Context, sourceBranch string, cwd string, opts twig.OverlayOptions) (twig.OverlayResult, error)
+}
+
 type options struct {
-	addCommander       AddCommander    // nil = use default
-	cleanCommander     CleanCommander  // nil = use default
-	listCommander      ListCommander   // nil = use default
-	removeCommander    RemoveCommander // nil = use default
-	initCommander      InitCommander   // nil = use default
-	syncCommander      SyncCommander   // nil = use default
-	commandIDGenerator func() string   // nil = use twig.GenerateCommandID
+	addCommander       AddCommander     // nil = use default
+	cleanCommander     CleanCommander   // nil = use default
+	listCommander      ListCommander    // nil = use default
+	removeCommander    RemoveCommander  // nil = use default
+	initCommander      InitCommander    // nil = use default
+	syncCommander      SyncCommander    // nil = use default
+	overlayCommander   OverlayCommander // nil = use default
+	commandIDGenerator func() string    // nil = use twig.GenerateCommandID
 }
 
 // Option configures newRootCmd.
@@ -105,6 +111,13 @@ func WithInitCommander(cmd InitCommander) Option {
 func WithSyncCommander(cmd SyncCommander) Option {
 	return func(o *options) {
 		o.syncCommander = cmd
+	}
+}
+
+// WithOverlayCommander sets the OverlayCommander instance for testing.
+func WithOverlayCommander(cmd OverlayCommander) Option {
+	return func(o *options) {
+		o.overlayCommander = cmd
 	}
 }
 
@@ -945,6 +958,123 @@ Examples:
 		return branches, cobra.ShellCompDirectiveNoFileComp
 	})
 	rootCmd.AddCommand(syncCmd)
+
+	overlayCmd := &cobra.Command{
+		Use:   "overlay [<source-branch>] [flags]",
+		Short: "Overlay file contents from another branch",
+		Long: `Overlay file contents from a source branch onto a target worktree.
+
+This is useful for testing changes from a feature branch in the context
+of another worktree.
+
+Use --restore to return the target worktree to its original state.
+
+Examples:
+  # Overlay feat/x onto main worktree
+  twig overlay feat/x --target main
+
+  # Overlay onto current worktree
+  twig overlay feat/x
+
+  # Restore original state
+  twig overlay --restore --target main
+
+  # Preview changes
+  twig overlay feat/x --target main --check`,
+		Args: cobra.MaximumNArgs(1),
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) >= 1 {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			dir, err := resolveCompletionDirectory(cmd)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			git := twig.NewGitRunner(dir)
+			branches, err := git.BranchList(cmd.Context())
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			return branches, cobra.ShellCompDirectiveNoFileComp
+		},
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			restore, _ := cmd.Flags().GetBool("restore")
+			if restore && len(args) > 0 {
+				return fmt.Errorf("cannot specify source branch with --restore")
+			}
+			if !restore && len(args) == 0 {
+				return fmt.Errorf("source branch is required (or use --restore)")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			verbosity, _ := cmd.Flags().GetCount("verbose")
+			verbose := verbosity >= 1
+			quiet, _ := cmd.Flags().GetBool("quiet")
+			check, _ := cmd.Flags().GetBool("check")
+			restore, _ := cmd.Flags().GetBool("restore")
+			force, _ := cmd.Flags().GetBool("force")
+			target, _ := cmd.Flags().GetString("target")
+
+			idGen := twig.GenerateCommandID
+			if o.commandIDGenerator != nil {
+				idGen = o.commandIDGenerator
+			}
+			log := createLogger(cmd.ErrOrStderr(), verbosity, idGen)
+
+			opts := twig.OverlayOptions{
+				Restore: restore,
+				Check:   check,
+				Force:   force,
+				Target:  target,
+			}
+
+			var overlayCmdRunner OverlayCommander
+			if o.overlayCommander != nil {
+				overlayCmdRunner = o.overlayCommander
+			} else {
+				overlayCmdRunner = twig.NewDefaultOverlayCommand(cwd, log)
+			}
+
+			var sourceBranch string
+			if len(args) > 0 {
+				sourceBranch = args[0]
+			}
+
+			result, err := overlayCmdRunner.Run(cmd.Context(), sourceBranch, cwd, opts)
+			if err != nil {
+				return err
+			}
+
+			formatted := result.Format(twig.OverlayFormatOptions{
+				Verbose: verbose,
+				Quiet:   quiet,
+			})
+			if formatted.Stderr != "" {
+				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
+			}
+			fmt.Fprint(cmd.OutOrStdout(), formatted.Stdout)
+			return nil
+		},
+	}
+	overlayCmd.Flags().Bool("restore", false, "Restore target worktree to original state")
+	overlayCmd.Flags().String("target", "", "Target worktree branch (default: current)")
+	overlayCmd.Flags().Bool("check", false, "Show what would be done (dry-run)")
+	overlayCmd.Flags().BoolP("force", "f", false, "Proceed even if target is dirty or HEAD has moved")
+	overlayCmd.Flags().BoolP("quiet", "q", false, "Suppress output")
+	overlayCmd.RegisterFlagCompletionFunc("target", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		dir, err := resolveCompletionDirectory(cmd)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		git := twig.NewGitRunner(dir)
+		branches, err := git.WorktreeListBranches(cmd.Context())
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		return branches, cobra.ShellCompDirectiveNoFileComp
+	})
+	rootCmd.AddCommand(overlayCmd)
 
 	versionCmd := &cobra.Command{
 		Use:   "version",

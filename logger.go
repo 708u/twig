@@ -157,13 +157,14 @@ const (
 
 // Log category values for consistent output prefixes.
 const (
-	LogCategoryDebug  = "debug"
-	LogCategoryGit    = "git"
-	LogCategoryConfig = "config"
-	LogCategoryGlob   = "glob"
-	LogCategoryRemove = "remove"
-	LogCategoryClean  = "clean"
-	LogCategorySync   = "sync"
+	LogCategoryDebug   = "debug"
+	LogCategoryGit     = "git"
+	LogCategoryConfig  = "config"
+	LogCategoryGlob    = "glob"
+	LogCategoryRemove  = "remove"
+	LogCategoryClean   = "clean"
+	LogCategorySync    = "sync"
+	LogCategoryOverlay = "overlay"
 )
 
 // Command ID generation settings.

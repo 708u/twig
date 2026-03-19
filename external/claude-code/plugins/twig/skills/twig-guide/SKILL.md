@@ -5,9 +5,10 @@ description: |
   - Wants to work on multiple branches simultaneously or in parallel
   - Needs to start a new feature/task while preserving current work
   - Asks about git worktree operations (create, remove, list, clean)
-  - Mentions "twig" commands (add, remove, clean, list, init)
+  - Mentions "twig" commands (add, remove, clean, list, init, overlay)
   - Wants to carry or move uncommitted changes to a new branch
   - Wants to copy/sync changes between branches
+  - Wants to temporarily apply another branch's files to a worktree
   - Needs to isolate work in a separate directory
   - Asks about switching context without stashing
   - Wants to clean up old/merged branches and their worktrees
@@ -36,6 +37,7 @@ creation, symlinks, and change management in a single command.
 | `twig list` | List all worktrees |
 | `twig clean` | Remove unneeded worktrees |
 | `twig sync` | Sync symlinks and submodules to worktrees |
+| `twig overlay` | Temporarily overlay another branch's files |
 
 ## Typical Workflows
 
@@ -90,6 +92,16 @@ twig clean
 This shows candidates and prompts for confirmation. Use `--yes` to skip
 the prompt.
 
+### Test a feature branch in another worktree
+
+Temporarily apply another branch's file contents:
+
+```bash
+twig overlay feat/x --target main
+# ... test in main worktree ...
+twig overlay --restore --target main
+```
+
 ### Force remove a worktree
 
 Remove a worktree even with uncommitted changes:
@@ -113,5 +125,6 @@ For detailed information on each command, refer to:
 - ./references/commands/list.md - List worktrees
 - ./references/commands/clean.md - Clean merged worktrees
 - ./references/commands/sync.md - Sync symlinks and submodules
+- ./references/commands/overlay.md - Overlay branch files temporarily
 - ./references/commands/init.md - Initialize configuration
 - ./references/configuration.md - Configuration file details
