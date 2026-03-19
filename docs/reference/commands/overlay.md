@@ -29,7 +29,7 @@ twig overlay --restore [flags]          # Restore original state
 Overlays file contents from a source branch onto a target worktree
 without changing the target's checked-out branch. This is useful for
 testing changes from a feature branch in the context of another
-worktree (e.g., running docker compose from the main worktree).
+worktree.
 
 ### Apply
 
@@ -72,21 +72,6 @@ The overlay state is stored at `<git-dir>/twig-overlay`:
   "added_files": ["new-file.go"],
   "created_at": "2026-03-19T12:00:00Z"
 }
-```
-
-### Docker Compose Workflow
-
-```bash
-# Overlay feature branch onto main worktree
-twig overlay feat/x --target main
-
-# Run services (main worktree is synced to docker)
-docker compose up
-# ... test ...
-docker compose down
-
-# Restore main worktree
-twig overlay --restore --target main
 ```
 
 ### Safety: Commit Prevention

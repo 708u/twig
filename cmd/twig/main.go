@@ -965,7 +965,7 @@ Examples:
 		Long: `Overlay file contents from a source branch onto a target worktree.
 
 This is useful for testing changes from a feature branch in the context
-of another worktree (e.g., running docker compose from the main worktree).
+of another worktree.
 
 Use --restore to return the target worktree to its original state.
 
