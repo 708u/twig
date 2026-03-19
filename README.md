@@ -176,19 +176,43 @@ Run the following slash commands in a Claude Code session:
 /plugin marketplace add 708u/twig
 
 # Install the plugin
-/plugin install twig@708u-twig
+/plugin install twig@twig-plugins
 ```
 
-### What the Plugin Provides
+### Available Plugins
+
+| Plugin               | Description                                |
+| -------------------- | ------------------------------------------ |
+| `twig`               | Agent and skill for AI-assisted operations |
+| `twig-worktree-hooks`| Delegate worktree lifecycle to twig CLI    |
+
+#### twig
+
+Provides guidance and command execution support:
 
 | Component           | Description                                 |
 | ------------------- | ------------------------------------------- |
 | twig-operator agent | Executes twig commands based on user intent |
 | twig-guide skill    | Provides command syntax and usage details   |
 
+#### twig-worktree-hooks
+
+Hooks into Claude Code's worktree lifecycle (WorktreeCreate /
+WorktreeRemove) so that `twig add` and `twig remove` are used
+instead of the built-in `git worktree` commands. This enables
+symlink creation, submodule initialization, and other twig
+features in Claude Code agent worktrees.
+
+**Requires `twig` installed in PATH.** Install separately:
+
+```txt
+/plugin install twig-worktree-hooks@twig-plugins
+```
+
 ### Usage Examples
 
-Once installed, Claude can help with worktree operations:
+Once the `twig` plugin is installed, Claude can help with
+worktree operations:
 
 - "Create a new worktree for feat/user-auth"
 - "Move my current changes to a new branch"

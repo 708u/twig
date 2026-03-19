@@ -10,10 +10,18 @@
     {
       "name": "twig",
       "description": "Claude Code plugin for twig - simplifies git worktree workflows",
-      "version": "0.2.0",
+      "version": "0.10.0",
       "category": "productivity",
       "keywords": ["git", "worktree", "branch", "cli", "twig"],
       "source": "./external/claude-code/plugins/twig"
+    },
+    {
+      "name": "twig-worktree-hooks",
+      "description": "Delegate Claude Code worktree lifecycle to twig CLI (requires twig installed)",
+      "version": "0.1.0",
+      "category": "productivity",
+      "keywords": ["git", "worktree", "twig", "hooks"],
+      "source": "./external/claude-code/plugins/twig-worktree-hooks"
     }
   ]
 }

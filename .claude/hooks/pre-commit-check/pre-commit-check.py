@@ -34,6 +34,7 @@ CHECKS = {
         "commands": [
             "make sync-plugin-docs",
             "Bump version in external/claude-code/plugins/twig/.claude-plugin/plugin.json",
+            "Sync version in .claude-plugin/marketplace.json",
         ],
     },
 }
