@@ -185,7 +185,14 @@ func (c *OverlayCommand) apply(ctx context.Context, sourceBranch string, cwd str
 	}
 
 	// Delete files that exist in target HEAD but not in source
-	c.removeFiles(ctx, targetPath, result.DeletedFiles)
+	for _, f := range result.DeletedFiles {
+		path := filepath.Join(targetPath, f)
+		if err := c.FS.Remove(path); err != nil && !c.FS.IsNotExist(err) {
+			c.Log.DebugContext(ctx, "failed to remove file",
+				LogAttrKeyCategory.String(), LogCategoryOverlay,
+				"file", f, "error", err)
+		}
+	}
 
 	// Unstage all changes
 	if _, err := targetGit.Run(ctx, GitCmdReset, "HEAD"); err != nil {
@@ -292,7 +299,14 @@ func (c *OverlayCommand) restore(ctx context.Context, cwd string, opts OverlayOp
 	}
 
 	// Remove files that were added by the overlay
-	c.removeFiles(ctx, targetPath, state.AddedFiles)
+	for _, f := range state.AddedFiles {
+		path := filepath.Join(targetPath, f)
+		if err := c.FS.Remove(path); err != nil && !c.FS.IsNotExist(err) {
+			c.Log.DebugContext(ctx, "failed to remove file",
+				LogAttrKeyCategory.String(), LogCategoryOverlay,
+				"file", f, "error", err)
+		}
+	}
 
 	// Remove state file
 	if err := c.FS.Remove(statePath); err != nil {
@@ -305,19 +319,6 @@ func (c *OverlayCommand) restore(ctx context.Context, cwd string, opts OverlayOp
 		"target", targetBranch)
 
 	return result, nil
-}
-
-// removeFiles removes a list of files from the target directory.
-// Errors are logged but do not stop the operation.
-func (c *OverlayCommand) removeFiles(ctx context.Context, targetPath string, files []string) {
-	for _, f := range files {
-		path := filepath.Join(targetPath, f)
-		if err := c.FS.Remove(path); err != nil && !c.FS.IsNotExist(err) {
-			c.Log.DebugContext(ctx, "failed to remove file",
-				LogAttrKeyCategory.String(), LogCategoryOverlay,
-				"file", f, "error", err)
-		}
-	}
 }
 
 // resolveTarget resolves the target worktree path and branch.
