@@ -97,6 +97,33 @@ When updating files under `external/claude-code/plugins/twig/`:
     major
   - Only pure fixes (typos, clarifications without behavior change) are patch
 
+## Plugin Local Debug
+
+To test a plugin from a local branch before merging to main:
+
+```bash
+# 1. Register current directory as a local marketplace
+claude plugin marketplace add "$(pwd)" --scope local
+
+# 2. Install the plugin
+claude plugin install <plugin-name>@twig-plugins --scope local
+
+# 3. Restart the session (hooks are loaded at startup)
+
+# 4. Test the plugin behavior
+
+# 5. Cleanup: uninstall plugin and remove local marketplace
+claude plugin uninstall <plugin-name>@twig-plugins --scope local
+claude plugin marketplace remove twig-plugins
+
+# 6. Re-add the GitHub marketplace (local override replaces it)
+claude plugin marketplace add 708u/twig
+```
+
+Note: `marketplace add` with a local path overrides the existing
+marketplace of the same name. Always re-add the GitHub source
+after removing the local override.
+
 ## User Instructions
 
 @.claude/user_instructions/index.md
