@@ -37,42 +37,18 @@ worktree.
 2. Checks that no overlay is already active
 3. Checks that the target has no uncommitted changes (use `--force`
    to skip)
-4. Resolves the source branch to a commit hash
-5. Checks out source branch files onto the target: `git checkout
-   <source> -- .`
-6. Deletes files that exist in target HEAD but not in source
-7. Unstages all changes: `git reset HEAD`
-8. Writes a state file for later restore
+4. Overlays source branch files onto the target working tree
+5. Deletes files that exist in target HEAD but not in source
 
 ### Restore
 
-1. Reads the state file from the target's git directory
-2. Checks that HEAD hasn't moved since overlay (use `--force` to
+1. Checks that HEAD hasn't moved since overlay (use `--force` to
    skip)
-3. Restores tracked files from HEAD: `git checkout HEAD -- .`
-4. Removes only files that were added by the overlay
-5. Removes the state file
+2. Restores all tracked files to their original state
+3. Removes only files that were added by the overlay
 
 Files created by the user after overlay are preserved during restore.
 Only overlay-added files are removed.
-
-### State File
-
-The overlay state is stored at `<git-dir>/twig-overlay`:
-
-- Main worktree: `.git/twig-overlay`
-- Linked worktree: `.git/worktrees/<name>/twig-overlay`
-
-```json
-{
-  "source_branch": "feat/x",
-  "source_commit": "abc1234",
-  "target_branch": "main",
-  "target_commit": "def5678",
-  "added_files": ["new-file.go"],
-  "created_at": "2026-03-19T12:00:00Z"
-}
-```
 
 ### Safety: Commit Prevention
 
