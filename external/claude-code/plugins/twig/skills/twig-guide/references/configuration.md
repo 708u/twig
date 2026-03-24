@@ -106,6 +106,24 @@ The CLI flag `--stale` forces enable regardless of this setting.
 
 See [clean subcommand](commands/clean.md#stale-option) for details.
 
+### hooks
+
+Commands to run after worktree creation.
+
+```toml
+hooks = ["npm install", "direnv allow"]
+```
+
+Default: `[]` (no hooks)
+
+Each command is executed via `sh -c` in the new worktree
+directory, in order. If a hook fails, remaining hooks are
+skipped and a warning is displayed, but the worktree creation
+itself succeeds.
+
+See [add subcommand](commands/add.md#post-create-hooks)
+for details.
+
 ## Merge Rules
 
 When both files exist, settings are merged:
@@ -119,6 +137,7 @@ When both files exist, settings are merged:
 | `init_submodules`               | Local overrides project | `false`                        |
 | `submodule_reference`           | Local overrides project | `false`                        |
 | `clean_stale`                   | Local overrides project | `false`                        |
+| `hooks`                         | Local overrides project | `[]`                           |
 
 ## symlinks vs extra_symlinks
 
@@ -158,6 +177,7 @@ symlinks = [".envrc", ".tool-versions", "config/**"]
 init_submodules = true
 submodule_reference = true
 clean_stale = true
+hooks = ["npm install", "direnv allow"]
 ```
 
 ```toml

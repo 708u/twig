@@ -31,6 +31,9 @@ symlinks = []
 
 # Always enable --stale for clean command (default: false)
 # clean_stale = true
+
+# Commands to run after worktree creation (run in new worktree directory)
+# hooks = ["npm install", "direnv allow"]
 `
 
 // InitCommand initializes twig configuration in a directory.

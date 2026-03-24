@@ -1695,6 +1695,216 @@ worktree_destination_base_dir = %q
 	})
 }
 
+func TestAddCommand_Hooks_Integration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("HooksExecuteInNewWorktree", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Setup twig config with hooks
+		twigDir := filepath.Join(mainDir, ".twig")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+hooks = ["touch .hook-executed"]
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewDefaultAddCommand(result.Config, NewNopLogger(), AddOptions{})
+
+		addResult, err := cmd.Run(t.Context(), "feature/hooks-test")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify worktree was created
+		wtPath := filepath.Join(repoDir, "feature", "hooks-test")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+
+		// Verify hook was executed (file created in new worktree)
+		hookFile := filepath.Join(wtPath, ".hook-executed")
+		if _, err := os.Stat(hookFile); os.IsNotExist(err) {
+			t.Errorf("hook file does not exist: %s", hookFile)
+		}
+
+		// Verify result
+		if len(addResult.HookResults) != 1 {
+			t.Fatalf("HookResults length = %d, want 1", len(addResult.HookResults))
+		}
+		if addResult.HookResults[0].Err != nil {
+			t.Errorf("hook error = %v, want nil", addResult.HookResults[0].Err)
+		}
+		if addResult.HookResults[0].Command != "touch .hook-executed" {
+			t.Errorf("hook command = %q, want %q", addResult.HookResults[0].Command, "touch .hook-executed")
+		}
+	})
+
+	t.Run("HookFailureIsWarning", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Setup twig config with failing hook
+		twigDir := filepath.Join(mainDir, ".twig")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+hooks = ["exit 1"]
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewDefaultAddCommand(result.Config, NewNopLogger(), AddOptions{})
+
+		addResult, err := cmd.Run(t.Context(), "feature/hooks-fail")
+		// Worktree creation should succeed even with hook failure
+		if err != nil {
+			t.Fatalf("Run failed: %v (should succeed despite hook failure)", err)
+		}
+
+		// Verify worktree was created
+		wtPath := filepath.Join(repoDir, "feature", "hooks-fail")
+		if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+			t.Errorf("worktree directory does not exist: %s", wtPath)
+		}
+
+		// Verify hook result captures error
+		if len(addResult.HookResults) != 1 {
+			t.Fatalf("HookResults length = %d, want 1", len(addResult.HookResults))
+		}
+		if addResult.HookResults[0].Err == nil {
+			t.Error("hook error should not be nil")
+		}
+	})
+
+	t.Run("HookFailureStopsRemaining", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Setup twig config: first hook fails, second should not run
+		twigDir := filepath.Join(mainDir, ".twig")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+hooks = ["exit 1", "touch .should-not-exist"]
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewDefaultAddCommand(result.Config, NewNopLogger(), AddOptions{})
+
+		addResult, err := cmd.Run(t.Context(), "feature/hooks-stop")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		wtPath := filepath.Join(repoDir, "feature", "hooks-stop")
+
+		// Verify second hook did not run
+		shouldNotExist := filepath.Join(wtPath, ".should-not-exist")
+		if _, err := os.Stat(shouldNotExist); !os.IsNotExist(err) {
+			t.Errorf("second hook should not have run: %s exists", shouldNotExist)
+		}
+
+		// Only first hook result should be present
+		if len(addResult.HookResults) != 1 {
+			t.Errorf("HookResults length = %d, want 1", len(addResult.HookResults))
+		}
+	})
+
+	t.Run("MultipleHooksRunInOrder", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Setup twig config with multiple hooks
+		twigDir := filepath.Join(mainDir, ".twig")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+hooks = ["echo first > order.txt", "echo second >> order.txt"]
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewDefaultAddCommand(result.Config, NewNopLogger(), AddOptions{})
+
+		addResult, err := cmd.Run(t.Context(), "feature/hooks-order")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		wtPath := filepath.Join(repoDir, "feature", "hooks-order")
+
+		// Verify hooks ran in order
+		orderFile := filepath.Join(wtPath, "order.txt")
+		content, err := os.ReadFile(orderFile)
+		if err != nil {
+			t.Fatalf("failed to read order file: %v", err)
+		}
+		want := "first\nsecond\n"
+		if string(content) != want {
+			t.Errorf("order file content = %q, want %q", string(content), want)
+		}
+
+		if len(addResult.HookResults) != 2 {
+			t.Errorf("HookResults length = %d, want 2", len(addResult.HookResults))
+		}
+	})
+
+	t.Run("EmptyHooksNoExecution", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Setup twig config without hooks
+		twigDir := filepath.Join(mainDir, ".twig")
+		settings := fmt.Sprintf(`worktree_destination_base_dir = %q
+`, repoDir)
+		if err := os.WriteFile(filepath.Join(twigDir, "settings.toml"), []byte(settings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewDefaultAddCommand(result.Config, NewNopLogger(), AddOptions{})
+
+		addResult, err := cmd.Run(t.Context(), "feature/no-hooks")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(addResult.HookResults) != 0 {
+			t.Errorf("HookResults length = %d, want 0", len(addResult.HookResults))
+		}
+	})
+}
+
 // TestAddCommand_Submodules_Integration tests submodule initialization.
 // Not parallel: uses t.Setenv for file:// protocol in local submodule URLs.
 func TestAddCommand_Submodules_Integration(t *testing.T) {

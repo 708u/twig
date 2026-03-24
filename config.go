@@ -25,6 +25,7 @@ type Config struct {
 	InitSubmodules      *bool    `toml:"init_submodules"`     // nil=unset, true=enable, false=disable
 	SubmoduleReference  *bool    `toml:"submodule_reference"` // nil=unset, true=enable, false=disable
 	CleanStale          *bool    `toml:"clean_stale"`         // nil=unset, true=enable, false=disable
+	Hooks               []string `toml:"hooks"`
 }
 
 // ShouldInitSubmodules returns whether submodule initialization is enabled.
@@ -194,6 +195,15 @@ func LoadConfig(dir string, opts ...LoadConfigOption) (*LoadConfigResult, error)
 		cleanStale = localCfg.CleanStale
 	}
 
+	// hooks: local overrides project
+	var hooks []string
+	if projCfg != nil && len(projCfg.Hooks) > 0 {
+		hooks = projCfg.Hooks
+	}
+	if localCfg != nil && len(localCfg.Hooks) > 0 {
+		hooks = localCfg.Hooks
+	}
+
 	return &LoadConfigResult{
 		Config: &Config{
 			Symlinks:            symlinks,
@@ -204,6 +214,7 @@ func LoadConfig(dir string, opts ...LoadConfigOption) (*LoadConfigResult, error)
 			InitSubmodules:      initSubmodules,
 			SubmoduleReference:  submoduleReference,
 			CleanStale:          cleanStale,
+			Hooks:               hooks,
 		},
 		Warnings: warnings,
 	}, nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -77,6 +78,13 @@ type SubmoduleInitResult struct {
 	NoReferenceSubmodules []string // submodules that couldn't use reference
 }
 
+// HookResult holds the result of a single hook execution.
+type HookResult struct {
+	Command string
+	Output  []byte
+	Err     error
+}
+
 // AddResult holds the result of an add operation.
 type AddResult struct {
 	Branch         string
@@ -86,6 +94,7 @@ type AddResult struct {
 	ChangesSynced  bool
 	ChangesCarried bool
 	SubmoduleInit  SubmoduleInitResult
+	HookResults    []HookResult
 }
 
 // AddFormatOptions configures add output formatting.
@@ -130,6 +139,19 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 		fmt.Fprintf(&stderr, "warning: submodule %s: reference not available, initialize in main worktree first\n", sm)
 	}
 
+	// Output hook results (single pass: warnings to stderr, count successes)
+	var hookRanCount int
+	for _, h := range r.HookResults {
+		if h.Err != nil {
+			fmt.Fprintf(&stderr, "warning: hook %q failed: %v\n", h.Command, h.Err)
+			if len(h.Output) > 0 {
+				stderr.Write(h.Output)
+			}
+		} else {
+			hookRanCount++
+		}
+	}
+
 	if opts.Verbose {
 		if len(r.GitOutput) > 0 {
 			stdout.Write(r.GitOutput)
@@ -149,6 +171,14 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 		if r.SubmoduleInit.Attempted && r.SubmoduleInit.Count > 0 {
 			fmt.Fprintf(&stdout, "Initialized %d submodule(s)\n", r.SubmoduleInit.Count)
 		}
+		for _, h := range r.HookResults {
+			if h.Err == nil {
+				fmt.Fprintf(&stdout, "Ran hook: %s\n", h.Command)
+				if len(h.Output) > 0 {
+					stdout.Write(h.Output)
+				}
+			}
+		}
 	}
 
 	var syncInfo string
@@ -162,7 +192,12 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 	if r.SubmoduleInit.Attempted && r.SubmoduleInit.Count > 0 {
 		submoduleInfo = fmt.Sprintf(", %d submodules", r.SubmoduleInit.Count)
 	}
-	fmt.Fprintf(&stdout, "twig add: %s (%d symlinks%s%s)\n", r.Branch, createdCount, syncInfo, submoduleInfo)
+
+	var hookInfo string
+	if hookRanCount > 0 {
+		hookInfo = fmt.Sprintf(", %d hooks ran", hookRanCount)
+	}
+	fmt.Fprintf(&stdout, "twig add: %s (%d symlinks%s%s%s)\n", r.Branch, createdCount, syncInfo, submoduleInfo, hookInfo)
 
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 }
@@ -297,7 +332,33 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	}
 	result.Symlinks = symlinks
 
+	// Run post-create hooks
+	if len(c.Config.Hooks) > 0 {
+		result.HookResults = c.runHooks(ctx, wtPath)
+	}
+
 	return result, nil
+}
+
+func (c *AddCommand) runHooks(ctx context.Context, dir string) []HookResult {
+	var results []HookResult
+	for _, hook := range c.Config.Hooks {
+		c.Log.DebugContext(ctx, "running hook", "command", hook, "dir", dir)
+		cmd := exec.CommandContext(ctx, "sh", "-c", hook)
+		cmd.Dir = dir
+		output, err := cmd.CombinedOutput()
+		results = append(results, HookResult{
+			Command: hook,
+			Output:  output,
+			Err:     err,
+		})
+		if err != nil {
+			c.Log.WarnContext(ctx, "hook failed", "command", hook, "error", err)
+			break
+		}
+		c.Log.DebugContext(ctx, "hook completed", "command", hook)
+	}
+	return results
 }
 
 func (c *AddCommand) createWorktree(ctx context.Context, branch, path string) ([]byte, error) {
