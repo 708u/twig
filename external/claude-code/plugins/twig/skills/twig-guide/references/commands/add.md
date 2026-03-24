@@ -239,6 +239,43 @@ Priority:
 2. Config `submodule_reference`
 3. Default: disabled
 
+### Post-Create Hooks
+
+Commands configured in `hooks` are executed after worktree
+creation and symlink setup:
+
+```toml
+# .twig/settings.toml
+hooks = ["npm install", "direnv allow"]
+```
+
+Execution details:
+
+- Each command runs via `sh -c` in the new worktree directory
+- Commands run in the order listed
+- stdout/stderr are forwarded to stderr
+- If a hook fails, remaining hooks are skipped
+- Hook failure does not fail the `twig add` command
+  (a warning is displayed)
+
+```bash
+# Hooks run automatically after worktree creation
+twig add feat/new
+# twig add: feat/new (2 symlinks, 2 hooks ran)
+```
+
+With `--verbose`, individual hook execution is shown:
+
+```bash
+twig add feat/new -v
+# Ran hook: npm install
+# added 100 packages
+# Ran hook: direnv allow
+# twig add: feat/new (2 symlinks, 2 hooks ran)
+```
+
+See [Configuration](../configuration.md#hooks) for merge rules.
+
 ### Default Source Configuration
 
 The default source branch can be configured in `.twig/settings.toml`:

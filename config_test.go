@@ -706,3 +706,120 @@ func TestLoadConfig_CleanStale(t *testing.T) {
 		}
 	})
 }
+
+func TestLoadConfig_Hooks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ProjectOnly", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		projectSettings := `hooks = ["npm install", "direnv allow"]
+`
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(tmpDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expected := []string{"npm install", "direnv allow"}
+		if !reflect.DeepEqual(result.Config.Hooks, expected) {
+			t.Errorf("Hooks = %v, want %v", result.Config.Hooks, expected)
+		}
+	})
+
+	t.Run("LocalOverridesProject", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		projectSettings := `hooks = ["npm install", "direnv allow"]
+`
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		localSettings := `hooks = ["yarn install"]
+`
+		if err := os.WriteFile(filepath.Join(twigDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(tmpDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expected := []string{"yarn install"}
+		if !reflect.DeepEqual(result.Config.Hooks, expected) {
+			t.Errorf("Hooks = %v, want %v", result.Config.Hooks, expected)
+		}
+	})
+
+	t.Run("EmptyLocalDoesNotOverride", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		projectSettings := `hooks = ["npm install"]
+`
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(projectSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		localSettings := `hooks = []
+`
+		if err := os.WriteFile(filepath.Join(twigDir, localConfigFileName), []byte(localSettings), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(tmpDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expected := []string{"npm install"}
+		if !reflect.DeepEqual(result.Config.Hooks, expected) {
+			t.Errorf("Hooks = %v, want %v", result.Config.Hooks, expected)
+		}
+	})
+
+	t.Run("NilWhenUnset", func(t *testing.T) {
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		twigDir := filepath.Join(tmpDir, configDir)
+		if err := os.MkdirAll(twigDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(""), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := LoadConfig(tmpDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if result.Config.Hooks != nil {
+			t.Errorf("Hooks = %v, want nil", result.Config.Hooks)
+		}
+	})
+}

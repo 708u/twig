@@ -1144,3 +1144,114 @@ func TestCreateSymlinks_RelativePath(t *testing.T) {
 		})
 	}
 }
+
+func TestAddResult_Format_Hooks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default_output_with_hooks", func(t *testing.T) {
+		t.Parallel()
+
+		result := AddResult{
+			Branch:       "feature/test",
+			WorktreePath: "/worktrees/feature/test",
+			Symlinks:     []SymlinkResult{},
+			HookResults: []HookResult{
+				{Command: "npm install"},
+				{Command: "direnv allow"},
+			},
+		}
+
+		got := result.Format(AddFormatOptions{})
+		want := "twig add: feature/test (0 symlinks, 2 hooks ran)\n"
+
+		if got.Stdout != want {
+			t.Errorf("Stdout = %q, want %q", got.Stdout, want)
+		}
+	})
+
+	t.Run("hook_failure_warning", func(t *testing.T) {
+		t.Parallel()
+
+		result := AddResult{
+			Branch:       "feature/test",
+			WorktreePath: "/worktrees/feature/test",
+			Symlinks:     []SymlinkResult{},
+			HookResults: []HookResult{
+				{Command: "npm install", Err: errors.New("exit status 1"), Output: []byte("npm ERR!\n")},
+			},
+		}
+
+		got := result.Format(AddFormatOptions{})
+
+		if !strings.Contains(got.Stderr, "warning:") {
+			t.Errorf("Stderr = %q, should contain 'warning:'", got.Stderr)
+		}
+		if !strings.Contains(got.Stderr, "npm install") {
+			t.Errorf("Stderr = %q, should contain hook command", got.Stderr)
+		}
+		if !strings.Contains(got.Stderr, "npm ERR!") {
+			t.Errorf("Stderr = %q, should contain hook output", got.Stderr)
+		}
+	})
+
+	t.Run("verbose_output_with_hooks", func(t *testing.T) {
+		t.Parallel()
+
+		result := AddResult{
+			Branch:       "feature/test",
+			WorktreePath: "/worktrees/feature/test",
+			Symlinks:     []SymlinkResult{},
+			HookResults: []HookResult{
+				{Command: "npm install", Output: []byte("added 100 packages\n")},
+			},
+		}
+
+		got := result.Format(AddFormatOptions{Verbose: true})
+
+		if !strings.Contains(got.Stdout, "Ran hook: npm install") {
+			t.Errorf("Stdout = %q, should contain 'Ran hook: npm install'", got.Stdout)
+		}
+		if !strings.Contains(got.Stdout, "added 100 packages") {
+			t.Errorf("Stdout = %q, should contain hook output", got.Stdout)
+		}
+	})
+
+	t.Run("no_hook_info_when_empty", func(t *testing.T) {
+		t.Parallel()
+
+		result := AddResult{
+			Branch:       "feature/test",
+			WorktreePath: "/worktrees/feature/test",
+			Symlinks:     []SymlinkResult{},
+			HookResults:  []HookResult{},
+		}
+
+		got := result.Format(AddFormatOptions{})
+		want := "twig add: feature/test (0 symlinks)\n"
+
+		if got.Stdout != want {
+			t.Errorf("Stdout = %q, want %q", got.Stdout, want)
+		}
+	})
+
+	t.Run("failed_hooks_not_counted_in_summary", func(t *testing.T) {
+		t.Parallel()
+
+		result := AddResult{
+			Branch:       "feature/test",
+			WorktreePath: "/worktrees/feature/test",
+			Symlinks:     []SymlinkResult{},
+			HookResults: []HookResult{
+				{Command: "npm install"},
+				{Command: "bad-command", Err: errors.New("exit status 1")},
+			},
+		}
+
+		got := result.Format(AddFormatOptions{})
+		want := "twig add: feature/test (0 symlinks, 1 hooks ran)\n"
+
+		if got.Stdout != want {
+			t.Errorf("Stdout = %q, want %q", got.Stdout, want)
+		}
+	})
+}
