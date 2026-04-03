@@ -21,6 +21,7 @@ twig overlay --restore [flags]          # Restore original state
 | `--target`  |       | Target worktree branch (default: current)       |
 | `--check`   |       | Show what would be done (dry-run)               |
 | `--force`   | `-f`  | Proceed even if target is dirty or HEAD moved   |
+| `--dirty`   |       | Include uncommitted changes from source worktree|
 | `--quiet`   | `-q`  | Suppress output                                 |
 | `--verbose` | `-v`  | Verbose output (use `-vv` for debug)            |
 
@@ -49,6 +50,39 @@ worktree.
 
 Files created by the user after overlay are preserved during restore.
 Only overlay-added files are removed.
+
+### Dirty Mode
+
+With `--dirty`, uncommitted changes from the source branch's worktree
+are applied on top of the committed overlay:
+
+1. Normal committed overlay is applied first
+2. Source worktree is located by branch name
+3. Each dirty file in the source worktree is copied to the target
+4. Deleted dirty files are removed from the target
+
+Requirements:
+
+- Source branch must have an existing worktree
+
+When source and target are at the same commit, `--dirty` allows the
+overlay to proceed (only dirty files are applied). Without dirty
+files, an error is returned.
+
+Untracked files in the source worktree are included and tracked
+for cleanup on restore.
+
+```bash
+# Overlay committed + uncommitted changes
+twig overlay feat/x --target main --dirty
+
+# Same commit, only dirty files
+twig overlay feat/x --dirty
+```
+
+Constraints:
+
+- Cannot be used with `--restore`
 
 ### Safety: Commit Prevention
 
@@ -136,6 +170,10 @@ With `--quiet`, no output is produced.
 | Submodules                    | Pointers updated, no init/deinit   |
 | Binary files                  | Handled by git checkout             |
 | Detached HEAD on target       | Works (recorded as "HEAD")          |
+| `--dirty` + same commit      | Only dirty files applied            |
+| `--dirty` without worktree   | Error (worktree required)           |
+| `--dirty` + `--restore`      | Error (mutually exclusive)          |
+| `--dirty` + no dirty files   | Error (same commit only)            |
 
 ## Examples
 
@@ -158,6 +196,12 @@ twig overlay --restore --target main
 
 # Force restore after accidental commit
 twig overlay --restore --target main --force
+
+# Include uncommitted changes from source worktree
+twig overlay feat/x --target main --dirty
+
+# Preview including dirty files
+twig overlay feat/x --target main --dirty --check
 ```
 
 ## Exit Code

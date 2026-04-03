@@ -441,6 +441,207 @@ func TestOverlay_Integration(t *testing.T) {
 	})
 }
 
+func TestOverlayDirty_Integration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ApplyAndRestore", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create committed content on main
+		writeFile(t, mainDir, "shared.txt", "main content")
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add files on main")
+
+		// Create feature branch with committed changes
+		testutil.RunGit(t, mainDir, "checkout", "-b", "feat/dirty")
+		writeFile(t, mainDir, "shared.txt", "committed feature content")
+		writeFile(t, mainDir, "committed-new.txt", "committed new")
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "feature changes")
+		testutil.RunGit(t, mainDir, "checkout", "main")
+
+		// Create worktree for feat/dirty
+		wtPath := filepath.Join(repoDir, "feat-dirty-wt")
+		testutil.RunGit(t, mainDir, "worktree", "add", wtPath, "feat/dirty")
+
+		// Make uncommitted changes in the feature worktree
+		writeFile(t, wtPath, "shared.txt", "dirty feature content")
+		writeFile(t, wtPath, "untracked.txt", "untracked file")
+
+		// Apply dirty overlay from feat/dirty onto main
+		git := NewGitRunner(mainDir)
+		cmd := NewOverlayCommand(osFS{}, git, nil)
+
+		result, err := cmd.Run(t.Context(), "feat/dirty", mainDir, OverlayOptions{
+			Dirty: true,
+		})
+		if err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+
+		if result.DirtyFiles != 2 {
+			t.Errorf("DirtyFiles = %d, want 2", result.DirtyFiles)
+		}
+
+		// shared.txt should have the dirty (not committed) content
+		content := readFile(t, mainDir, "shared.txt")
+		if content != "dirty feature content" {
+			t.Errorf("shared.txt = %q, want 'dirty feature content'", content)
+		}
+
+		// untracked.txt should exist (dirty untracked file)
+		if !fileExists(t, mainDir, "untracked.txt") {
+			t.Error("untracked.txt should exist after dirty overlay")
+		}
+
+		// committed-new.txt should also exist (from committed overlay)
+		if !fileExists(t, mainDir, "committed-new.txt") {
+			t.Error("committed-new.txt should exist from committed overlay")
+		}
+
+		// Restore
+		_, err = cmd.Run(t.Context(), "", mainDir, OverlayOptions{Restore: true})
+		if err != nil {
+			t.Fatalf("restore failed: %v", err)
+		}
+
+		// shared.txt should be back to main content
+		content = readFile(t, mainDir, "shared.txt")
+		if content != "main content" {
+			t.Errorf("shared.txt = %q after restore, want 'main content'", content)
+		}
+
+		// untracked.txt should be removed (was in AddedFiles)
+		if fileExists(t, mainDir, "untracked.txt") {
+			t.Error("untracked.txt should not exist after restore")
+		}
+
+		// committed-new.txt should also be removed
+		if fileExists(t, mainDir, "committed-new.txt") {
+			t.Error("committed-new.txt should not exist after restore")
+		}
+	})
+
+	t.Run("SameCommit", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		writeFile(t, mainDir, "file.txt", "original")
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add file")
+
+		// Create branch at same commit
+		testutil.RunGit(t, mainDir, "branch", "feat/same")
+
+		// Create worktree for feat/same
+		wtPath := filepath.Join(repoDir, "feat-same-wt")
+		testutil.RunGit(t, mainDir, "worktree", "add", wtPath, "feat/same")
+
+		// Make dirty changes in the feature worktree
+		writeFile(t, wtPath, "file.txt", "dirty content")
+		writeFile(t, wtPath, "new-dirty.txt", "brand new")
+
+		// Apply dirty overlay (same commit, only dirty files)
+		git := NewGitRunner(mainDir)
+		cmd := NewOverlayCommand(osFS{}, git, nil)
+
+		result, err := cmd.Run(t.Context(), "feat/same", mainDir, OverlayOptions{
+			Dirty: true,
+		})
+		if err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+
+		if result.ModifiedFiles != 0 {
+			t.Errorf("ModifiedFiles = %d, want 0 (same commit)", result.ModifiedFiles)
+		}
+		if result.DirtyFiles != 2 {
+			t.Errorf("DirtyFiles = %d, want 2", result.DirtyFiles)
+		}
+
+		// file.txt should have dirty content
+		content := readFile(t, mainDir, "file.txt")
+		if content != "dirty content" {
+			t.Errorf("file.txt = %q, want 'dirty content'", content)
+		}
+
+		// Restore
+		_, err = cmd.Run(t.Context(), "", mainDir, OverlayOptions{Restore: true})
+		if err != nil {
+			t.Fatalf("restore failed: %v", err)
+		}
+
+		// file.txt back to original
+		content = readFile(t, mainDir, "file.txt")
+		if content != "original" {
+			t.Errorf("file.txt = %q after restore, want 'original'", content)
+		}
+
+		// new-dirty.txt should be cleaned up
+		if fileExists(t, mainDir, "new-dirty.txt") {
+			t.Error("new-dirty.txt should not exist after restore")
+		}
+	})
+
+	t.Run("UntrackedFiles", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		writeFile(t, mainDir, "tracked.txt", "tracked")
+		testutil.RunGit(t, mainDir, "add", ".")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add file")
+
+		testutil.RunGit(t, mainDir, "branch", "feat/untracked")
+
+		wtPath := filepath.Join(repoDir, "feat-untracked-wt")
+		testutil.RunGit(t, mainDir, "worktree", "add", wtPath, "feat/untracked")
+
+		// Create untracked files in subdirectory
+		writeFile(t, wtPath, "subdir/new-file.txt", "new in subdir")
+		writeFile(t, wtPath, "another-new.txt", "another")
+
+		git := NewGitRunner(mainDir)
+		cmd := NewOverlayCommand(osFS{}, git, nil)
+
+		result, err := cmd.Run(t.Context(), "feat/untracked", mainDir, OverlayOptions{
+			Dirty: true,
+		})
+		if err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+
+		if result.DirtyFiles != 2 {
+			t.Errorf("DirtyFiles = %d, want 2", result.DirtyFiles)
+		}
+
+		// Untracked files should exist in target
+		if !fileExists(t, mainDir, "subdir/new-file.txt") {
+			t.Error("subdir/new-file.txt should exist")
+		}
+		if !fileExists(t, mainDir, "another-new.txt") {
+			t.Error("another-new.txt should exist")
+		}
+
+		// Restore
+		_, err = cmd.Run(t.Context(), "", mainDir, OverlayOptions{Restore: true})
+		if err != nil {
+			t.Fatalf("restore failed: %v", err)
+		}
+
+		// Untracked files should be cleaned up
+		if fileExists(t, mainDir, "subdir/new-file.txt") {
+			t.Error("subdir/new-file.txt should not exist after restore")
+		}
+		if fileExists(t, mainDir, "another-new.txt") {
+			t.Error("another-new.txt should not exist after restore")
+		}
+	})
+}
+
 // Test helpers
 
 func writeFile(t *testing.T, dir, name, content string) {

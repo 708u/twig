@@ -980,7 +980,10 @@ Examples:
   twig overlay --restore --target main
 
   # Preview changes
-  twig overlay feat/x --target main --check`,
+  twig overlay feat/x --target main --check
+
+  # Include uncommitted changes from source worktree
+  twig overlay feat/x --target main --dirty`,
 		Args: cobra.MaximumNArgs(1),
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) >= 1 {
@@ -999,11 +1002,15 @@ Examples:
 		},
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			restore, _ := cmd.Flags().GetBool("restore")
+			dirty, _ := cmd.Flags().GetBool("dirty")
 			if restore && len(args) > 0 {
 				return fmt.Errorf("cannot specify source branch with --restore")
 			}
 			if !restore && len(args) == 0 {
 				return fmt.Errorf("source branch is required (or use --restore)")
+			}
+			if dirty && restore {
+				return fmt.Errorf("cannot use --dirty with --restore")
 			}
 			return nil
 		},
@@ -1014,6 +1021,7 @@ Examples:
 			check, _ := cmd.Flags().GetBool("check")
 			restore, _ := cmd.Flags().GetBool("restore")
 			force, _ := cmd.Flags().GetBool("force")
+			dirty, _ := cmd.Flags().GetBool("dirty")
 			target, _ := cmd.Flags().GetString("target")
 
 			idGen := twig.GenerateCommandID
@@ -1026,6 +1034,7 @@ Examples:
 				Restore: restore,
 				Check:   check,
 				Force:   force,
+				Dirty:   dirty,
 				Target:  target,
 			}
 
@@ -1062,6 +1071,7 @@ Examples:
 	overlayCmd.Flags().Bool("check", false, "Show what would be done (dry-run)")
 	overlayCmd.Flags().BoolP("force", "f", false, "Proceed even if target is dirty or HEAD has moved")
 	overlayCmd.Flags().BoolP("quiet", "q", false, "Suppress output")
+	overlayCmd.Flags().Bool("dirty", false, "Include uncommitted changes from source worktree")
 	overlayCmd.RegisterFlagCompletionFunc("target", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		dir, err := resolveCompletionDirectory(cmd)
 		if err != nil {
