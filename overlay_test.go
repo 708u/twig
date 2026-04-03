@@ -625,10 +625,6 @@ func TestOverlayCommand_DirtyApply(t *testing.T) {
 		}
 		mockFS := &testutil.MockFS{
 			WrittenFiles: make(map[string][]byte),
-			ExistingPaths: []string{
-				"/repo/feat-x/file.go",
-				"/repo/feat-x/untracked.txt",
-			},
 			ReadFileResults: map[string][]byte{
 				"/repo/feat-x/file.go":       []byte("dirty content"),
 				"/repo/feat-x/untracked.txt": []byte("new file"),
@@ -685,9 +681,6 @@ func TestOverlayCommand_DirtyApply(t *testing.T) {
 		}
 		mockFS := &testutil.MockFS{
 			WrittenFiles: make(map[string][]byte),
-			ExistingPaths: []string{
-				"/repo/feat-x/dirty.go",
-			},
 			ReadFileResults: map[string][]byte{
 				"/repo/feat-x/dirty.go": []byte("dirty"),
 			},

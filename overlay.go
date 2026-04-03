@@ -53,7 +53,6 @@ type overlayState struct {
 	TargetBranch string   `json:"target_branch"`
 	TargetCommit string   `json:"target_commit"`
 	AddedFiles   []string `json:"added_files,omitempty"`
-	Dirty        bool     `json:"dirty,omitempty"`
 	CreatedAt    string   `json:"created_at"`
 }
 
@@ -152,7 +151,6 @@ func (c *OverlayCommand) apply(ctx context.Context, sourceBranch string, cwd str
 		return result, fmt.Errorf("source and target are at the same commit")
 	}
 
-	// Committed diff (skipped when source and target are at the same commit)
 	if !sameCommit {
 		allChangedOut, err := targetGit.Run(ctx, GitCmdDiff, "--name-only", "HEAD", sourceCommit)
 		if err != nil {
@@ -184,9 +182,7 @@ func (c *OverlayCommand) apply(ctx context.Context, sourceBranch string, cwd str
 		}
 		sourceWtPath = sourceWt.Path
 		sourceGit := c.Git.InDir(sourceWtPath)
-		// Use -uall to list individual files within untracked directories.
-		// ChangedFiles() uses -unormal which collapses directories.
-		dirtyFiles, err = changedFilesAll(ctx, sourceGit)
+		dirtyFiles, err = sourceGit.ChangedFilesAll(ctx)
 		if err != nil {
 			return result, fmt.Errorf("failed to get dirty files from source: %w", err)
 		}
@@ -207,7 +203,6 @@ func (c *OverlayCommand) apply(ctx context.Context, sourceBranch string, cwd str
 		return result, nil
 	}
 
-	// Committed overlay (skipped when source and target are at the same commit)
 	if !sameCommit {
 		if _, err := targetGit.Run(ctx, GitCmdCheckout, sourceBranch, "--", "."); err != nil {
 			return result, fmt.Errorf("failed to checkout source files: %w", err)
@@ -227,7 +222,6 @@ func (c *OverlayCommand) apply(ctx context.Context, sourceBranch string, cwd str
 		}
 	}
 
-	// Dirty overlay
 	if opts.Dirty && len(dirtyFiles) > 0 {
 		dirtyAdded, err := c.copyDirtyFiles(ctx, dirtyFiles, sourceWtPath, targetPath)
 		if err != nil {
@@ -243,7 +237,6 @@ func (c *OverlayCommand) apply(ctx context.Context, sourceBranch string, cwd str
 		TargetBranch: targetBranch,
 		TargetCommit: targetCommit,
 		AddedFiles:   result.AddedFiles,
-		Dirty:        opts.Dirty,
 		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
 	}
 	stateData, err := json.MarshalIndent(state, "", "  ")
@@ -489,12 +482,11 @@ func (c *OverlayCommand) copyDirtyFiles(ctx context.Context, dirtyFiles []FileSt
 		srcPath := filepath.Join(sourceWtPath, f.Path)
 		dstPath := filepath.Join(targetPath, f.Path)
 
-		// Check if the file exists in the source worktree.
-		// Using Stat instead of parsing status codes handles edge cases
-		// like "DM" (staged delete then re-created) correctly.
-		_, statErr := c.FS.Stat(srcPath)
-		if statErr != nil && c.FS.IsNotExist(statErr) {
-			// File deleted in source worktree
+		// ReadFile directly instead of Stat-then-Read to avoid TOCTOU.
+		// This also handles edge cases like "DM" (staged delete then
+		// re-created) correctly by checking actual file existence.
+		data, readErr := c.FS.ReadFile(srcPath)
+		if readErr != nil && c.FS.IsNotExist(readErr) {
 			if err := c.FS.Remove(dstPath); err != nil && !c.FS.IsNotExist(err) {
 				c.Log.DebugContext(ctx, "failed to remove dirty-deleted file",
 					LogAttrKeyCategory.String(), LogCategoryOverlay,
@@ -502,13 +494,8 @@ func (c *OverlayCommand) copyDirtyFiles(ctx context.Context, dirtyFiles []FileSt
 			}
 			continue
 		}
-		if statErr != nil {
-			return nil, fmt.Errorf("failed to stat dirty file %s: %w", f.Path, statErr)
-		}
-
-		data, err := c.FS.ReadFile(srcPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read dirty file %s: %w", f.Path, err)
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read dirty file %s: %w", f.Path, readErr)
 		}
 
 		if err := c.FS.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
@@ -541,29 +528,6 @@ func mergeUnique(a, b []string) []string {
 		}
 	}
 	return a
-}
-
-// changedFilesAll returns changed files using -uall to list individual files
-// within untracked directories instead of collapsing them.
-func changedFilesAll(ctx context.Context, git *GitRunner) ([]FileStatus, error) {
-	output, err := git.Run(ctx, GitCmdStatus, "--porcelain", "-uall")
-	if err != nil {
-		return nil, fmt.Errorf("failed to check git status: %w", err)
-	}
-
-	files := make([]FileStatus, 0)
-	for _, line := range strings.Split(string(output), "\n") {
-		if len(line) < 3 {
-			continue
-		}
-		status := line[:2]
-		path := strings.TrimSpace(line[2:])
-		if idx := strings.Index(path, " -> "); idx != -1 {
-			path = path[idx+4:]
-		}
-		files = append(files, FileStatus{Status: status, Path: path})
-	}
-	return files, nil
 }
 
 // splitNonEmpty splits a newline-separated string and removes empty entries.
