@@ -9,6 +9,7 @@ description: |
   - Wants to carry or move uncommitted changes to a new branch
   - Wants to copy/sync changes between branches
   - Wants to temporarily apply another branch's files to a worktree
+  - Wants to test uncommitted/dirty changes from another worktree
   - Needs to isolate work in a separate directory
   - Asks about switching context without stashing
   - Wants to clean up old/merged branches and their worktrees
@@ -101,6 +102,19 @@ twig overlay feat/x --target main
 # ... test in main worktree ...
 twig overlay --restore --target main
 ```
+
+### Test uncommitted changes in another worktree
+
+Include dirty (uncommitted) files from the source worktree:
+
+```bash
+twig overlay feat/x --target main --dirty
+# ... test including uncommitted changes ...
+twig overlay --restore --target main
+```
+
+This also works when source and target are at the same commit
+(only dirty files are applied).
 
 ### Force remove a worktree
 
