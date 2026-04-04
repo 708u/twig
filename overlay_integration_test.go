@@ -439,12 +439,8 @@ func TestOverlay_Integration(t *testing.T) {
 			t.Error("state file should be removed after restore")
 		}
 	})
-}
 
-func TestOverlayDirty_Integration(t *testing.T) {
-	t.Parallel()
-
-	t.Run("ApplyAndRestore", func(t *testing.T) {
+	t.Run("DirtyApplyAndRestore", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -524,7 +520,7 @@ func TestOverlayDirty_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("SameCommit", func(t *testing.T) {
+	t.Run("DirtySameCommit", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
@@ -586,7 +582,7 @@ func TestOverlayDirty_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("UntrackedFiles", func(t *testing.T) {
+	t.Run("DirtyUntrackedFiles", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := testutil.SetupTestRepo(t)
