@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -502,7 +503,13 @@ func (c *OverlayCommand) copyDirtyFiles(ctx context.Context, dirtyFiles []FileSt
 			return nil, fmt.Errorf("failed to create directory for %s: %w", f.Path, err)
 		}
 
-		if err := c.FS.WriteFile(dstPath, data, 0644); err != nil {
+		// Preserve source file permissions (e.g., executable bit).
+		perm := fs.FileMode(0644)
+		if info, err := c.FS.Stat(srcPath); err == nil {
+			perm = info.Mode().Perm()
+		}
+
+		if err := c.FS.WriteFile(dstPath, data, perm); err != nil {
 			return nil, fmt.Errorf("failed to write dirty file %s: %w", f.Path, err)
 		}
 
