@@ -546,6 +546,32 @@ func TestOverlayResult_Format(t *testing.T) {
 				"  1 overlay-added file(s) would be removed\n",
 		},
 		{
+			name: "apply_with_dirty",
+			result: OverlayResult{
+				TargetBranch:  "main",
+				SourceBranch:  "feat/x",
+				ModifiedFiles: 10,
+				DirtyFiles:    3,
+			},
+			opts:       OverlayFormatOptions{},
+			wantStdout: "Overlaid main with feat/x (10 files changed, 3 dirty)\n",
+			wantStderr: "warning: do not commit in the overlaid worktree.\n         Use 'twig overlay --restore' when done.\n",
+		},
+		{
+			name: "check_apply_with_dirty",
+			result: OverlayResult{
+				Check:         true,
+				TargetBranch:  "main",
+				SourceBranch:  "feat/x",
+				ModifiedFiles: 5,
+				DirtyFiles:    2,
+			},
+			opts: OverlayFormatOptions{},
+			wantStdout: "Would overlay main with feat/x:\n" +
+				"  5 file(s) would change\n" +
+				"  2 dirty file(s) would be applied\n",
+		},
+		{
 			name: "quiet_suppresses_output",
 			result: OverlayResult{
 				TargetBranch:  "main",
@@ -568,6 +594,228 @@ func TestOverlayResult_Format(t *testing.T) {
 			}
 			if formatted.Stderr != tt.wantStderr {
 				t.Errorf("Stderr:\ngot:  %q\nwant: %q", formatted.Stderr, tt.wantStderr)
+			}
+		})
+	}
+}
+
+func TestOverlayCommand_DirtyApply(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Basic", func(t *testing.T) {
+		t.Parallel()
+
+		mockGit := &testutil.MockGitExecutor{
+			Worktrees: []testutil.MockWorktree{
+				{Path: "/repo/main", Branch: "main", HEAD: "main-commit"},
+				{Path: "/repo/feat-x", Branch: "feat/x", HEAD: "feat-x-commit"},
+			},
+			BranchHEADs: map[string]string{
+				"feat/x": "feat-x-commit",
+			},
+			DiffNameOnlyOutput: map[string]string{
+				"D:HEAD:feat-x-commit": "",
+				"A:HEAD:feat-x-commit": "new.go\n",
+				":HEAD:feat-x-commit":  "file.go\nnew.go\n",
+			},
+			// Dirty files in source worktree
+			StatusOutputMap: map[string]string{
+				"/repo/feat-x": " M file.go\n?? untracked.txt\n",
+			},
+		}
+		mockFS := &testutil.MockFS{
+			WrittenFiles: make(map[string][]byte),
+			ReadFileResults: map[string][]byte{
+				"/repo/feat-x/file.go":       []byte("dirty content"),
+				"/repo/feat-x/untracked.txt": []byte("new file"),
+			},
+		}
+
+		git := &GitRunner{Executor: mockGit, Dir: "/repo/main", Log: NewNopLogger()}
+		cmd := NewOverlayCommand(mockFS, git, nil)
+
+		result, err := cmd.Run(t.Context(), "feat/x", "/repo/main", OverlayOptions{
+			Target: "main",
+			Dirty:  true,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.DirtyFiles != 2 {
+			t.Errorf("DirtyFiles = %d, want 2", result.DirtyFiles)
+		}
+		// untracked.txt should be in AddedFiles (dirty untracked)
+		found := false
+		for _, f := range result.AddedFiles {
+			if f == "untracked.txt" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("AddedFiles = %v, want to contain untracked.txt", result.AddedFiles)
+		}
+		// Dirty files should be written to target
+		if _, ok := mockFS.WrittenFiles["/repo/main/file.go"]; !ok {
+			t.Error("dirty file.go was not written to target")
+		}
+		if _, ok := mockFS.WrittenFiles["/repo/main/untracked.txt"]; !ok {
+			t.Error("dirty untracked.txt was not written to target")
+		}
+	})
+
+	t.Run("SameCommit_WithDirtyFiles", func(t *testing.T) {
+		t.Parallel()
+
+		mockGit := &testutil.MockGitExecutor{
+			Worktrees: []testutil.MockWorktree{
+				{Path: "/repo/main", Branch: "main", HEAD: "same-commit"},
+				{Path: "/repo/feat-x", Branch: "feat/x", HEAD: "same-commit"},
+			},
+			BranchHEADs: map[string]string{
+				"feat/x": "same-commit",
+			},
+			StatusOutputMap: map[string]string{
+				"/repo/feat-x": " M dirty.go\n",
+			},
+		}
+		mockFS := &testutil.MockFS{
+			WrittenFiles: make(map[string][]byte),
+			ReadFileResults: map[string][]byte{
+				"/repo/feat-x/dirty.go": []byte("dirty"),
+			},
+		}
+
+		git := &GitRunner{Executor: mockGit, Dir: "/repo/main", Log: NewNopLogger()}
+		cmd := NewOverlayCommand(mockFS, git, nil)
+
+		result, err := cmd.Run(t.Context(), "feat/x", "/repo/main", OverlayOptions{
+			Target: "main",
+			Dirty:  true,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if result.DirtyFiles != 1 {
+			t.Errorf("DirtyFiles = %d, want 1", result.DirtyFiles)
+		}
+		// Committed diff should be 0 (same commit)
+		if result.ModifiedFiles != 0 {
+			t.Errorf("ModifiedFiles = %d, want 0", result.ModifiedFiles)
+		}
+	})
+
+	t.Run("SameCommit_NoDirtyFiles", func(t *testing.T) {
+		t.Parallel()
+
+		mockGit := &testutil.MockGitExecutor{
+			Worktrees: []testutil.MockWorktree{
+				{Path: "/repo/main", Branch: "main", HEAD: "same-commit"},
+				{Path: "/repo/feat-x", Branch: "feat/x", HEAD: "same-commit"},
+			},
+			BranchHEADs: map[string]string{
+				"feat/x": "same-commit",
+			},
+			StatusOutputMap: map[string]string{
+				"/repo/feat-x": "",
+			},
+		}
+		mockFS := &testutil.MockFS{}
+
+		git := &GitRunner{Executor: mockGit, Dir: "/repo/main", Log: NewNopLogger()}
+		cmd := NewOverlayCommand(mockFS, git, nil)
+
+		_, err := cmd.Run(t.Context(), "feat/x", "/repo/main", OverlayOptions{
+			Target: "main",
+			Dirty:  true,
+		})
+		if err == nil {
+			t.Fatal("expected error for same commit with no dirty files")
+		}
+		if !strings.Contains(err.Error(), "same commit") || !strings.Contains(err.Error(), "no uncommitted") {
+			t.Errorf("error = %q, want to contain 'same commit' and 'no uncommitted'", err.Error())
+		}
+	})
+
+	t.Run("CheckMode", func(t *testing.T) {
+		t.Parallel()
+
+		mockGit := &testutil.MockGitExecutor{
+			Worktrees: []testutil.MockWorktree{
+				{Path: "/repo/main", Branch: "main", HEAD: "main-commit"},
+				{Path: "/repo/feat-x", Branch: "feat/x", HEAD: "feat-x-commit"},
+			},
+			BranchHEADs: map[string]string{
+				"feat/x": "feat-x-commit",
+			},
+			DiffNameOnlyOutput: map[string]string{
+				"D:HEAD:feat-x-commit": "",
+				"A:HEAD:feat-x-commit": "",
+				":HEAD:feat-x-commit":  "file.go\n",
+			},
+			StatusOutputMap: map[string]string{
+				"/repo/feat-x": " M file.go\n?? new.txt\n",
+			},
+		}
+		mockFS := &testutil.MockFS{
+			WrittenFiles: make(map[string][]byte),
+		}
+
+		git := &GitRunner{Executor: mockGit, Dir: "/repo/main", Log: NewNopLogger()}
+		cmd := NewOverlayCommand(mockFS, git, nil)
+
+		result, err := cmd.Run(t.Context(), "feat/x", "/repo/main", OverlayOptions{
+			Target: "main",
+			Dirty:  true,
+			Check:  true,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.DirtyFiles != 2 {
+			t.Errorf("DirtyFiles = %d, want 2", result.DirtyFiles)
+		}
+		// No files should be written in check mode
+		// (state file and dirty files should not be written)
+		for path := range mockFS.WrittenFiles {
+			if !strings.Contains(path, "twig-overlay") {
+				continue
+			}
+			t.Errorf("state file should not be written in check mode: %s", path)
+		}
+	})
+}
+
+func TestMergeUnique(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		a    []string
+		b    []string
+		want []string
+	}{
+		{"both_empty", nil, nil, nil},
+		{"b_empty", []string{"a", "b"}, nil, []string{"a", "b"}},
+		{"a_empty", nil, []string{"x"}, []string{"x"}},
+		{"no_overlap", []string{"a"}, []string{"b"}, []string{"a", "b"}},
+		{"with_overlap", []string{"a", "b"}, []string{"b", "c"}, []string{"a", "b", "c"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := mergeUnique(tt.a, tt.b)
+			if len(got) != len(tt.want) {
+				t.Errorf("mergeUnique(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+				return
+			}
+			for i, v := range got {
+				if v != tt.want[i] {
+					t.Errorf("mergeUnique(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+					return
+				}
 			}
 		})
 	}

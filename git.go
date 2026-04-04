@@ -484,10 +484,21 @@ type FileStatus struct {
 }
 
 // ChangedFiles returns files with uncommitted changes including staged,
-// unstaged, and untracked files. Status codes are the first 2 characters
-// from git status --porcelain output.
+// unstaged, and untracked files. Untracked directories are collapsed
+// into a single entry. Status codes are the first 2 characters from
+// git status --porcelain output.
 func (g *GitRunner) ChangedFiles(ctx context.Context) ([]FileStatus, error) {
-	output, err := g.Run(ctx, GitCmdStatus, "--porcelain", "-unormal")
+	return g.changedFiles(ctx, "-unormal")
+}
+
+// ChangedFilesAll is like ChangedFiles but lists individual files within
+// untracked directories instead of collapsing them.
+func (g *GitRunner) ChangedFilesAll(ctx context.Context) ([]FileStatus, error) {
+	return g.changedFiles(ctx, "-uall")
+}
+
+func (g *GitRunner) changedFiles(ctx context.Context, untrackedMode string) ([]FileStatus, error) {
+	output, err := g.Run(ctx, GitCmdStatus, "--porcelain", untrackedMode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check git status: %w", err)
 	}

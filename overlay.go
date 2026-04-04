@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,7 @@ type OverlayOptions struct {
 	Restore bool   // Restore the target worktree to its original state
 	Check   bool   // Dry-run mode
 	Force   bool   // Proceed even if target is dirty or HEAD has moved
+	Dirty   bool   // Include uncommitted changes from source worktree
 	Target  string // Target branch (empty = current worktree)
 }
 
@@ -36,6 +38,7 @@ type OverlayResult struct {
 	ModifiedFiles int
 	DeletedFiles  []string
 	AddedFiles    []string
+	DirtyFiles    int
 }
 
 // OverlayFormatOptions configures overlay output formatting.
@@ -88,7 +91,8 @@ func (c *OverlayCommand) apply(ctx context.Context, sourceBranch string, cwd str
 		"source", sourceBranch,
 		"target", opts.Target,
 		"check", opts.Check,
-		"force", opts.Force)
+		"force", opts.Force,
+		"dirty", opts.Dirty)
 
 	var result OverlayResult
 	result.SourceBranch = sourceBranch
@@ -142,61 +146,89 @@ func (c *OverlayCommand) apply(ctx context.Context, sourceBranch string, cwd str
 	}
 	targetCommit := strings.TrimSpace(string(targetCommitOut))
 
-	// Source == target check
-	if sourceCommit == targetCommit {
+	// Source == target check (relaxed when --dirty is set)
+	sameCommit := sourceCommit == targetCommit
+	if sameCommit && !opts.Dirty {
 		return result, fmt.Errorf("source and target are at the same commit")
 	}
 
-	// Get all changed files in a single diff, then filter by type.
-	// This avoids running three separate git diff commands.
-	allChangedOut, err := targetGit.Run(ctx, GitCmdDiff, "--name-only", "HEAD", sourceCommit)
-	if err != nil {
-		return result, fmt.Errorf("failed to diff: %w", err)
-	}
-	allChanged := splitNonEmpty(string(allChangedOut))
-	result.ModifiedFiles = len(allChanged)
+	if !sameCommit {
+		allChangedOut, err := targetGit.Run(ctx, GitCmdDiff, "--name-only", "HEAD", sourceCommit)
+		if err != nil {
+			return result, fmt.Errorf("failed to diff: %w", err)
+		}
+		allChanged := splitNonEmpty(string(allChangedOut))
+		result.ModifiedFiles = len(allChanged)
 
-	// Identify deleted files (in HEAD but not in source)
-	deletedOut, err := targetGit.Run(ctx, GitCmdDiff, "--name-only", "--diff-filter=D", "HEAD", sourceCommit)
-	if err != nil {
-		return result, fmt.Errorf("failed to diff for deleted files: %w", err)
-	}
-	result.DeletedFiles = splitNonEmpty(string(deletedOut))
+		deletedOut, err := targetGit.Run(ctx, GitCmdDiff, "--name-only", "--diff-filter=D", "HEAD", sourceCommit)
+		if err != nil {
+			return result, fmt.Errorf("failed to diff for deleted files: %w", err)
+		}
+		result.DeletedFiles = splitNonEmpty(string(deletedOut))
 
-	// Identify added files (in source but not in HEAD)
-	addedOut, err := targetGit.Run(ctx, GitCmdDiff, "--name-only", "--diff-filter=A", "HEAD", sourceCommit)
-	if err != nil {
-		return result, fmt.Errorf("failed to diff for added files: %w", err)
+		addedOut, err := targetGit.Run(ctx, GitCmdDiff, "--name-only", "--diff-filter=A", "HEAD", sourceCommit)
+		if err != nil {
+			return result, fmt.Errorf("failed to diff for added files: %w", err)
+		}
+		result.AddedFiles = splitNonEmpty(string(addedOut))
 	}
-	result.AddedFiles = splitNonEmpty(string(addedOut))
+
+	// Resolve dirty files from source worktree (before check mode early return)
+	var dirtyFiles []FileStatus
+	var sourceWtPath string
+	if opts.Dirty {
+		sourceWt, err := c.Git.WorktreeFindByBranch(ctx, sourceBranch)
+		if err != nil {
+			return result, fmt.Errorf("--dirty requires source branch %q to have a worktree: %w", sourceBranch, err)
+		}
+		sourceWtPath = sourceWt.Path
+		sourceGit := c.Git.InDir(sourceWtPath)
+		dirtyFiles, err = sourceGit.ChangedFilesAll(ctx)
+		if err != nil {
+			return result, fmt.Errorf("failed to get dirty files from source: %w", err)
+		}
+		result.DirtyFiles = len(dirtyFiles)
+
+		if sameCommit && len(dirtyFiles) == 0 {
+			return result, fmt.Errorf("source and target are at the same commit and source has no uncommitted changes")
+		}
+	}
 
 	if opts.Check {
 		c.Log.DebugContext(ctx, "apply check completed",
 			LogAttrKeyCategory.String(), LogCategoryOverlay,
 			"modifiedFiles", result.ModifiedFiles,
 			"deletedFiles", len(result.DeletedFiles),
-			"addedFiles", len(result.AddedFiles))
+			"addedFiles", len(result.AddedFiles),
+			"dirtyFiles", result.DirtyFiles)
 		return result, nil
 	}
 
-	// Checkout source branch files onto target
-	if _, err := targetGit.Run(ctx, GitCmdCheckout, sourceBranch, "--", "."); err != nil {
-		return result, fmt.Errorf("failed to checkout source files: %w", err)
-	}
+	if !sameCommit {
+		if _, err := targetGit.Run(ctx, GitCmdCheckout, sourceBranch, "--", "."); err != nil {
+			return result, fmt.Errorf("failed to checkout source files: %w", err)
+		}
 
-	// Delete files that exist in target HEAD but not in source
-	for _, f := range result.DeletedFiles {
-		path := filepath.Join(targetPath, f)
-		if err := c.FS.Remove(path); err != nil && !c.FS.IsNotExist(err) {
-			c.Log.DebugContext(ctx, "failed to remove file",
-				LogAttrKeyCategory.String(), LogCategoryOverlay,
-				"file", f, "error", err)
+		for _, f := range result.DeletedFiles {
+			path := filepath.Join(targetPath, f)
+			if err := c.FS.Remove(path); err != nil && !c.FS.IsNotExist(err) {
+				c.Log.DebugContext(ctx, "failed to remove file",
+					LogAttrKeyCategory.String(), LogCategoryOverlay,
+					"file", f, "error", err)
+			}
+		}
+
+		if _, err := targetGit.Run(ctx, GitCmdReset, "HEAD"); err != nil {
+			return result, fmt.Errorf("failed to unstage changes: %w", err)
 		}
 	}
 
-	// Unstage all changes
-	if _, err := targetGit.Run(ctx, GitCmdReset, "HEAD"); err != nil {
-		return result, fmt.Errorf("failed to unstage changes: %w", err)
+	if opts.Dirty && len(dirtyFiles) > 0 {
+		dirtyAdded, err := c.copyDirtyFiles(ctx, dirtyFiles, sourceWtPath, targetPath)
+		if err != nil {
+			return result, err
+		}
+		result.AddedFiles = mergeUnique(result.AddedFiles, dirtyAdded)
 	}
 
 	// Write state file
@@ -220,7 +252,8 @@ func (c *OverlayCommand) apply(ctx context.Context, sourceBranch string, cwd str
 		LogAttrKeyCategory.String(), LogCategoryOverlay,
 		"source", sourceBranch,
 		"target", targetBranch,
-		"modifiedFiles", result.ModifiedFiles)
+		"modifiedFiles", result.ModifiedFiles,
+		"dirtyFiles", result.DirtyFiles)
 
 	return result, nil
 }
@@ -376,6 +409,9 @@ func (r OverlayResult) Format(opts OverlayFormatOptions) FormatResult {
 			if len(r.AddedFiles) > 0 {
 				fmt.Fprintf(&stdout, "  %d file(s) would be added\n", len(r.AddedFiles))
 			}
+			if r.DirtyFiles > 0 {
+				fmt.Fprintf(&stdout, "  %d dirty file(s) would be applied\n", r.DirtyFiles)
+			}
 		}
 
 		if opts.Verbose {
@@ -406,6 +442,9 @@ func (r OverlayResult) Format(opts OverlayFormatOptions) FormatResult {
 		if len(r.AddedFiles) > 0 {
 			fmt.Fprintf(&stdout, ", %d added", len(r.AddedFiles))
 		}
+		if r.DirtyFiles > 0 {
+			fmt.Fprintf(&stdout, ", %d dirty", r.DirtyFiles)
+		}
 		fmt.Fprintln(&stdout, ")")
 
 		// Warning about not committing
@@ -429,6 +468,73 @@ func (r OverlayResult) Format(opts OverlayFormatOptions) FormatResult {
 	}
 
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
+}
+
+// copyDirtyFiles copies uncommitted changes from the source worktree to the target.
+// Returns the list of newly-added file paths for restore tracking.
+func (c *OverlayCommand) copyDirtyFiles(ctx context.Context, dirtyFiles []FileStatus, sourceWtPath, targetPath string) ([]string, error) {
+	c.Log.DebugContext(ctx, "applying dirty files",
+		LogAttrKeyCategory.String(), LogCategoryOverlay,
+		"count", len(dirtyFiles),
+		"source_worktree", sourceWtPath)
+
+	var addedFiles []string
+	for _, f := range dirtyFiles {
+		srcPath := filepath.Join(sourceWtPath, f.Path)
+		dstPath := filepath.Join(targetPath, f.Path)
+
+		// ReadFile directly instead of Stat-then-Read to avoid TOCTOU.
+		// This also handles edge cases like "DM" (staged delete then
+		// re-created) correctly by checking actual file existence.
+		data, readErr := c.FS.ReadFile(srcPath)
+		if readErr != nil && c.FS.IsNotExist(readErr) {
+			if err := c.FS.Remove(dstPath); err != nil && !c.FS.IsNotExist(err) {
+				c.Log.DebugContext(ctx, "failed to remove dirty-deleted file",
+					LogAttrKeyCategory.String(), LogCategoryOverlay,
+					"file", f.Path, "error", err)
+			}
+			continue
+		}
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read dirty file %s: %w", f.Path, readErr)
+		}
+
+		if err := c.FS.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+			return nil, fmt.Errorf("failed to create directory for %s: %w", f.Path, err)
+		}
+
+		// Preserve source file permissions (e.g., executable bit).
+		perm := fs.FileMode(0644)
+		if info, err := c.FS.Stat(srcPath); err == nil {
+			perm = info.Mode().Perm()
+		}
+
+		if err := c.FS.WriteFile(dstPath, data, perm); err != nil {
+			return nil, fmt.Errorf("failed to write dirty file %s: %w", f.Path, err)
+		}
+
+		// Track untracked and staged-new files for restore cleanup
+		if f.Status == "??" || strings.HasPrefix(f.Status, "A") {
+			addedFiles = append(addedFiles, f.Path)
+		}
+	}
+
+	return addedFiles, nil
+}
+
+// mergeUnique merges b into a, skipping duplicates.
+func mergeUnique(a, b []string) []string {
+	seen := make(map[string]bool, len(a))
+	for _, s := range a {
+		seen[s] = true
+	}
+	for _, s := range b {
+		if !seen[s] {
+			a = append(a, s)
+			seen[s] = true
+		}
+	}
+	return a
 }
 
 // splitNonEmpty splits a newline-separated string and removes empty entries.

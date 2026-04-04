@@ -10,7 +10,7 @@
     {
       "name": "twig",
       "description": "Claude Code plugin for twig - simplifies git worktree workflows",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "category": "productivity",
       "keywords": ["git", "worktree", "branch", "cli", "twig"],
       "source": "./external/claude-code/plugins/twig"

@@ -62,6 +62,10 @@ type MockGitExecutor struct {
 	// If set, this overrides HasChanges.
 	StatusOutput string
 
+	// StatusOutputMap maps directory to custom status --porcelain output.
+	// Used when different worktrees need different status results.
+	StatusOutputMap map[string]string
+
 	// StashPushErr is returned when stash push is called.
 	StashPushErr error
 
@@ -178,7 +182,7 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 	case "branch":
 		return m.handleBranch(args)
 	case "status":
-		return m.handleStatus(args)
+		return m.handleStatus(args, dir)
 	case "stash":
 		return m.handleStash(args)
 	case "for-each-ref":
@@ -382,9 +386,15 @@ func (m *MockGitExecutor) handleBranch(args []string) ([]byte, error) {
 	return nil, nil
 }
 
-func (m *MockGitExecutor) handleStatus(args []string) ([]byte, error) {
+func (m *MockGitExecutor) handleStatus(args []string, dir string) ([]byte, error) {
 	// args: ["status", "--porcelain"]
 	if len(args) >= 2 && args[1] == "--porcelain" {
+		// Check directory-specific output first
+		if m.StatusOutputMap != nil && dir != "" {
+			if output, ok := m.StatusOutputMap[dir]; ok {
+				return []byte(output), nil
+			}
+		}
 		// Use StatusOutput if set (allows custom status output)
 		if m.StatusOutput != "" {
 			return []byte(m.StatusOutput), nil
