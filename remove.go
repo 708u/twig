@@ -536,6 +536,16 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 			// git status failed - return error to caller for proper handling
 			return result, fmt.Errorf("failed to check uncommitted changes: %w", err)
 		}
+		// Twig-managed symlinks show up as untracked in git status; exclude
+		// them so they are not mistaken for genuine uncommitted changes.
+		var excludedSymlinks []string
+		changedFiles, excludedSymlinks = filterSymlinkManagedFiles(c.FS, wtInfo.Path, c.Config.Symlinks, changedFiles)
+		if len(excludedSymlinks) > 0 {
+			c.Log.DebugContext(ctx, "excluded symlink-managed paths from changed files",
+				"category", LogCategoryRemove,
+				"branch", branch,
+				"paths", excludedSymlinks)
+		}
 		result.ChangedFiles = changedFiles
 		if reason := c.checkSkipReason(ctx, wt, opts, changedFiles); reason != "" {
 			result.CanRemove = false

@@ -48,6 +48,13 @@ Glob patterns for files to symlink from source worktree to new worktrees.
 symlinks = [".envrc", "config/**/*.toml"]
 ```
 
+Since these symlinks are untracked, `git status` reports them the same way
+as ordinary untracked files. The [clean](commands/clean.md) and
+[remove](commands/remove.md) commands match `symlinks` (including
+`extra_symlinks`) against each worktree's untracked files and exclude the
+matches from uncommitted-changes detection, so a worktree with only
+symlinked files is still treated as clean.
+
 ### extra_symlinks
 
 Additional symlink patterns. Collected from both project and local configs.

@@ -70,3 +70,38 @@ func createSymlinks(fsys FileSystem, srcDir, dstDir string, patterns []string) (
 
 	return results, nil
 }
+
+// filterSymlinkManagedFiles removes entries from changedFiles whose path
+// matches one of the symlink glob patterns evaluated against dir. It returns
+// the filtered list and the paths that were excluded.
+func filterSymlinkManagedFiles(fsys FileSystem, dir string, patterns []string, changedFiles []FileStatus) ([]FileStatus, []string) {
+	if len(patterns) == 0 || len(changedFiles) == 0 {
+		return changedFiles, nil
+	}
+
+	symlinkPaths := make(map[string]bool)
+	for _, pattern := range patterns {
+		matches, err := fsys.Glob(dir, pattern)
+		if err != nil {
+			// An invalid pattern should not block uncommitted-changes detection.
+			continue
+		}
+		for _, m := range matches {
+			symlinkPaths[m] = true
+		}
+	}
+	if len(symlinkPaths) == 0 {
+		return changedFiles, nil
+	}
+
+	filtered := make([]FileStatus, 0, len(changedFiles))
+	var excluded []string
+	for _, f := range changedFiles {
+		if symlinkPaths[f.Path] {
+			excluded = append(excluded, f.Path)
+			continue
+		}
+		filtered = append(filtered, f)
+	}
+	return filtered, excluded
+}

@@ -842,6 +842,7 @@ func TestRemoveCommand_Check(t *testing.T) {
 		opts          CheckOptions
 		config        *Config
 		setupGit      func() *testutil.MockGitExecutor
+		fs            *testutil.MockFS
 		wantCanRemove bool
 		wantSkip      SkipReason
 		wantClean     CleanReason
@@ -970,6 +971,55 @@ func TestRemoveCommand_Check(t *testing.T) {
 			},
 			wantCanRemove: false,
 			wantSkip:      SkipHasChanges,
+		},
+		{
+			name:   "symlink_managed_untracked_file_not_treated_as_change",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main", Symlinks: []string{"justfile"}},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{"main": {"feat/a"}},
+					StatusOutput:   "?? justfile\n",
+				}
+			},
+			fs: &testutil.MockFS{
+				GlobResults: map[string][]string{"justfile": {"justfile"}},
+			},
+			wantCanRemove: true,
+			wantClean:     CleanMerged,
+		},
+		{
+			name:   "non_symlink_untracked_file_still_skips",
+			branch: "feat/a",
+			opts: CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			},
+			config: &Config{WorktreeSourceDir: "/repo/main", Symlinks: []string{"justfile"}},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/feat/a", Branch: "feat/a"},
+					},
+					MergedBranches: map[string][]string{"main": {"feat/a"}},
+					StatusOutput:   "?? debug.log\n",
+				}
+			},
+			fs: &testutil.MockFS{
+				GlobResults: map[string][]string{"justfile": {"justfile"}},
+			},
+			wantCanRemove: false,
+			wantSkip:      SkipHasChanges,
+			wantClean:     CleanMerged,
 		},
 		{
 			name:   "skip_not_merged",
@@ -1428,8 +1478,13 @@ func TestRemoveCommand_Check(t *testing.T) {
 
 			mockGit := tt.setupGit()
 
+			fs := tt.fs
+			if fs == nil {
+				fs = &testutil.MockFS{}
+			}
+
 			cmd := &RemoveCommand{
-				FS:     &testutil.MockFS{},
+				FS:     fs,
 				Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
 				Config: tt.config,
 				Log:    NewNopLogger(),
