@@ -1246,6 +1246,64 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("ExcludesSymlinkManagedFiles", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// Create a branch with a commit
+		wtPath := filepath.Join(repoDir, "feature", "symlink-only-change")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/symlink-only-change", wtPath)
+
+		testFile := filepath.Join(wtPath, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "test.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "test commit")
+
+		// Merge the branch to main
+		testutil.RunGit(t, mainDir, "merge", "--no-ff", "-m", "Merge feature/symlink-only-change", "feature/symlink-only-change")
+
+		// Simulate a twig-managed symlink left in the worktree (e.g. justfile
+		// created by `twig add` via the symlinks setting).
+		symlinkTarget := filepath.Join(mainDir, "justfile")
+		if err := os.WriteFile(symlinkTarget, []byte("build:\n\tgo build\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(symlinkTarget, filepath.Join(wtPath, "justfile")); err != nil {
+			t.Fatal(err)
+		}
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfgResult.Config.Symlinks = []string{"justfile"}
+
+		cmd := &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+
+		// Without --stale, a merged worktree whose only untracked path is a
+		// symlink-managed file should still be cleanable (not skipped).
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if result.Candidates[0].Skipped {
+			t.Errorf("merged branch with only symlink-managed changes should not be skipped, reason: %s", result.Candidates[0].SkipReason)
+		}
+		for _, f := range result.Candidates[0].ChangedFiles {
+			if f.Path == "justfile" {
+				t.Error("symlink-managed justfile should be excluded from ChangedFiles")
+			}
+		}
+	})
+
 	t.Run("StaleOverridesMergedWithChanges", func(t *testing.T) {
 		t.Parallel()
 

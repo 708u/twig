@@ -36,6 +36,11 @@ twig remove <branch>... [flags]
 This matches git's behavior where `git worktree remove -f` removes unclean
 worktrees and `git worktree remove -f -f` also removes locked worktrees.
 
+Files matching the `symlinks`/`extra_symlinks` patterns (see
+[Configuration](../configuration.md#symlinks)) are excluded from
+uncommitted-changes detection, since they are twig-managed symlinks rather
+than genuine changes.
+
 ### Submodule Handling
 
 `git worktree remove` requires `--force` for any worktree containing initialized

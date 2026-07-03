@@ -1325,6 +1325,81 @@ func TestRemoveCommand_Check_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("ExcludesSymlinkManagedFiles", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		wtPath := filepath.Join(repoDir, "feature", "symlink-test")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feature/symlink-test", wtPath)
+
+		// Simulate a twig-managed symlink (e.g. created by `twig add`).
+		symlinkTarget := filepath.Join(mainDir, "justfile")
+		if err := os.WriteFile(symlinkTarget, []byte("build:\n\tgo build\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(symlinkTarget, filepath.Join(wtPath, "justfile")); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := &RemoveCommand{
+			FS:  osFS{},
+			Git: NewGitRunner(mainDir),
+			Config: &Config{
+				WorktreeSourceDir: mainDir,
+				Symlinks:          []string{"justfile"},
+			},
+			Log: NewNopLogger(),
+		}
+
+		checkResult, err := cmd.Check(t.Context(), "feature/symlink-test", CheckOptions{
+			Cwd: mainDir,
+		})
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+
+		for _, f := range checkResult.ChangedFiles {
+			if f.Path == "justfile" {
+				t.Error("symlink-managed justfile should be excluded from ChangedFiles")
+			}
+		}
+		if !checkResult.CanRemove {
+			t.Errorf("CanRemove should be true when only symlink-managed files changed, got SkipReason=%v", checkResult.SkipReason)
+		}
+
+		// A genuine untracked file must still be reported and block removal.
+		if err := os.WriteFile(filepath.Join(wtPath, "debug.log"), []byte("log"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		checkResult, err = cmd.Check(t.Context(), "feature/symlink-test", CheckOptions{
+			Cwd: mainDir,
+		})
+		if err != nil {
+			t.Fatalf("Check failed: %v", err)
+		}
+
+		var foundDebugLog bool
+		for _, f := range checkResult.ChangedFiles {
+			if f.Path == "justfile" {
+				t.Error("symlink-managed justfile should still be excluded from ChangedFiles")
+			}
+			if f.Path == "debug.log" {
+				foundDebugLog = true
+			}
+		}
+		if !foundDebugLog {
+			t.Error("expected debug.log to remain in ChangedFiles")
+		}
+		if checkResult.CanRemove {
+			t.Error("CanRemove should be false when a genuine untracked file exists")
+		}
+		if checkResult.SkipReason != SkipHasChanges {
+			t.Errorf("SkipReason = %v, want %v", checkResult.SkipReason, SkipHasChanges)
+		}
+	})
+
 	t.Run("BlocksRemovalFromNestedSubdir", func(t *testing.T) {
 		t.Parallel()
 
