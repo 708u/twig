@@ -237,6 +237,73 @@ func TestGitRunner_IsFirstParentAncestor(t *testing.T) {
 	}
 }
 
+func TestBranchMergeStatus_Classification(t *testing.T) {
+	t.Parallel()
+
+	mockGit := &testutil.MockGitExecutor{
+		BranchHEADs: map[string]string{
+			"main":         "commit-main",
+			"feat/merged":  "commit-merged",
+			"feat/gone":    "commit-gone",
+			"feat/same":    "commit-main",
+			"feat/notdone": "commit-notdone",
+		},
+		MergedBranches: map[string][]string{
+			// git branch --merged includes same-commit branches.
+			"main": {"feat/merged", "feat/same"},
+		},
+		UpstreamGoneBranches: []string{"feat/gone"},
+	}
+	runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
+
+	status, err := runner.ClassifyBranchMergeStatus(t.Context(), "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !status.Merged["feat/merged"] {
+		t.Error("feat/merged should be in Merged")
+	}
+	if status.Merged["feat/same"] {
+		t.Error("feat/same points to target commit and must be excluded from Merged")
+	}
+	if !status.SameCommit["feat/same"] {
+		t.Error("feat/same should be in SameCommit")
+	}
+	if !status.Gone["feat/gone"] {
+		t.Error("feat/gone should be in Gone")
+	}
+	if status.Merged["feat/gone"] {
+		t.Error("gone branches must not be recorded in Merged")
+	}
+
+	// IsMerged treats both traditional merge and gone upstream as removable.
+	for _, b := range []string{"feat/merged", "feat/gone"} {
+		if !status.IsMerged(b) {
+			t.Errorf("IsMerged(%q) = false, want true", b)
+		}
+	}
+	for _, b := range []string{"feat/same", "feat/notdone"} {
+		if status.IsMerged(b) {
+			t.Errorf("IsMerged(%q) = true, want false", b)
+		}
+	}
+
+	// CleanReason: traditional merge and same-commit both display as merged;
+	// gone-only displays as upstream gone.
+	cleanReasons := map[string]CleanReason{
+		"feat/merged":  CleanMerged,
+		"feat/same":    CleanMerged,
+		"feat/gone":    CleanUpstreamGone,
+		"feat/notdone": "",
+	}
+	for b, want := range cleanReasons {
+		if got := status.CleanReason(b); got != want {
+			t.Errorf("CleanReason(%q) = %q, want %q", b, got, want)
+		}
+	}
+}
+
 func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 	t.Parallel()
 

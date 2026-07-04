@@ -55,7 +55,8 @@ type CleanCandidate struct {
 	SkipReason    SkipReason
 	CleanReason   CleanReason
 	ChangedFiles  []FileStatus
-	StaleOverride bool // Changes check bypassed via --stale for merged/upstream-gone
+	StaleOverride bool         // Changes check bypassed via --stale for merged/upstream-gone
+	checkResult   *CheckResult // cached Check result, reused by the removal phase
 }
 
 // CleanResult aggregates results from clean operations.
@@ -250,18 +251,19 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		"count", len(worktrees))
 
 	// Pre-fetch branch merge status to avoid redundant git branch --merged calls
-	mergeStatus, err := c.Git.ClassifyBranchMergeStatus(ctx, target)
-	if err != nil {
+	var mergeStatus *BranchMergeStatus
+	if ms, err := c.Git.ClassifyBranchMergeStatus(ctx, target); err != nil {
 		c.Log.DebugContext(ctx, "failed to classify branch merge status",
 			LogAttrKeyCategory.String(), LogCategoryClean,
 			"error", err.Error())
 		// Continue without cache - Check() will fall back to individual calls
-		mergeStatus = BranchMergeStatus{}
 	} else {
+		mergeStatus = &ms
 		c.Log.DebugContext(ctx, "branch merge status classified",
 			LogAttrKeyCategory.String(), LogCategoryClean,
-			"mergedCount", len(mergeStatus.Merged),
-			"sameCommitCount", len(mergeStatus.SameCommit))
+			"mergedCount", len(ms.Merged),
+			"sameCommitCount", len(ms.SameCommit),
+			"goneCount", len(ms.Gone))
 	}
 
 	// RemoveCommand is used for both Check and Run
@@ -344,6 +346,7 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 				SkipReason:   checkResult.SkipReason,
 				CleanReason:  checkResult.CleanReason,
 				ChangedFiles: checkResult.ChangedFiles,
+				checkResult:  &checkResult,
 			}
 
 			c.Log.DebugContext(ctx, "check completed",
@@ -427,12 +430,21 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 				"branch", candidate.Branch)
 
 			effectiveForce := opts.Force
-			if candidate.StaleOverride && effectiveForce < WorktreeForceLevelUnclean {
-				effectiveForce = WorktreeForceLevelUnclean
+			var preChecked *CheckResult
+			if candidate.StaleOverride {
+				// Stale bypasses the changes/submodule checks that the cached
+				// result recorded as a skip reason (CanRemove=false), so re-check
+				// with the elevated force instead of reusing that result.
+				if effectiveForce < WorktreeForceLevelUnclean {
+					effectiveForce = WorktreeForceLevelUnclean
+				}
+			} else {
+				preChecked = candidate.checkResult
 			}
 			wt, err := removeCmd.Run(ctx, candidate.Branch, cwd, RemoveOptions{
-				Force: effectiveForce,
-				Check: false,
+				Force:      effectiveForce,
+				Check:      false,
+				PreChecked: preChecked,
 			})
 			if err != nil {
 				c.Log.DebugContext(ctx, "removal failed",

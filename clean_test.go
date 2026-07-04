@@ -1,11 +1,114 @@
 package twig
 
 import (
+	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/708u/twig/internal/testutil"
 )
+
+// countingExecutor wraps a GitExecutor and counts calls per git subcommand.
+type countingExecutor struct {
+	inner  GitExecutor
+	mu     sync.Mutex
+	counts map[string]int
+	total  int
+}
+
+func newCountingExecutor(inner GitExecutor) *countingExecutor {
+	return &countingExecutor{inner: inner, counts: map[string]int{}}
+}
+
+func (e *countingExecutor) Run(ctx context.Context, args ...string) ([]byte, error) {
+	e.mu.Lock()
+	e.total++
+	e.counts[gitSubcommandKey(args)]++
+	e.mu.Unlock()
+	return e.inner.Run(ctx, args...)
+}
+
+// gitSubcommandKey derives a stable key from git args, ignoring the -C <dir>
+// prefix. Subcommands whose cost depends on the second token (e.g. branch
+// --merged vs branch -d) are keyed on both tokens.
+func gitSubcommandKey(args []string) string {
+	for len(args) >= 2 && args[0] == "-C" {
+		args = args[2:]
+	}
+	if len(args) == 0 {
+		return ""
+	}
+	switch args[0] {
+	case "worktree", "submodule", "stash":
+		if len(args) >= 2 {
+			return args[0] + " " + args[1]
+		}
+	case "branch":
+		if len(args) >= 2 && (args[1] == "--merged" || args[1] == "-d" || args[1] == "-D") {
+			return "branch " + args[1]
+		}
+	}
+	return args[0]
+}
+
+// TestCleanCommand_Run_ReusesChecks verifies the removal phase reuses the
+// check phase results instead of re-running per-branch git queries.
+func TestCleanCommand_Run_ReusesChecks(t *testing.T) {
+	t.Parallel()
+
+	mockGit := &testutil.MockGitExecutor{
+		Worktrees: []testutil.MockWorktree{
+			{Path: "/repo/main", Branch: "main"},
+			{Path: "/repo/feat/a", Branch: "feat/a"},
+			{Path: "/repo/feat/b", Branch: "feat/b"},
+		},
+		MergedBranches: map[string][]string{
+			"main": {"main", "feat/a"},
+		},
+		UpstreamGoneBranches: []string{"feat/b"},
+	}
+	counter := newCountingExecutor(mockGit)
+
+	cmd := &CleanCommand{
+		FS:     &testutil.MockFS{},
+		Git:    &GitRunner{Executor: counter, Log: NewNopLogger()},
+		Config: &Config{WorktreeSourceDir: "/repo/main", DefaultSource: "main"},
+		Log:    NewNopLogger(),
+	}
+
+	result, err := cmd.Run(t.Context(), "/other/dir", CleanOptions{Yes: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.CleanableCount() != 2 {
+		t.Fatalf("expected 2 cleanable, got %d", result.CleanableCount())
+	}
+
+	// branch --merged and the repo-wide for-each-ref classification run once
+	// for the whole command, not once per candidate.
+	if got := counter.counts["branch --merged"]; got != 1 {
+		t.Errorf("branch --merged called %d times, want 1", got)
+	}
+	if got := counter.counts["for-each-ref"]; got != 1 {
+		t.Errorf("for-each-ref called %d times, want 1", got)
+	}
+	// Submodule status is checked once per candidate in the check phase and
+	// reused during removal, not re-fetched.
+	if got := counter.counts["submodule status"]; got != 2 {
+		t.Errorf("submodule status called %d times, want 2", got)
+	}
+	// Removal reuses the check result: only worktree remove + branch delete run.
+	if got := counter.counts["worktree remove"]; got != 2 {
+		t.Errorf("worktree remove called %d times, want 2", got)
+	}
+	if got := counter.counts["branch -d"]; got != 1 {
+		t.Errorf("branch -d (merged) called %d times, want 1", got)
+	}
+	if got := counter.counts["branch -D"]; got != 1 {
+		t.Errorf("branch -D (upstream gone) called %d times, want 1", got)
+	}
+}
 
 func TestCleanResult_CleanableCount(t *testing.T) {
 	t.Parallel()
