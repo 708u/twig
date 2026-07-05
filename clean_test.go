@@ -48,6 +48,12 @@ func gitSubcommandKey(args []string) string {
 		if len(args) >= 2 && (args[1] == "--merged" || args[1] == "-d" || args[1] == "-D") {
 			return "branch " + args[1]
 		}
+	case "rev-parse":
+		// The cwd worktree-root lookup is the rev-parse variant whose count the
+		// clean path optimizes, so key it separately from other rev-parse uses.
+		if len(args) >= 2 && args[1] == "--show-toplevel" {
+			return "rev-parse --show-toplevel"
+		}
 	}
 	return args[0]
 }
@@ -71,7 +77,12 @@ func TestCleanCommand_Run_ReusesChecks(t *testing.T) {
 	counter := newCountingExecutor(mockGit)
 
 	cmd := &CleanCommand{
-		FS:     &testutil.MockFS{},
+		// .gitmodules present so the submodule status query is exercised; this
+		// test asserts it runs once per candidate and is reused during removal.
+		FS: &testutil.MockFS{ExistingPaths: []string{
+			"/repo/feat/a/.gitmodules",
+			"/repo/feat/b/.gitmodules",
+		}},
 		Git:    &GitRunner{Executor: counter, Log: NewNopLogger()},
 		Config: &Config{WorktreeSourceDir: "/repo/main", DefaultSource: "main"},
 		Log:    NewNopLogger(),
@@ -108,6 +119,76 @@ func TestCleanCommand_Run_ReusesChecks(t *testing.T) {
 	if got := counter.counts["branch -D"]; got != 1 {
 		t.Errorf("branch -D (upstream gone) called %d times, want 1", got)
 	}
+}
+
+// TestCleanCommand_Run_MinimizesGitSpawns verifies the per-command git spawns
+// that the check phase reduces: no submodule status query when .gitmodules is
+// absent, a single cwd worktree-root lookup, and a single worktree list.
+func TestCleanCommand_Run_MinimizesGitSpawns(t *testing.T) {
+	t.Parallel()
+
+	newMock := func() *testutil.MockGitExecutor {
+		return &testutil.MockGitExecutor{
+			Worktrees: []testutil.MockWorktree{
+				{Path: "/repo/main", Branch: "main"},
+				{Path: "/repo/feat/a", Branch: "feat/a"},
+				{Path: "/repo/feat/b", Branch: "feat/b"},
+				{Path: "/repo/feat/c", Branch: "feat/c"},
+			},
+			MergedBranches: map[string][]string{
+				"main": {"main", "feat/a"},
+			},
+			UpstreamGoneBranches: []string{"feat/b"},
+		}
+	}
+
+	newCmd := func(counter *countingExecutor) *CleanCommand {
+		return &CleanCommand{
+			// No .gitmodules paths: repos without submodules must not spawn
+			// `git submodule status`.
+			FS:     &testutil.MockFS{},
+			Git:    &GitRunner{Executor: counter, Log: NewNopLogger()},
+			Config: &Config{WorktreeSourceDir: "/repo/main", DefaultSource: "main"},
+			Log:    NewNopLogger(),
+		}
+	}
+
+	assertCounts := func(t *testing.T, counter *countingExecutor) {
+		t.Helper()
+		if got := counter.counts["submodule status"]; got != 0 {
+			t.Errorf("submodule status called %d times, want 0 (no .gitmodules)", got)
+		}
+		if got := counter.counts["rev-parse --show-toplevel"]; got != 1 {
+			t.Errorf("rev-parse --show-toplevel called %d times, want 1", got)
+		}
+		if got := counter.counts["worktree list"]; got != 1 {
+			t.Errorf("worktree list called %d times, want 1", got)
+		}
+	}
+
+	t.Run("check mode", func(t *testing.T) {
+		t.Parallel()
+
+		counter := newCountingExecutor(newMock())
+		cmd := newCmd(counter)
+
+		if _, err := cmd.Run(t.Context(), "/other/dir", CleanOptions{Check: true}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		assertCounts(t, counter)
+	})
+
+	t.Run("execute mode", func(t *testing.T) {
+		t.Parallel()
+
+		counter := newCountingExecutor(newMock())
+		cmd := newCmd(counter)
+
+		if _, err := cmd.Run(t.Context(), "/other/dir", CleanOptions{Yes: true}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		assertCounts(t, counter)
+	})
 }
 
 func TestCleanResult_CleanableCount(t *testing.T) {
@@ -983,7 +1064,12 @@ func TestCleanCommand_ResolveTarget(t *testing.T) {
 				Log:    NewNopLogger(),
 			}
 
-			got, err := cmd.resolveTarget(t.Context(), tt.target)
+			worktrees, err := cmd.Git.WorktreeList(t.Context())
+			if err != nil {
+				t.Fatalf("unexpected error listing worktrees: %v", err)
+			}
+
+			got, err := cmd.resolveTarget(tt.target, worktrees)
 
 			if tt.wantErr {
 				if err == nil {

@@ -65,6 +65,7 @@ type CheckOptions struct {
 	Force        WorktreeForceLevel // Force level to apply
 	Target       string             // Target branch for merged check (empty = skip merged check)
 	Cwd          string             // Current directory for cwd check
+	CwdRoot      *string            // Pre-resolved worktree root of Cwd (nil = resolve on demand)
 	WorktreeInfo *Worktree          // Pre-fetched worktree info (skips WorktreeFindByBranch if set)
 	MergeStatus  *BranchMergeStatus // Pre-fetched branch merge status (nil = query per branch)
 }
@@ -315,7 +316,7 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	if effectiveForce < WorktreeForceLevelUnclean {
 		smStatus := checkResult.SubmoduleStatus
 		if smStatus == SubmoduleCleanStatusUnknown {
-			if s, err := c.Git.InDir(checkResult.WorktreePath).CheckSubmoduleCleanStatus(ctx); err == nil {
+			if s, err := c.submoduleCleanStatus(ctx, checkResult.WorktreePath); err == nil {
 				smStatus = s
 			}
 		}
@@ -563,7 +564,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 		// elevated. Compute it once here and cache it for Run() to reuse.
 		smStatus := SubmoduleCleanStatusUnknown
 		if opts.Force < WorktreeForceLevelUnclean {
-			if s, err := c.Git.InDir(wtInfo.Path).CheckSubmoduleCleanStatus(ctx); err == nil {
+			if s, err := c.submoduleCleanStatus(ctx, wtInfo.Path); err == nil {
 				smStatus = s
 			}
 		}
@@ -622,9 +623,18 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts C
 		return SkipDetached
 	}
 
-	// Check current directory (never bypassed)
-	// Use git rev-parse --show-toplevel to get the worktree root of cwd
-	if root, err := c.Git.InDir(opts.Cwd).WorktreeRoot(ctx); err == nil && root == wt.Path {
+	// Check current directory (never bypassed). Compare the worktree against the
+	// resolved worktree root of cwd. A caller that checks many worktrees (clean)
+	// resolves the root once and passes it in; otherwise resolve it here. An
+	// unresolvable cwd (outside any worktree) never matches, so the check is
+	// skipped silently.
+	cwdRoot := opts.CwdRoot
+	if cwdRoot == nil {
+		if root, err := c.Git.InDir(opts.Cwd).WorktreeRoot(ctx); err == nil {
+			cwdRoot = &root
+		}
+	}
+	if cwdRoot != nil && *cwdRoot == wt.Path {
 		return SkipCurrentDir
 	}
 
@@ -727,4 +737,15 @@ func (c *RemoveCommand) shouldForceDeleteBranch(ctx context.Context, branch stri
 	}
 	gone, err := c.Git.IsBranchUpstreamGone(ctx, branch)
 	return err == nil && gone
+}
+
+// submoduleCleanStatus resolves a worktree's submodule clean status. A repo
+// without submodules is the common case, so a missing .gitmodules short-circuits
+// to "none" and skips launching `git submodule status`. Any other stat outcome
+// defers to the git query, which stays authoritative.
+func (c *RemoveCommand) submoduleCleanStatus(ctx context.Context, worktreePath string) (SubmoduleCleanStatus, error) {
+	if _, err := c.FS.Stat(filepath.Join(worktreePath, ".gitmodules")); err != nil && c.FS.IsNotExist(err) {
+		return SubmoduleCleanStatusNone, nil
+	}
+	return c.Git.InDir(worktreePath).CheckSubmoduleCleanStatus(ctx)
 }

@@ -1060,6 +1060,8 @@ func TestRemoveCommand_Check(t *testing.T) {
 					SubmoduleStatusOutput: "+abc123 submodule-path (v1.0.0)\n",
 				}
 			},
+			// .gitmodules present so the submodule status query runs.
+			fs:            &testutil.MockFS{ExistingPaths: []string{"/repo/feat/a/.gitmodules"}},
 			wantCanRemove: false,
 			wantSkip:      SkipDirtySubmodule,
 			wantClean:     CleanMerged, // CleanReason is set for non-merge-related skip reasons
@@ -1199,6 +1201,8 @@ func TestRemoveCommand_Check(t *testing.T) {
 					},
 				}
 			},
+			// .gitmodules present so the submodule status query runs.
+			fs:            &testutil.MockFS{ExistingPaths: []string{"/repo/feat/a/.gitmodules"}},
 			wantCanRemove: false,
 			wantSkip:      SkipDirtySubmodule,
 			wantClean:     "", // WIP on first-parent: CleanReason cleared
@@ -1514,6 +1518,63 @@ func TestRemoveCommand_Check(t *testing.T) {
 			}
 			if result.CleanReason != tt.wantClean {
 				t.Errorf("CleanReason = %q, want %q", result.CleanReason, tt.wantClean)
+			}
+		})
+	}
+}
+
+// TestRemoveCommand_Check_SubmoduleShortCircuit verifies that the submodule
+// status git query is skipped when the worktree has no .gitmodules file, and
+// still runs when one is present.
+func TestRemoveCommand_Check_SubmoduleShortCircuit(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		existingPaths []string
+		wantSubmodule int
+	}{
+		{name: "no gitmodules skips submodule status", existingPaths: nil, wantSubmodule: 0},
+		{
+			name:          "gitmodules present queries submodule status",
+			existingPaths: []string{"/repo/feat/a/.gitmodules"},
+			wantSubmodule: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := &testutil.MockGitExecutor{
+				Worktrees: []testutil.MockWorktree{
+					{Path: "/repo/main", Branch: "main"},
+					{Path: "/repo/feat/a", Branch: "feat/a"},
+				},
+				MergedBranches: map[string][]string{"main": {"feat/a"}},
+			}
+			counter := newCountingExecutor(mockGit)
+
+			cmd := &RemoveCommand{
+				FS:     &testutil.MockFS{ExistingPaths: tt.existingPaths},
+				Git:    &GitRunner{Executor: counter, Log: NewNopLogger()},
+				Config: &Config{WorktreeSourceDir: "/repo/main"},
+				Log:    NewNopLogger(),
+			}
+
+			result, err := cmd.Check(t.Context(), "feat/a", CheckOptions{
+				Force:  WorktreeForceLevelNone,
+				Target: "main",
+				Cwd:    "/other/dir",
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !result.CanRemove {
+				t.Fatalf("expected CanRemove=true, got skip %q", result.SkipReason)
+			}
+			if got := counter.counts["submodule status"]; got != tt.wantSubmodule {
+				t.Errorf("submodule status called %d times, want %d", got, tt.wantSubmodule)
 			}
 		})
 	}
