@@ -229,8 +229,19 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 	var result CleanResult
 	result.Check = opts.Check
 
+	// List worktrees once; both target auto-detection and the per-candidate
+	// checks below reuse this single snapshot.
+	worktrees, err := c.Git.WorktreeList(ctx)
+	if err != nil {
+		return result, fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	c.Log.DebugContext(ctx, "worktrees listed",
+		LogAttrKeyCategory.String(), LogCategoryClean,
+		"count", len(worktrees))
+
 	// Resolve target branch
-	target, err := c.resolveTarget(ctx, opts.Target)
+	target, err := c.resolveTarget(opts.Target, worktrees)
 	if err != nil {
 		return result, err
 	}
@@ -240,15 +251,15 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		LogAttrKeyCategory.String(), LogCategoryClean,
 		"target", target)
 
-	// Get all worktrees
-	worktrees, err := c.Git.WorktreeList(ctx)
-	if err != nil {
-		return result, fmt.Errorf("failed to list worktrees: %w", err)
+	// Resolve the cwd worktree root once. Every candidate's current-directory
+	// check compares against the same value, so resolving it per candidate would
+	// spawn a redundant git rev-parse each time. An unresolvable cwd (outside a
+	// worktree) yields an empty root that never matches, matching the
+	// per-candidate fallback in RemoveCommand.Check.
+	cwdRoot := ""
+	if root, err := c.Git.InDir(cwd).WorktreeRoot(ctx); err == nil {
+		cwdRoot = root
 	}
-
-	c.Log.DebugContext(ctx, "worktrees listed",
-		LogAttrKeyCategory.String(), LogCategoryClean,
-		"count", len(worktrees))
 
 	// Pre-fetch branch merge status to avoid redundant git branch --merged calls
 	var mergeStatus *BranchMergeStatus
@@ -326,6 +337,7 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 				Force:        opts.Force,
 				Target:       target,
 				Cwd:          cwd,
+				CwdRoot:      &cwdRoot,
 				WorktreeInfo: &wt,
 				MergeStatus:  mergeStatus,
 			})
@@ -485,16 +497,11 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 }
 
 // resolveTarget resolves the target branch for merge checking.
-// If target is specified, use it. Otherwise, auto-detect from first non-bare worktree.
-func (c *CleanCommand) resolveTarget(ctx context.Context, target string) (string, error) {
+// If target is specified, use it. Otherwise, auto-detect from the first
+// non-bare worktree (usually main) in the provided list.
+func (c *CleanCommand) resolveTarget(target string, worktrees []Worktree) (string, error) {
 	if target != "" {
 		return target, nil
-	}
-
-	// Find first non-bare worktree (usually main)
-	worktrees, err := c.Git.WorktreeList(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
 	for _, wt := range worktrees {
