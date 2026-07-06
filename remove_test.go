@@ -1714,3 +1714,75 @@ func TestRemoveCommand_UpstreamGoneUsesForceDelete(t *testing.T) {
 		})
 	}
 }
+
+// TestRemoveCommand_Run_UsesPreCheckedResult verifies that a pre-fetched check
+// result lets Run skip all eligibility queries, running only the mutating
+// worktree remove and branch delete.
+func TestRemoveCommand_Run_UsesPreCheckedResult(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		cleanReason CleanReason
+		wantDelete  string // "branch -d" or "branch -D"
+	}{
+		{
+			name:        "merged uses plain delete",
+			cleanReason: CleanMerged,
+			wantDelete:  "branch -d",
+		},
+		{
+			name:        "upstream gone uses force delete",
+			cleanReason: CleanUpstreamGone,
+			wantDelete:  "branch -D",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := &testutil.MockGitExecutor{
+				Worktrees: []testutil.MockWorktree{
+					{Path: "/repo/main", Branch: "main"},
+					{Path: "/repo/feat/a", Branch: "feat/a"},
+				},
+			}
+			counter := newCountingExecutor(mockGit)
+
+			cmd := &RemoveCommand{
+				FS:     &testutil.MockFS{},
+				Git:    &GitRunner{Executor: counter, Log: NewNopLogger()},
+				Config: &Config{WorktreeSourceDir: "/repo/main"},
+				Log:    NewNopLogger(),
+			}
+
+			preChecked := &CheckResult{
+				CanRemove:       true,
+				WorktreePath:    "/repo/feat/a",
+				Branch:          "feat/a",
+				CleanReason:     tt.cleanReason,
+				SubmoduleStatus: SubmoduleCleanStatusNone,
+			}
+
+			_, err := cmd.Run(t.Context(), "feat/a", "/other/dir", RemoveOptions{PreChecked: preChecked})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			// No eligibility queries are issued when the result is pre-checked.
+			forbidden := []string{"worktree list", "status", "submodule status", "for-each-ref", "rev-parse"}
+			for _, key := range forbidden {
+				if got := counter.counts[key]; got != 0 {
+					t.Errorf("%s called %d times, want 0", key, got)
+				}
+			}
+			if got := counter.counts["worktree remove"]; got != 1 {
+				t.Errorf("worktree remove called %d times, want 1", got)
+			}
+			if got := counter.counts[tt.wantDelete]; got != 1 {
+				t.Errorf("%s called %d times, want 1", tt.wantDelete, got)
+			}
+		})
+	}
+}

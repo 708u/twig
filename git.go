@@ -632,27 +632,53 @@ func (g *GitRunner) IsBranchMerged(ctx context.Context, branch, target string) (
 	if err != nil {
 		return false, err
 	}
-	return result.Merged[branch], nil
+	return result.IsMerged(branch), nil
 }
 
 // BranchMergeStatus holds the classification of branches by merge status.
 type BranchMergeStatus struct {
-	// Merged contains branches that are considered merged
-	// (via git branch --merged or upstream gone, excluding same-commit branches).
+	// Merged contains branches in `git branch --merged <target>` output,
+	// excluding branches pointing to the same commit as target.
 	Merged map[string]bool
 	// SameCommit contains branches pointing to the same commit as target.
 	// These are excluded from Merged because they could be newly created or ff-merged.
 	SameCommit map[string]bool
+	// Gone contains branches whose upstream tracking branch is gone,
+	// indicating a squash/rebase merge whose remote branch was deleted.
+	Gone map[string]bool
+}
+
+// IsMerged reports whether the branch is safe to treat as merged for removal:
+// reachable from target (git branch --merged) or with a gone upstream.
+// Same-commit branches are excluded since they may be unmerged work.
+func (s BranchMergeStatus) IsMerged(branch string) bool {
+	return s.Merged[branch] || s.Gone[branch]
+}
+
+// CleanReason returns the display reason for why the branch is cleanable,
+// or empty if it is not merged. Presence in `git branch --merged` output
+// (including same-commit branches) takes precedence over a gone upstream,
+// matching git's merge detection order.
+func (s BranchMergeStatus) CleanReason(branch string) CleanReason {
+	if s.Merged[branch] || s.SameCommit[branch] {
+		return CleanMerged
+	}
+	if s.Gone[branch] {
+		return CleanUpstreamGone
+	}
+	return ""
 }
 
 // ClassifyBranchMergeStatus classifies branches by their merge status relative to target.
 // A branch is merged if it's in `git branch --merged <target>` or if its upstream is gone.
-// Branches pointing to the same commit as target are returned separately in SameCommit.
+// Branches pointing to the same commit as target are returned separately in SameCommit,
+// and branches with a gone upstream in Gone.
 // This is more efficient than calling IsBranchMerged for each branch individually.
 func (g *GitRunner) ClassifyBranchMergeStatus(ctx context.Context, target string) (BranchMergeStatus, error) {
 	result := BranchMergeStatus{
 		Merged:     make(map[string]bool),
 		SameCommit: make(map[string]bool),
+		Gone:       make(map[string]bool),
 	}
 
 	// Get all branch info in one call: name, commit hash, and upstream status
@@ -678,7 +704,7 @@ func (g *GitRunner) ClassifyBranchMergeStatus(ctx context.Context, target string
 
 		// Check for upstream gone (squash/rebase merges)
 		if len(parts) == 3 && parts[2] == "[gone]" {
-			result.Merged[branch] = true
+			result.Gone[branch] = true
 		}
 	}
 
@@ -749,8 +775,10 @@ const (
 type SubmoduleCleanStatus int
 
 const (
+	// SubmoduleCleanStatusUnknown: status not yet checked (zero value).
+	SubmoduleCleanStatusUnknown SubmoduleCleanStatus = iota
 	// SubmoduleCleanStatusNone: no initialized submodules exist.
-	SubmoduleCleanStatusNone SubmoduleCleanStatus = iota
+	SubmoduleCleanStatusNone
 	// SubmoduleCleanStatusClean: submodules exist but all are clean.
 	SubmoduleCleanStatusClean
 	// SubmoduleCleanStatusDirty: submodules have uncommitted changes or are at different commits.
