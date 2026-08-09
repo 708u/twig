@@ -46,7 +46,51 @@ type CleanReason string
 const (
 	CleanMerged       CleanReason = "merged"
 	CleanUpstreamGone CleanReason = "upstream gone"
+	CleanSquashMerged CleanReason = "squash merged"
 )
+
+// squashMergeProbe answers the squash-merge question for a single branch.
+// The probe costs three git spawns, so it runs on first use and memoizes the
+// answer for the skip decision and the clean reason to share. A nil probe
+// reports no detection, which lets callers disable it by passing nil.
+type squashMergeProbe struct {
+	git    *GitRunner
+	log    *slog.Logger
+	branch string
+	target string
+	done   bool
+	merged bool
+}
+
+func (p *squashMergeProbe) detect(ctx context.Context) bool {
+	if p == nil {
+		return false
+	}
+	if p.done {
+		return p.merged
+	}
+	p.done = true
+
+	merged, err := p.git.IsSquashMerged(ctx, p.branch, p.target)
+	if err != nil {
+		// A history without a common base (orphan branch, unrelated roots)
+		// cannot be compared; keep the branch.
+		p.log.DebugContext(ctx, "squash merge probe failed",
+			"category", LogCategoryRemove,
+			"branch", p.branch,
+			"target", p.target,
+			"error", err.Error())
+		return false
+	}
+	p.merged = merged
+
+	p.log.DebugContext(ctx, "squash merge probe",
+		"category", LogCategoryRemove,
+		"branch", p.branch,
+		"target", p.target,
+		"squashMerged", merged)
+	return merged
+}
 
 // CheckResult holds the result of checking whether a worktree can be removed.
 type CheckResult struct {
@@ -517,6 +561,13 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 	result.WorktreePath = wtInfo.Path
 	result.Prunable = wtInfo.Prunable
 
+	// An elevated force level removes the branch regardless of merge status and
+	// deletes it with -D, leaving the probe no decision to influence.
+	var probe *squashMergeProbe
+	if opts.Target != "" && opts.Force < WorktreeForceLevelUnclean {
+		probe = &squashMergeProbe{git: c.Git, log: c.Log, branch: branch, target: opts.Target}
+	}
+
 	c.Log.DebugContext(ctx, "checking",
 		"category", LogCategoryRemove,
 		"branch", branch,
@@ -525,7 +576,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 
 	if wtInfo.Prunable {
 		// Prunable branch: worktree directory was deleted externally
-		if reason := c.checkPrunableSkipReason(ctx, branch, opts.Target, opts.Force, opts.MergeStatus); reason != "" {
+		if reason := c.checkPrunableSkipReason(ctx, branch, opts.Target, opts.Force, opts.MergeStatus, probe); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
 			c.Log.DebugContext(ctx, "skip",
@@ -570,17 +621,17 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 		}
 		result.SubmoduleStatus = smStatus
 
-		if reason := c.checkSkipReason(ctx, wt, opts, changedFiles, smStatus); reason != "" {
+		if reason := c.checkSkipReason(ctx, wt, opts, changedFiles, smStatus, probe); reason != "" {
 			result.CanRemove = false
 			result.SkipReason = reason
 			// Calculate CleanReason for skip candidates (except merge-related skip reasons)
 			isMergeRelated := reason == SkipNotMerged || reason == SkipSameCommit
 			if opts.Target != "" && !isMergeRelated {
-				result.CleanReason = c.getCleanReason(ctx, branch, opts.Target, opts.MergeStatus)
-				// Clear CleanMerged for WIP branches on first-parent lineage.
+				result.CleanReason = c.getCleanReason(ctx, branch, opts.Target, opts.MergeStatus, probe)
+				// Clear the merged reason for WIP branches on first-parent lineage.
 				// A branch with no new commits whose HEAD is a direct ancestor
 				// of target via first-parent is WIP, not genuinely merged.
-				if result.CleanReason == CleanMerged &&
+				if (result.CleanReason == CleanMerged || result.CleanReason == CleanSquashMerged) &&
 					(reason == SkipHasChanges || reason == SkipDirtySubmodule) {
 					isWIP, fpErr := c.Git.IsFirstParentAncestor(
 						ctx, wtInfo.HEAD, opts.Target,
@@ -603,7 +654,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 	result.CanRemove = true
 	// CleanReason requires a target branch to determine merge status
 	if opts.Target != "" {
-		result.CleanReason = c.getCleanReason(ctx, branch, opts.Target, opts.MergeStatus)
+		result.CleanReason = c.getCleanReason(ctx, branch, opts.Target, opts.MergeStatus, probe)
 		if result.CleanReason != "" {
 			c.Log.DebugContext(ctx, "clean reason",
 				"category", LogCategoryRemove,
@@ -617,7 +668,7 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 // checkSkipReason checks if worktree should be skipped and returns the reason.
 // force level controls which conditions can be bypassed (matches git worktree behavior).
 // changedFiles and smStatus are pre-fetched to avoid redundant git calls.
-func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts CheckOptions, changedFiles []FileStatus, smStatus SubmoduleCleanStatus) SkipReason {
+func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts CheckOptions, changedFiles []FileStatus, smStatus SubmoduleCleanStatus, probe *squashMergeProbe) SkipReason {
 	// Check detached HEAD (never bypassed)
 	if wt.Detached {
 		return SkipDetached
@@ -657,7 +708,7 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts C
 
 	// Check merged (only when target is specified)
 	if opts.Target != "" && opts.Force < WorktreeForceLevelUnclean {
-		return c.checkMergedSkipReason(ctx, wt.Branch, opts.Target, opts.MergeStatus)
+		return c.checkMergedSkipReason(ctx, wt.Branch, opts.Target, opts.MergeStatus, probe)
 	}
 
 	return ""
@@ -666,10 +717,10 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts C
 // checkPrunableSkipReason checks if a prunable branch should be skipped.
 // Only checks merged status since worktree-specific conditions don't apply.
 // mergeStatus is pre-fetched to avoid redundant git branch --merged calls.
-func (c *RemoveCommand) checkPrunableSkipReason(ctx context.Context, branch, target string, force WorktreeForceLevel, mergeStatus *BranchMergeStatus) SkipReason {
+func (c *RemoveCommand) checkPrunableSkipReason(ctx context.Context, branch, target string, force WorktreeForceLevel, mergeStatus *BranchMergeStatus, probe *squashMergeProbe) SkipReason {
 	// Check merged (only when target is specified)
 	if target != "" && force < WorktreeForceLevelUnclean {
-		return c.checkMergedSkipReason(ctx, branch, target, mergeStatus)
+		return c.checkMergedSkipReason(ctx, branch, target, mergeStatus, probe)
 	}
 	return ""
 }
@@ -677,13 +728,18 @@ func (c *RemoveCommand) checkPrunableSkipReason(ctx context.Context, branch, tar
 // checkMergedSkipReason checks if a branch should be skipped due to merge status.
 // Returns appropriate SkipReason: empty if merged, SkipNotMerged if not merged,
 // or a dynamic "same commit as <target>" if pointing to same commit as target.
-func (c *RemoveCommand) checkMergedSkipReason(ctx context.Context, branch, target string, mergeStatus *BranchMergeStatus) SkipReason {
+// Branches left undecided by the commit-level signals go to the squash probe,
+// since a squash merge leaves no commit in common with target.
+func (c *RemoveCommand) checkMergedSkipReason(ctx context.Context, branch, target string, mergeStatus *BranchMergeStatus, probe *squashMergeProbe) SkipReason {
 	if mergeStatus != nil {
 		if mergeStatus.IsMerged(branch) {
 			return "" // merged, can remove
 		}
 		if mergeStatus.SameCommit[branch] {
 			return SkipSameCommit
+		}
+		if probe.detect(ctx) {
+			return ""
 		}
 		return SkipNotMerged
 	}
@@ -694,14 +750,23 @@ func (c *RemoveCommand) checkMergedSkipReason(ctx context.Context, branch, targe
 	if err == nil && merged {
 		return ""
 	}
+	if probe.detect(ctx) {
+		return ""
+	}
 	return SkipNotMerged
 }
 
 // getCleanReason determines why a branch is cleanable. When a pre-fetched
 // mergeStatus is available it is used directly; otherwise git is queried.
-func (c *RemoveCommand) getCleanReason(ctx context.Context, branch, target string, mergeStatus *BranchMergeStatus) CleanReason {
+func (c *RemoveCommand) getCleanReason(ctx context.Context, branch, target string, mergeStatus *BranchMergeStatus, probe *squashMergeProbe) CleanReason {
 	if mergeStatus != nil {
-		return mergeStatus.CleanReason(branch)
+		if reason := mergeStatus.CleanReason(branch); reason != "" {
+			return reason
+		}
+		if probe.detect(ctx) {
+			return CleanSquashMerged
+		}
+		return ""
 	}
 
 	// Fallback: no cache available, query git directly.
@@ -721,16 +786,21 @@ func (c *RemoveCommand) getCleanReason(ctx context.Context, branch, target strin
 		return CleanUpstreamGone
 	}
 
+	if probe.detect(ctx) {
+		return CleanSquashMerged
+	}
+
 	return ""
 }
 
 // shouldForceDeleteBranch reports whether deleting the branch needs -D.
-// Upstream-gone branches (squash/rebase merged) diverge from target, so -d
-// would fail. A cached clean reason answers this without a git call; when
-// absent (e.g. a single remove without a target) it falls back to a query.
+// Squash-merged branches, whether detected through a gone upstream or through
+// patch equivalence, diverge from target and would fail -d. A cached clean
+// reason answers this without a git call; when absent (e.g. a single remove
+// without a target) it falls back to a query.
 func (c *RemoveCommand) shouldForceDeleteBranch(ctx context.Context, branch string, checkResult CheckResult) bool {
 	switch checkResult.CleanReason {
-	case CleanUpstreamGone:
+	case CleanUpstreamGone, CleanSquashMerged:
 		return true
 	case CleanMerged:
 		return false

@@ -94,12 +94,30 @@ The clean command detects merged branches using:
 
 1. `git branch --merged` - traditional merge commits
 2. Upstream gone status - squash/rebase merges via PR
+3. Patch comparison - squash merges whose branch still exists
 
-**Limitation:** Squash and rebase merge detection relies on
-upstream gone status. If the remote branch is not deleted after
-merging the PR, the branch is reported as "not merged". Enable
-GitHub's "Automatically delete head branches" repository setting
-to ensure remote branches are cleaned up after PR merge.
+Patch comparison runs only for branches the first two methods
+leave undecided. The branch is rebuilt as the single commit a
+squash merge would produce (its tree on top of the merge base with
+the target), and `git rev-list --cherry-pick` then checks whether
+every patch it carries already exists in the target. An empty
+result means the whole branch is contained in the target.
+
+Branches with no commits of their own produce an empty patch,
+which is never treated as contained, so ongoing work is not
+reported as merged.
+
+**Limitation:** Patch comparison needs the merged content to match
+the branch. A squash merge that resolved conflicts, or a branch
+amended after the merge, carries patches the target does not have
+and is reported as "not merged". Detection never reports a branch
+that is only partially contained in the target.
+
+**Limitation:** A rebase merge spreads the branch over several
+commits in the target, so the combined patch matches none of them
+unless the branch holds a single commit. Enable GitHub's
+"Automatically delete head branches" repository setting so rebase
+merged branches are detected through upstream gone status.
 
 **Limitation:** Local-only fast-forward merges are not detected.
 When a branch is fast-forward merged locally (without `--no-ff`),
@@ -112,7 +130,9 @@ worked on.
 | Merge commit (`--no-ff`)                | `git branch --merged` | Yes      |
 | Squash merge (PR)                       | Upstream gone         | Yes      |
 | Rebase merge (PR)                       | Upstream gone         | Yes      |
-| Squash merge (PR, branch not deleted)   | (none)                | No       |
+| Squash merge (PR, branch not deleted)   | Patch comparison      | Yes      |
+| Squash merge (conflicts resolved)       | (none)                | No       |
+| Rebase merge (branch not deleted)       | Patch comparison      | 1 commit |
 | Local fast-forward                      | (none)                | No       |
 
 To clean local fast-forward merged branches, use `--force`:
@@ -261,6 +281,7 @@ Clean reasons:
 |------------------|-------------------------------------------------|
 | `merged`         | Branch is merged to target branch               |
 | `upstream gone`  | Remote tracking branch was deleted              |
+| `squash merged`  | Branch content is squashed into target branch   |
 | `prunable, ...`  | Worktree directory was deleted externally       |
 
 Skip reasons:

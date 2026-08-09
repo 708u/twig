@@ -142,6 +142,15 @@ type MockGitExecutor struct {
 
 	// ResetErr is returned when reset is called.
 	ResetErr error
+
+	// SquashMergedBranches is a list of branches whose content is fully
+	// contained in the target as a squashed commit.
+	// Used by rev-list --cherry-pick to detect squash merged branches.
+	SquashMergedBranches []string
+
+	// NoMergeBaseBranches is a list of branches that share no history with the
+	// target, making git merge-base fail.
+	NoMergeBaseBranches []string
 }
 
 func (m *MockGitExecutor) Run(ctx context.Context, args ...string) ([]byte, error) {
@@ -193,6 +202,10 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 		return m.handleSubmodule(args)
 	case "rev-list":
 		return m.handleRevList(args)
+	case "merge-base":
+		return m.handleMergeBase(args)
+	case "commit-tree":
+		return m.handleCommitTree(args)
 	case "checkout":
 		return m.handleCheckout(args)
 	case "reset":
@@ -572,11 +585,52 @@ func (m *MockGitExecutor) handleSubmodule(args []string) ([]byte, error) {
 	return nil, nil
 }
 
+// handleMergeBase handles ["merge-base", "<target>", "<branch>"].
+// The returned hash encodes the branch so commit-tree can resolve it back.
+func (m *MockGitExecutor) handleMergeBase(args []string) ([]byte, error) {
+	if len(args) < 3 {
+		return nil, nil
+	}
+	branch := args[2]
+	if slices.Contains(m.NoMergeBaseBranches, branch) {
+		return nil, &MockExitError{Code: 1}
+	}
+	return []byte("mergebase-" + branch + "\n"), nil
+}
+
+// handleCommitTree handles ["commit-tree", "<branch>^{tree}", "-p", ...].
+// The returned hash encodes the branch so rev-list can resolve it back.
+func (m *MockGitExecutor) handleCommitTree(args []string) ([]byte, error) {
+	if len(args) < 2 {
+		return nil, nil
+	}
+	branch := strings.TrimSuffix(args[1], "^{tree}")
+	return []byte("synthetic-" + branch + "\n"), nil
+}
+
 func (m *MockGitExecutor) handleRevList(args []string) ([]byte, error) {
 	// args: ["rev-list", "--first-parent", "<target>"] or
 	// args: ["rev-list", "--first-parent", "<target>", "--not", "<parent>"]
 	if len(args) < 3 {
 		return nil, nil
+	}
+
+	// Squash detection: ["rev-list", "--cherry-pick", "--right-only",
+	// "--no-merges", "-n1", "<target>...synthetic-<branch>"].
+	// An empty result means every patch of the branch is present in target.
+	if slices.Contains(args, "--cherry-pick") {
+		for _, arg := range args[1:] {
+			_, synthetic, found := strings.Cut(arg, "...")
+			if !found {
+				continue
+			}
+			branch := strings.TrimPrefix(synthetic, "synthetic-")
+			if slices.Contains(m.SquashMergedBranches, branch) {
+				return []byte{}, nil
+			}
+			return []byte("unmatched-" + branch + "\n"), nil
+		}
+		return []byte("unmatched\n"), nil
 	}
 
 	// Find the target (first non-flag arg after "rev-list")

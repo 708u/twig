@@ -294,3 +294,124 @@ func TestGitRunner_BranchDelete_Integration(t *testing.T) {
 		}
 	})
 }
+
+func TestGitRunner_IsSquashMerged_Integration(t *testing.T) {
+	t.Parallel()
+
+	// writeCommit commits a file with the given content on the current branch.
+	writeCommit := func(t *testing.T, dir, name, content, message string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, dir, "add", name)
+		testutil.RunGit(t, dir, "commit", "-m", message)
+	}
+
+	t.Run("SquashMerged", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		testutil.RunGit(t, mainDir, "checkout", "-b", "feat/x")
+		writeCommit(t, mainDir, "feature.txt", "one\n", "first")
+		writeCommit(t, mainDir, "feature.txt", "one\ntwo\n", "second")
+		testutil.RunGit(t, mainDir, "checkout", "main")
+		testutil.RunGit(t, mainDir, "merge", "--squash", "feat/x")
+		testutil.RunGit(t, mainDir, "commit", "-m", "squashed feat/x")
+
+		runner := NewGitRunner(mainDir)
+
+		got, err := runner.IsSquashMerged(t.Context(), "feat/x", "main")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !got {
+			t.Error("squash merged branch should be detected")
+		}
+	})
+
+	t.Run("TargetMovedAfterSquashMerge", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		testutil.RunGit(t, mainDir, "checkout", "-b", "feat/x")
+		writeCommit(t, mainDir, "feature.txt", "one\n", "first")
+		testutil.RunGit(t, mainDir, "checkout", "main")
+		testutil.RunGit(t, mainDir, "merge", "--squash", "feat/x")
+		testutil.RunGit(t, mainDir, "commit", "-m", "squashed feat/x")
+		// The target keeps evolving the same file the branch introduced.
+		writeCommit(t, mainDir, "feature.txt", "one\nthree\n", "follow-up on main")
+
+		runner := NewGitRunner(mainDir)
+
+		got, err := runner.IsSquashMerged(t.Context(), "feat/x", "main")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !got {
+			t.Error("squash merged branch should stay detected after target moves on")
+		}
+	})
+
+	t.Run("BranchWithoutOwnCommits", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		writeCommit(t, mainDir, "main.txt", "main\n", "main work")
+		testutil.RunGit(t, mainDir, "branch", "feat/wip")
+		writeCommit(t, mainDir, "main.txt", "main\nmore\n", "more main work")
+
+		runner := NewGitRunner(mainDir)
+
+		got, err := runner.IsSquashMerged(t.Context(), "feat/wip", "main")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got {
+			t.Error("branch without its own commits should not be detected as merged")
+		}
+	})
+
+	t.Run("BranchWithUnmergedCommit", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		testutil.RunGit(t, mainDir, "checkout", "-b", "feat/x")
+		writeCommit(t, mainDir, "feature.txt", "one\n", "first")
+		testutil.RunGit(t, mainDir, "checkout", "main")
+
+		runner := NewGitRunner(mainDir)
+
+		got, err := runner.IsSquashMerged(t.Context(), "feat/x", "main")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got {
+			t.Error("unmerged branch should not be detected")
+		}
+	})
+
+	t.Run("UnrelatedHistory", func(t *testing.T) {
+		t.Parallel()
+
+		_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+		testutil.RunGit(t, mainDir, "checkout", "--orphan", "orphan")
+		testutil.RunGit(t, mainDir, "commit", "--allow-empty", "-m", "orphan root")
+		testutil.RunGit(t, mainDir, "checkout", "main")
+
+		runner := NewGitRunner(mainDir)
+
+		got, err := runner.IsSquashMerged(t.Context(), "orphan", "main")
+		if err == nil {
+			t.Fatal("expected error for branches without a common ancestor")
+		}
+		if got {
+			t.Error("branch without a common ancestor should not be detected")
+		}
+	})
+}

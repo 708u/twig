@@ -45,6 +45,8 @@ const (
 	GitCmdRevList    = "rev-list"
 	GitCmdCheckout   = "checkout"
 	GitCmdReset      = "reset"
+	GitCmdMergeBase  = "merge-base"
+	GitCmdCommitTree = "commit-tree"
 )
 
 // Git worktree subcommands.
@@ -740,6 +742,45 @@ func (g *GitRunner) ClassifyBranchMergeStatus(ctx context.Context, target string
 	}
 
 	return result, nil
+}
+
+// IsSquashMerged reports whether every change on branch is already contained in
+// target. A squash merge rewrites the branch into a single new commit, so no
+// commit is shared and `git branch --merged` reports nothing; comparing patches
+// instead of commits recovers the relation.
+//
+// The branch is synthesized into the shape a squash merge produces - one commit
+// carrying the branch tree on top of the merge base - and rev-list --cherry-pick
+// drops commits whose patch id already exists on the target side. An empty
+// result means the whole branch is present in target.
+//
+// A branch with no commits of its own yields an empty patch, which carries no
+// patch id and therefore always survives the comparison, so such branches are
+// never reported as merged.
+func (g *GitRunner) IsSquashMerged(ctx context.Context, branch, target string) (bool, error) {
+	mbOut, err := g.Run(ctx, GitCmdMergeBase, target, branch)
+	if err != nil {
+		return false, fmt.Errorf("failed to find merge base: %w", err)
+	}
+	mergeBase := strings.TrimSpace(string(mbOut))
+	if mergeBase == "" {
+		return false, nil
+	}
+
+	synOut, err := g.Run(ctx, GitCmdCommitTree, branch+"^{tree}", "-p", mergeBase, "-m", "twig squash merge probe")
+	if err != nil {
+		return false, fmt.Errorf("failed to build synthetic commit: %w", err)
+	}
+	synthetic := strings.TrimSpace(string(synOut))
+	if synthetic == "" {
+		return false, nil
+	}
+
+	out, err := g.Run(ctx, GitCmdRevList, "--cherry-pick", "--right-only", "--no-merges", "-n1", target+"..."+synthetic)
+	if err != nil {
+		return false, fmt.Errorf("failed to compare patches: %w", err)
+	}
+	return strings.TrimSpace(string(out)) == "", nil
 }
 
 // IsBranchUpstreamGone checks if the branch's upstream tracking branch is gone.
