@@ -54,6 +54,7 @@ type CheckResult struct {
 	SkipReason      SkipReason           // Reason if cannot be removed
 	CleanReason     CleanReason          // Reason if can be removed (for clean command display)
 	Prunable        bool                 // Whether worktree is prunable (directory was deleted externally)
+	Detached        bool                 // Whether worktree has detached HEAD (no branch to delete)
 	WorktreePath    string               // Path to the worktree
 	Branch          string               // Branch name
 	ChangedFiles    []FileStatus         // Uncommitted changes (for verbose output)
@@ -111,12 +112,22 @@ type RemovedWorktree struct {
 	WorktreePath string
 	CleanedDirs  []string     // Empty parent directories that were removed
 	Pruned       bool         // Stale worktree record was pruned (directory was already deleted)
+	Detached     bool         // Worktree had detached HEAD (no branch was deleted)
 	Check        bool         // --check mode: show what would be removed
 	CanRemove    bool         // Whether the worktree can be removed (from Check)
 	SkipReason   SkipReason   // Reason if cannot be removed (from Check)
 	ChangedFiles []FileStatus // Uncommitted changes (for verbose output)
 	GitOutput    []byte
 	Err          error // nil if success
+}
+
+// DisplayName identifies the worktree in output. A detached worktree has no
+// branch name, so its path stands in.
+func (r RemovedWorktree) DisplayName() string {
+	if r.Branch != "" {
+		return r.Branch
+	}
+	return r.WorktreePath
 }
 
 // RemoveResult aggregates results from remove operations.
@@ -152,7 +163,7 @@ func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 	for i := range r.Removed {
 		wt := &r.Removed[i]
 		if wt.Err != nil {
-			formatRemoveError(&stderr, wt.Branch, wt.Err, opts.Verbose, wt.ChangedFiles)
+			formatRemoveError(&stderr, wt.DisplayName(), wt.Err, opts.Verbose, wt.ChangedFiles)
 			continue
 		}
 		formatted := wt.Format(opts)
@@ -230,7 +241,9 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 				fmt.Fprintf(&stdout, "  %s %s\n", f.Status, f.Path)
 			}
 		}
-		fmt.Fprintf(&stdout, "Would delete branch: %s\n", r.Branch)
+		if !r.Detached {
+			fmt.Fprintf(&stdout, "Would delete branch: %s\n", r.Branch)
+		}
 		for _, dir := range r.CleanedDirs {
 			fmt.Fprintf(&stdout, "Would remove empty directory: %s\n", dir)
 		}
@@ -241,9 +254,14 @@ func (r RemovedWorktree) Format(opts FormatOptions) FormatResult {
 		if len(r.GitOutput) > 0 {
 			stdout.Write(r.GitOutput)
 		}
-		if r.Pruned {
+		switch {
+		case r.Detached && r.Pruned:
+			fmt.Fprintf(&stdout, "Pruned stale worktree: %s\n", r.WorktreePath)
+		case r.Detached:
+			fmt.Fprintf(&stdout, "Removed worktree: %s\n", r.WorktreePath)
+		case r.Pruned:
 			fmt.Fprintf(&stdout, "Pruned stale worktree and deleted branch: %s\n", r.Branch)
-		} else {
+		default:
 			fmt.Fprintf(&stdout, "Removed worktree and branch: %s\n", r.Branch)
 		}
 		for _, dir := range r.CleanedDirs {
@@ -287,6 +305,7 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 	// Copy check results
 	result.WorktreePath = checkResult.WorktreePath
 	result.Pruned = checkResult.Prunable
+	result.Detached = checkResult.Detached
 	result.CanRemove = checkResult.CanRemove
 	result.SkipReason = checkResult.SkipReason
 	result.ChangedFiles = checkResult.ChangedFiles
@@ -354,21 +373,24 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 			"branch", branch)
 	}
 
-	var branchOpts []BranchDeleteOption
-	switch {
-	case opts.Force > WorktreeForceLevelNone:
-		branchOpts = append(branchOpts, WithForceDelete())
-	case c.shouldForceDeleteBranch(ctx, branch, checkResult):
-		c.Log.DebugContext(ctx, "upstream gone, using force delete",
-			"category", LogCategoryRemove,
-			"branch", branch)
-		branchOpts = append(branchOpts, WithForceDelete())
+	// A detached worktree holds no branch, so the removal ends here.
+	if !checkResult.Detached {
+		var branchOpts []BranchDeleteOption
+		switch {
+		case opts.Force > WorktreeForceLevelNone:
+			branchOpts = append(branchOpts, WithForceDelete())
+		case c.shouldForceDeleteBranch(ctx, branch, checkResult):
+			c.Log.DebugContext(ctx, "upstream gone, using force delete",
+				"category", LogCategoryRemove,
+				"branch", branch)
+			branchOpts = append(branchOpts, WithForceDelete())
+		}
+		brOut, err := c.Git.BranchDelete(ctx, branch, branchOpts...)
+		if err != nil {
+			return result, err
+		}
+		gitOutput = append(gitOutput, brOut...)
 	}
-	brOut, err := c.Git.BranchDelete(ctx, branch, branchOpts...)
-	if err != nil {
-		return result, err
-	}
-	gitOutput = append(gitOutput, brOut...)
 
 	result.GitOutput = gitOutput
 
@@ -380,7 +402,7 @@ func (c *RemoveCommand) Run(ctx context.Context, branch string, cwd string, opts
 }
 
 // removePrunable handles removal of a prunable worktree (directory already deleted).
-// It prunes the stale worktree record and deletes the branch.
+// It prunes the stale worktree record and deletes the branch, if there is one.
 func (c *RemoveCommand) removePrunable(ctx context.Context, branch string, opts RemoveOptions, checkResult CheckResult, result RemovedWorktree) (RemovedWorktree, error) {
 	if opts.Check {
 		return result, nil
@@ -393,6 +415,16 @@ func (c *RemoveCommand) removePrunable(ctx context.Context, branch string, opts 
 	// Prune stale worktree records
 	if _, err := c.Git.WorktreePrune(ctx); err != nil {
 		return result, fmt.Errorf("failed to prune worktrees: %w", err)
+	}
+
+	// A detached worktree holds no branch, so pruning the record is the whole job.
+	if checkResult.Detached {
+		c.Log.DebugContext(ctx, "run completed",
+			"category", LogCategoryRemove,
+			"path", checkResult.WorktreePath,
+			"detached", true,
+			"prunable", true)
+		return result, nil
 	}
 
 	// Delete the branch
@@ -614,15 +646,135 @@ func (c *RemoveCommand) Check(ctx context.Context, branch string, opts CheckOpti
 	return result, nil
 }
 
+// checkDetached checks whether a detached-HEAD worktree can be removed.
+// Such a worktree carries no branch, so removing it deletes no ref and any
+// commit already reachable from target survives it. Plain ancestry is the
+// right merge test here, unlike the first-parent test branch removal needs.
+func (c *RemoveCommand) checkDetached(ctx context.Context, wt Worktree, opts CheckOptions) (CheckResult, error) {
+	result := CheckResult{
+		Detached:     true,
+		WorktreePath: wt.Path,
+		Prunable:     wt.Prunable,
+	}
+
+	if c.Config.WorktreeSourceDir == "" {
+		return result, fmt.Errorf("worktree source directory is not configured")
+	}
+
+	c.Log.DebugContext(ctx, "checking detached",
+		"category", LogCategoryRemove,
+		"path", wt.Path,
+		"head", wt.HEAD,
+		"prunable", wt.Prunable)
+
+	// A prunable worktree has no directory left to inspect, so the state
+	// checks below cannot run and only ancestry decides.
+	if wt.Prunable {
+		if !c.isDetachedContainedIn(ctx, wt.HEAD, opts) {
+			result.SkipReason = SkipNotMerged
+			return result, nil
+		}
+		result.CanRemove = true
+		result.CleanReason = CleanMerged
+		return result, nil
+	}
+
+	changedFiles, err := c.Git.InDir(wt.Path).ChangedFiles(ctx)
+	if err != nil {
+		return result, fmt.Errorf("failed to check uncommitted changes: %w", err)
+	}
+	// Twig-managed symlinks show up as untracked in git status; exclude
+	// them so they are not mistaken for genuine uncommitted changes.
+	changedFiles, excludedSymlinks := filterSymlinkManagedFiles(c.FS, wt.Path, c.Config.Symlinks, changedFiles)
+	if len(excludedSymlinks) > 0 {
+		c.Log.DebugContext(ctx, "excluded symlink-managed paths from changed files",
+			"category", LogCategoryRemove,
+			"path", wt.Path,
+			"paths", excludedSymlinks)
+	}
+	result.ChangedFiles = changedFiles
+
+	// Submodule status affects the removal decision only when force is not
+	// elevated. Compute it once here and cache it for Run() to reuse.
+	smStatus := SubmoduleCleanStatusUnknown
+	if opts.Force < WorktreeForceLevelUnclean {
+		if s, err := c.submoduleCleanStatus(ctx, wt.Path); err == nil {
+			smStatus = s
+		}
+	}
+	result.SubmoduleStatus = smStatus
+
+	contained := c.isDetachedContainedIn(ctx, wt.HEAD, opts)
+
+	reason := c.checkWorktreeStateSkipReason(ctx, wt, opts, changedFiles, smStatus)
+	// Ancestry is the merge test for a detached worktree, and -f bypasses it
+	// exactly as it bypasses the merged check for branches.
+	if reason == "" && !contained && opts.Force < WorktreeForceLevelUnclean {
+		reason = SkipNotMerged
+	}
+
+	if reason != "" {
+		result.SkipReason = reason
+		// Uncommitted work is all a detached worktree can hold, so a contained
+		// HEAD does not make it merely stale: leaving CleanReason empty keeps
+		// --stale from bypassing the changes check, matching WIP branches.
+		if contained && reason != SkipHasChanges && reason != SkipDirtySubmodule {
+			result.CleanReason = CleanMerged
+		}
+		c.Log.DebugContext(ctx, "skip",
+			"category", LogCategoryRemove,
+			"reason", reason,
+			"cleanReason", result.CleanReason,
+			"path", wt.Path)
+		return result, nil
+	}
+
+	result.CanRemove = true
+	if contained {
+		result.CleanReason = CleanMerged
+	}
+	return result, nil
+}
+
+// isDetachedContainedIn reports whether a detached HEAD is already contained
+// in the target branch. Without a target there is nothing to compare against,
+// and an unresolvable HEAD must not read as removable, so both answer false.
+func (c *RemoveCommand) isDetachedContainedIn(ctx context.Context, head string, opts CheckOptions) bool {
+	if head == "" || opts.Target == "" {
+		return false
+	}
+	contained, err := c.Git.IsAncestor(ctx, head, opts.Target)
+	return err == nil && contained
+}
+
 // checkSkipReason checks if worktree should be skipped and returns the reason.
 // force level controls which conditions can be bypassed (matches git worktree behavior).
 // changedFiles and smStatus are pre-fetched to avoid redundant git calls.
 func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts CheckOptions, changedFiles []FileStatus, smStatus SubmoduleCleanStatus) SkipReason {
-	// Check detached HEAD (never bypassed)
+	// Check detached HEAD (never bypassed). Removal here is keyed by branch
+	// name, so a worktree without one has no removal path; clean reaches those
+	// through checkDetached instead.
 	if wt.Detached {
 		return SkipDetached
 	}
 
+	if reason := c.checkWorktreeStateSkipReason(ctx, wt, opts, changedFiles, smStatus); reason != "" {
+		return reason
+	}
+
+	// Check merged (only when target is specified)
+	if opts.Target != "" && opts.Force < WorktreeForceLevelUnclean {
+		return c.checkMergedSkipReason(ctx, wt.Branch, opts.Target, opts.MergeStatus)
+	}
+
+	return ""
+}
+
+// checkWorktreeStateSkipReason checks the conditions that depend on the
+// worktree's own state rather than on what its HEAD points at.
+// force level controls which conditions can be bypassed (matches git worktree behavior).
+// changedFiles and smStatus are pre-fetched to avoid redundant git calls.
+func (c *RemoveCommand) checkWorktreeStateSkipReason(ctx context.Context, wt Worktree, opts CheckOptions, changedFiles []FileStatus, smStatus SubmoduleCleanStatus) SkipReason {
 	// Check current directory (never bypassed). Compare the worktree against the
 	// resolved worktree root of cwd. A caller that checks many worktrees (clean)
 	// resolves the root once and passes it in; otherwise resolve it here. An
@@ -653,11 +805,6 @@ func (c *RemoveCommand) checkSkipReason(ctx context.Context, wt Worktree, opts C
 		if len(changedFiles) > 0 {
 			return SkipHasChanges
 		}
-	}
-
-	// Check merged (only when target is specified)
-	if opts.Target != "" && opts.Force < WorktreeForceLevelUnclean {
-		return c.checkMergedSkipReason(ctx, wt.Branch, opts.Target, opts.MergeStatus)
 	}
 
 	return ""

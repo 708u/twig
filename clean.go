@@ -51,12 +51,22 @@ type CleanCandidate struct {
 	Branch        string
 	WorktreePath  string
 	Prunable      bool
+	Detached      bool
 	Skipped       bool
 	SkipReason    SkipReason
 	CleanReason   CleanReason
 	ChangedFiles  []FileStatus
 	StaleOverride bool         // Changes check bypassed via --stale for merged/upstream-gone
 	checkResult   *CheckResult // cached Check result, reused by the removal phase
+}
+
+// DisplayName identifies the candidate in output. A detached worktree has no
+// branch name, so its path stands in.
+func (c CleanCandidate) DisplayName() string {
+	if c.Branch != "" {
+		return c.Branch
+	}
+	return c.WorktreePath
 }
 
 // CleanResult aggregates results from clean operations.
@@ -138,11 +148,15 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 		for i := range r.Removed {
 			if r.Removed[i].Err != nil {
 				fmt.Fprintf(&stderr, "%s %s: %v\n",
-					applyError("error:"), r.Removed[i].Branch, r.Removed[i].Err)
+					applyError("error:"), r.Removed[i].DisplayName(), r.Removed[i].Err)
 				continue
 			}
 			if opts.Verbose {
-				fmt.Fprintf(&stdout, "Removed worktree and branch: %s\n", r.Removed[i].Branch)
+				if r.Removed[i].Detached {
+					fmt.Fprintf(&stdout, "Removed worktree: %s\n", r.Removed[i].WorktreePath)
+				} else {
+					fmt.Fprintf(&stdout, "Removed worktree and branch: %s\n", r.Removed[i].Branch)
+				}
 			}
 		}
 		return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
@@ -164,7 +178,7 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 		if opts.Verbose && len(skipped) > 0 {
 			lw.Line(0, "%s", applySkip("skip:"))
 			for _, c := range skipped {
-				lw.Line(1, "%s", c.Branch)
+				lw.Line(1, "%s", c.DisplayName())
 				if c.CleanReason != "" {
 					lw.Line(2, "%s %s", applySuccess("✓"), c.CleanReason)
 				}
@@ -186,13 +200,16 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 	lw.Line(0, "%s", applyClean("clean:"))
 	for _, c := range cleanable {
 		reason := string(c.CleanReason)
+		if c.Detached {
+			reason = "detached, " + reason
+		}
 		if c.Prunable {
 			reason = "prunable, " + reason
 		}
 		if c.StaleOverride {
 			reason += ", stale"
 		}
-		lw.Line(1, "%s %s", c.Branch, applyReason("("+reason+")"))
+		lw.Line(1, "%s %s", c.DisplayName(), applyReason("("+reason+")"))
 	}
 
 	// Output skipped candidates with group header (verbose only)
@@ -200,7 +217,7 @@ func (r CleanResult) Format(opts FormatOptions) FormatResult {
 		fmt.Fprintln(&stdout)
 		lw.Line(0, "%s", applySkip("skip:"))
 		for _, c := range skipped {
-			lw.Line(1, "%s", c.Branch)
+			lw.Line(1, "%s", c.DisplayName())
 			if c.CleanReason != "" {
 				lw.Line(2, "%s %s", applySuccess("✓"), c.CleanReason)
 			}
@@ -304,24 +321,6 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			continue
 		}
 
-		// Handle detached HEAD worktrees directly (they have no branch name)
-		if wt.Detached || wt.Branch == "" {
-			c.Log.DebugContext(ctx, "skipping detached worktree",
-				LogAttrKeyCategory.String(), LogCategoryClean,
-				"path", wt.Path)
-			candidates = append(candidates, indexedCandidate{
-				index: candidateIndex,
-				candidate: CleanCandidate{
-					Branch:       wt.Branch,
-					WorktreePath: wt.Path,
-					Skipped:      true,
-					SkipReason:   SkipDetached,
-				},
-			})
-			candidateIndex++
-			continue
-		}
-
 		// Launch parallel check.
 		// Each Check() runs git status which is slow for large repos.
 		// Parallelizing gives ~3x speedup.
@@ -331,20 +330,34 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 
 			c.Log.DebugContext(ctx, "checking worktree",
 				LogAttrKeyCategory.String(), LogCategoryClean,
-				"branch", wt.Branch)
+				"branch", wt.Branch,
+				"path", wt.Path)
 
-			checkResult, err := removeCmd.Check(ctx, wt.Branch, CheckOptions{
+			checkOpts := CheckOptions{
 				Force:        opts.Force,
 				Target:       target,
 				Cwd:          cwd,
 				CwdRoot:      &cwdRoot,
 				WorktreeInfo: &wt,
 				MergeStatus:  mergeStatus,
-			})
+			}
+
+			// A worktree without a branch cannot be looked up by name, so it
+			// takes the path-keyed check instead.
+			var (
+				checkResult CheckResult
+				err         error
+			)
+			if wt.Detached || wt.Branch == "" {
+				checkResult, err = removeCmd.checkDetached(ctx, wt, checkOpts)
+			} else {
+				checkResult, err = removeCmd.Check(ctx, wt.Branch, checkOpts)
+			}
 			if err != nil {
 				c.Log.DebugContext(ctx, "check failed",
 					LogAttrKeyCategory.String(), LogCategoryClean,
 					"branch", wt.Branch,
+					"path", wt.Path,
 					"error", err.Error())
 				// Skip worktrees that fail to check (e.g., not in any worktree)
 				return
@@ -354,6 +367,7 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 				Branch:       wt.Branch,
 				WorktreePath: checkResult.WorktreePath,
 				Prunable:     checkResult.Prunable,
+				Detached:     checkResult.Detached,
 				Skipped:      !checkResult.CanRemove,
 				SkipReason:   checkResult.SkipReason,
 				CleanReason:  checkResult.CleanReason,
@@ -364,6 +378,7 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			c.Log.DebugContext(ctx, "check completed",
 				LogAttrKeyCategory.String(), LogCategoryClean,
 				"branch", wt.Branch,
+				"path", wt.Path,
 				"canRemove", checkResult.CanRemove,
 				"reason", string(checkResult.CleanReason),
 				"skipReason", string(checkResult.SkipReason))
@@ -439,7 +454,8 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 
 			c.Log.DebugContext(ctx, "removing worktree",
 				LogAttrKeyCategory.String(), LogCategoryClean,
-				"branch", candidate.Branch)
+				"branch", candidate.Branch,
+				"path", candidate.WorktreePath)
 
 			effectiveForce := opts.Force
 			var preChecked *CheckResult
@@ -462,8 +478,11 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 				c.Log.DebugContext(ctx, "removal failed",
 					LogAttrKeyCategory.String(), LogCategoryClean,
 					"branch", candidate.Branch,
+					"path", candidate.WorktreePath,
 					"error", err.Error())
 				wt.Branch = candidate.Branch
+				wt.WorktreePath = candidate.WorktreePath
+				wt.Detached = candidate.Detached
 				wt.Err = err
 			}
 

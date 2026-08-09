@@ -1723,3 +1723,281 @@ func TestCleanCommand_Integration(t *testing.T) {
 		}
 	})
 }
+
+func TestCleanCommand_Integration_DetachedWorktrees(t *testing.T) {
+	t.Parallel()
+
+	// setupDetached prepares a repo whose main branch has an extra commit, then
+	// adds a detached worktree at the given revision.
+	setupDetached := func(t *testing.T, rev string) (mainDir, wtPath string) {
+		t.Helper()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		testFile := filepath.Join(mainDir, "base.txt")
+		if err := os.WriteFile(testFile, []byte("base"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", "base.txt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "base commit")
+
+		wtPath = filepath.Join(repoDir, "detached")
+		testutil.RunGit(t, mainDir, "worktree", "add", "--detach", wtPath, rev)
+
+		return mainDir, wtPath
+	}
+
+	newCleanCommand := func(t *testing.T, mainDir string) *CleanCommand {
+		t.Helper()
+
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+	}
+
+	t.Run("CleansDetachedWorktreeContainedInTarget", func(t *testing.T) {
+		t.Parallel()
+
+		mainDir, wtPath := setupDetached(t, "HEAD~1")
+		cmd := newCleanCommand(t, mainDir)
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Yes: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+		candidate := result.Candidates[0]
+		if candidate.Skipped {
+			t.Fatalf("detached worktree skipped: %s", candidate.SkipReason)
+		}
+		if !candidate.Detached {
+			t.Error("candidate should be marked detached")
+		}
+		if candidate.CleanReason != CleanMerged {
+			t.Errorf("clean reason = %q, want %q", candidate.CleanReason, CleanMerged)
+		}
+		if candidate.WorktreePath != wtPath {
+			t.Errorf("worktree path = %q, want %q", candidate.WorktreePath, wtPath)
+		}
+
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+		if out := testutil.RunGit(t, mainDir, "worktree", "list"); strings.Contains(out, wtPath) {
+			t.Errorf("worktree record should be gone, got: %s", out)
+		}
+
+		// Only main exists; removal must not have deleted any branch.
+		branches := strings.Fields(testutil.RunGit(t, mainDir, "branch", "--format=%(refname:short)"))
+		if len(branches) != 1 || branches[0] != "main" {
+			t.Errorf("branches = %v, want [main]", branches)
+		}
+	})
+
+	t.Run("SkipsDetachedWorktreeWithOwnCommits", func(t *testing.T) {
+		t.Parallel()
+
+		mainDir, wtPath := setupDetached(t, "HEAD")
+
+		// Commit inside the detached worktree so its HEAD leaves main's history.
+		ownFile := filepath.Join(wtPath, "own.txt")
+		if err := os.WriteFile(ownFile, []byte("own"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "own.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "detached commit")
+
+		cmd := newCleanCommand(t, mainDir)
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+		candidate := result.Candidates[0]
+		if !candidate.Skipped {
+			t.Fatal("detached worktree with unreachable commits should be skipped")
+		}
+		if candidate.SkipReason != SkipNotMerged {
+			t.Errorf("skip reason = %q, want %q", candidate.SkipReason, SkipNotMerged)
+		}
+		if _, err := os.Stat(wtPath); err != nil {
+			t.Errorf("worktree should still exist: %v", err)
+		}
+	})
+
+	t.Run("ForceCleansDetachedWorktreeWithOwnCommits", func(t *testing.T) {
+		t.Parallel()
+
+		mainDir, wtPath := setupDetached(t, "HEAD")
+
+		ownFile := filepath.Join(wtPath, "own.txt")
+		if err := os.WriteFile(ownFile, []byte("own"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "own.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "detached commit")
+
+		cmd := newCleanCommand(t, mainDir)
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{
+			Yes:   true,
+			Force: WorktreeForceLevelUnclean,
+		})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Removed) != 1 {
+			t.Fatalf("expected 1 removed, got %d", len(result.Removed))
+		}
+		if result.Removed[0].Err != nil {
+			t.Fatalf("removal failed: %v", result.Removed[0].Err)
+		}
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree should be removed: %s", wtPath)
+		}
+	})
+
+	t.Run("SkipsDetachedWorktreeWithChanges", func(t *testing.T) {
+		t.Parallel()
+
+		mainDir, wtPath := setupDetached(t, "HEAD~1")
+
+		dirtyFile := filepath.Join(wtPath, "base.txt")
+		if err := os.WriteFile(dirtyFile, []byte("modified"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := newCleanCommand(t, mainDir)
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+		if !result.Candidates[0].Skipped {
+			t.Fatal("detached worktree with changes should be skipped")
+		}
+		if result.Candidates[0].SkipReason != SkipHasChanges {
+			t.Errorf("skip reason = %q, want %q", result.Candidates[0].SkipReason, SkipHasChanges)
+		}
+	})
+
+	t.Run("StaleDoesNotOverrideDetachedWithChanges", func(t *testing.T) {
+		t.Parallel()
+
+		mainDir, wtPath := setupDetached(t, "HEAD~1")
+
+		dirtyFile := filepath.Join(wtPath, "base.txt")
+		if err := os.WriteFile(dirtyFile, []byte("modified"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := newCleanCommand(t, mainDir)
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+		candidate := result.Candidates[0]
+		if !candidate.Skipped {
+			t.Fatal("--stale must not bypass uncommitted changes for a detached worktree")
+		}
+		if candidate.StaleOverride {
+			t.Error("stale override should not apply to detached worktrees")
+		}
+		if _, err := os.Stat(wtPath); err != nil {
+			t.Errorf("worktree should still exist: %v", err)
+		}
+	})
+
+	t.Run("SkipsLockedDetachedWorktree", func(t *testing.T) {
+		t.Parallel()
+
+		mainDir, wtPath := setupDetached(t, "HEAD~1")
+		testutil.RunGit(t, mainDir, "worktree", "lock", wtPath)
+
+		cmd := newCleanCommand(t, mainDir)
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+		candidate := result.Candidates[0]
+		if !candidate.Skipped {
+			t.Fatal("locked detached worktree should be skipped")
+		}
+		if candidate.SkipReason != SkipLocked {
+			t.Errorf("skip reason = %q, want %q", candidate.SkipReason, SkipLocked)
+		}
+		// A locked worktree is otherwise removable, so the reason is shown.
+		if candidate.CleanReason != CleanMerged {
+			t.Errorf("clean reason = %q, want %q", candidate.CleanReason, CleanMerged)
+		}
+	})
+
+	t.Run("SkipsCurrentDetachedWorktree", func(t *testing.T) {
+		t.Parallel()
+
+		mainDir, wtPath := setupDetached(t, "HEAD~1")
+
+		cmd := newCleanCommand(t, mainDir)
+		result, err := cmd.Run(t.Context(), wtPath, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+		if result.Candidates[0].SkipReason != SkipCurrentDir {
+			t.Errorf("skip reason = %q, want %q", result.Candidates[0].SkipReason, SkipCurrentDir)
+		}
+	})
+
+	t.Run("PrunesDetachedWorktreeRecordWhenDirectoryDeleted", func(t *testing.T) {
+		t.Parallel()
+
+		mainDir, wtPath := setupDetached(t, "HEAD~1")
+
+		if err := os.RemoveAll(wtPath); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := newCleanCommand(t, mainDir)
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Yes: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		if len(result.Removed) != 1 {
+			t.Fatalf("expected 1 removed, got %d", len(result.Removed))
+		}
+		if result.Removed[0].Err != nil {
+			t.Fatalf("removal failed: %v", result.Removed[0].Err)
+		}
+		if out := testutil.RunGit(t, mainDir, "worktree", "list"); strings.Contains(out, wtPath) {
+			t.Errorf("stale worktree record should be pruned, got: %s", out)
+		}
+	})
+}

@@ -443,7 +443,7 @@ Use --yes to skip confirmation and remove immediately.
 Use --check to only show candidates without prompting.
 
 Safety checks (all must pass):
-  - Branch is merged to target
+  - Branch is merged to target (detached HEAD: contained in target)
   - No uncommitted changes
   - Worktree is not locked
   - Not the current directory

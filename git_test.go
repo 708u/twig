@@ -1,6 +1,7 @@
 package twig
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -172,6 +173,73 @@ func TestGitRunner_IsBranchUpstreamGone(t *testing.T) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGitRunner_IsAncestor(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		commit    string
+		target    string
+		ancestors map[string][]string
+		want      bool
+	}{
+		{
+			name:      "reachable from target",
+			commit:    "commit-abc",
+			target:    "main",
+			ancestors: map[string][]string{"main": {"commit-abc", "commit-def"}},
+			want:      true,
+		},
+		{
+			name:      "not reachable from target",
+			commit:    "commit-xyz",
+			target:    "main",
+			ancestors: map[string][]string{"main": {"commit-abc"}},
+			want:      false,
+		},
+		{
+			name:   "unknown target",
+			commit: "commit-abc",
+			target: "develop",
+			want:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockGit := &testutil.MockGitExecutor{Ancestors: tt.ancestors}
+			runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
+
+			got, err := runner.IsAncestor(t.Context(), tt.commit, tt.target)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGitRunner_IsAncestor_PropagatesFailure(t *testing.T) {
+	t.Parallel()
+
+	// exit 1 is git's "not an ancestor" answer; any other code is a failure
+	// that must not be reported as a clean negative.
+	mockGit := &testutil.MockGitExecutor{
+		RunFunc: func(ctx context.Context, args ...string) ([]byte, error) {
+			return nil, &testutil.MockExitError{Code: 128}
+		},
+	}
+	runner := &GitRunner{Executor: mockGit, Log: NewNopLogger()}
+
+	if _, err := runner.IsAncestor(t.Context(), "bad-object", "main"); err == nil {
+		t.Fatal("expected error for exit code 128, got nil")
 	}
 }
 

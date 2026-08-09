@@ -45,6 +45,7 @@ const (
 	GitCmdRevList    = "rev-list"
 	GitCmdCheckout   = "checkout"
 	GitCmdReset      = "reset"
+	GitCmdMergeBase  = "merge-base"
 )
 
 // Git worktree subcommands.
@@ -1003,6 +1004,25 @@ func (g *GitRunner) MainWorktreePath(ctx context.Context) (string, error) {
 	}
 	gitDir := strings.TrimSpace(string(out))
 	return filepath.Dir(gitDir), nil
+}
+
+// IsAncestor reports whether commit is reachable from target, including
+// reachability through the second parent of a merge commit.
+//
+// Reachability alone says nothing about whether a branch's work landed on
+// target, so this must not gate branch deletion; IsFirstParentAncestor exists
+// for that. It answers a narrower question: whether removing a ref-less
+// worktree can strand commits.
+func (g *GitRunner) IsAncestor(ctx context.Context, commit, target string) (bool, error) {
+	if _, err := g.Run(ctx, GitCmdMergeBase, "--is-ancestor", commit, target); err != nil {
+		// git reports "not an ancestor" as exit 1; other codes are real failures
+		var exitErr interface{ ExitCode() int }
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check ancestry: %w", err)
+	}
+	return true, nil
 }
 
 // IsFirstParentAncestor checks if commit is on the first-parent lineage of target.
