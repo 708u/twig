@@ -49,14 +49,14 @@ Any other input aborts the operation without removing anything.
 
 All conditions must pass for a worktree to be cleaned:
 
-| Condition          | Description                                      |
-|--------------------|--------------------------------------------------|
-| Merged             | Branch is merged to target or upstream is gone   |
-| No changes         | No uncommitted changes                           |
-| No dirty submodule | Submodules have no uncommitted changes           |
-| Not locked         | Worktree is not locked                           |
-| Not current        | Not the current directory                        |
-| Not main           | Not the main worktree                            |
+| Condition          | Description                                       |
+|--------------------|---------------------------------------------------|
+| Merged             | Branch is merged, squash merged, or upstream gone |
+| No changes         | No uncommitted changes                            |
+| No dirty submodule | Submodules have no uncommitted changes            |
+| Not locked         | Worktree is not locked                            |
+| Not current        | Not the current directory                         |
+| Not main           | Not the main worktree                             |
 
 Files matching the `symlinks`/`extra_symlinks` patterns (see
 [Configuration](../configuration.md#symlinks)) are excluded from the
@@ -76,9 +76,9 @@ associated with a worktree are detected - regular branches created with
 
 Safety checks for prunable branches:
 
-| Condition | Description                                     |
-|-----------|-------------------------------------------------|
-| Merged    | Branch is merged to target or upstream is gone  |
+| Condition | Description                                       |
+|-----------|---------------------------------------------------|
+| Merged    | Branch is merged, squash merged, or upstream gone |
 
 Other checks (locked, changes, current directory) don't apply since
 the worktree no longer exists.
