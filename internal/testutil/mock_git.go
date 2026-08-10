@@ -129,6 +129,11 @@ type MockGitExecutor struct {
 	// RootCommits is a list of commits that have no parent (root commits).
 	RootCommits []string
 
+	// Ancestors maps a ref to the commits reachable from it.
+	// Used by merge-base --is-ancestor. Commits not listed are reported as
+	// non-ancestors, so ancestry must be declared explicitly.
+	Ancestors map[string][]string
+
 	// GitDirMap maps worktree directory to its git directory path.
 	// Used by rev-parse --git-dir.
 	GitDirMap map[string]string
@@ -193,6 +198,8 @@ func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 		return m.handleSubmodule(args)
 	case "rev-list":
 		return m.handleRevList(args)
+	case "merge-base":
+		return m.handleMergeBase(args)
 	case "checkout":
 		return m.handleCheckout(args)
 	case "reset":
@@ -597,6 +604,18 @@ func (m *MockGitExecutor) handleRevList(args []string) ([]byte, error) {
 		return []byte{}, nil
 	}
 	return []byte(strings.Join(commits, "\n") + "\n"), nil
+}
+
+func (m *MockGitExecutor) handleMergeBase(args []string) ([]byte, error) {
+	// args: ["merge-base", "--is-ancestor", "<commit>", "<target>"]
+	if len(args) < 4 || args[1] != "--is-ancestor" {
+		return nil, nil
+	}
+	commit, target := args[2], args[3]
+	if slices.Contains(m.Ancestors[target], commit) {
+		return nil, nil
+	}
+	return nil, &MockExitError{Code: 1}
 }
 
 func (m *MockGitExecutor) handleCheckout(args []string) ([]byte, error) {

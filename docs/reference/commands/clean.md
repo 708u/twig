@@ -63,6 +63,44 @@ Files matching the `symlinks`/`extra_symlinks` patterns (see
 "No changes" check, since they are twig-managed symlinks rather than
 genuine changes.
 
+### Detached HEAD Worktrees
+
+A worktree with a detached HEAD has no branch, so the "Merged" check
+cannot apply to it. It is replaced by a reachability test: the worktree
+is cleanable when its HEAD is contained in the target branch
+(`git merge-base --is-ancestor <HEAD> <target>`). All other safety
+checks are unchanged, and no branch is deleted on removal.
+
+Removing such a worktree drops no ref, so nothing is lost: every commit
+it held is still reachable from the target. A detached HEAD that is not
+contained in the target may hold commits nothing else references, so it
+is skipped as "not merged".
+
+Detached worktrees are shown by path, since they have no branch name:
+
+```txt
+clean:
+  /path/to/worktree/experiment (detached, merged)
+
+skip:
+  /path/to/worktree/spike
+    ✗ not merged
+```
+
+Removal reports the path as well:
+
+```txt
+Removed worktree: /path/to/worktree/experiment
+```
+
+Unlike the branch checks, this test accepts commits reachable through
+any parent of a merge. That is sound only because no ref is deleted, so
+it is never used to decide branch removal.
+
+`--stale` does not apply to detached worktrees. Uncommitted changes are
+the only work such a worktree can hold, which makes it the equivalent of
+a WIP branch (see [Stale Option](#stale-option)).
+
 ### Prunable Branches
 
 When a worktree directory is deleted externally (via `rm -rf` or other means),
@@ -115,6 +153,10 @@ worked on.
 | Squash merge (PR, branch not deleted)   | (none)                | No       |
 | Local fast-forward                      | (none)                | No       |
 
+Worktrees with a detached HEAD are exempt from this table: they use the
+reachability test described in
+[Detached HEAD Worktrees](#detached-head-worktrees).
+
 To clean local fast-forward merged branches, use `--force`:
 
 ```bash
@@ -133,10 +175,14 @@ With `--force` (`-f`), some safety checks can be bypassed:
 The following conditions are never bypassed:
 
 - Current directory (dangerous to remove cwd)
-- Detached HEAD (RemoveCommand requires branch name)
 
 This matches `twig remove` behavior where `-f` removes unclean worktrees
 and `-ff` also removes locked worktrees.
+
+`-f` bypasses the reachability test for detached worktrees the same way
+it bypasses "not merged" for branches, so it removes every detached
+worktree that passes the remaining checks, including those holding
+commits reachable from nothing else.
 
 ```bash
 # Force clean unmerged branches with uncommitted changes
@@ -158,10 +204,15 @@ direct ancestor of target via first-parent lineage) are treated as
 work-in-progress even if `git branch --merged` reports them as
 merged. `--stale` does not remove these branches.
 
+**Detached worktree protection:** a detached HEAD contained in the
+target has no commits of its own, so uncommitted changes are the only
+work it can hold. `--stale` treats it like a WIP branch and keeps it.
+
 | Condition            | `--stale` | `--force` |
 |----------------------|-----------|-----------|
 | Changes (merged)     | Bypassed  | Bypassed  |
 | Changes (WIP)        | Kept      | Bypassed  |
+| Changes (detached)   | Kept      | Bypassed  |
 | Dirty submod (merged)| Bypassed  | Bypassed  |
 | Dirty submod (WIP)   | Kept      | Bypassed  |
 | Changes (not merged) | Kept      | Bypassed  |
@@ -223,6 +274,7 @@ clean:
   feat/old-branch (merged)
   fix/completed (upstream gone)
   feat/stale-branch (prunable, merged)
+  /path/to/worktree/experiment (detached, merged)
 
 skip:
   feat/wip
@@ -235,11 +287,14 @@ skip:
   feat/submod
     ✓ merged
     ✗ submodule has uncommitted changes
+  /path/to/worktree/spike
+    ✗ not merged
 ```
 
 - `clean:` shows worktrees and prunable branches that will be removed
 - `skip:` shows skipped worktrees (verbose mode only)
 - Each item is indented with 2 spaces
+- Detached worktrees are identified by path, all others by branch name
 - Skip candidates show both cleanable reason (`✓`) and skip reason (`✗`)
 - A blank line separates groups
 
@@ -262,18 +317,18 @@ Clean reasons:
 | `merged`         | Branch is merged to target branch               |
 | `upstream gone`  | Remote tracking branch was deleted              |
 | `prunable, ...`  | Worktree directory was deleted externally       |
+| `detached, ...`  | Worktree has no branch; HEAD is in target       |
 
 Skip reasons:
 
 | Reason                      | Description                                     |
 |-----------------------------|-------------------------------------------------|
-| `not merged`                | Branch has commits not in target branch         |
+| `not merged`                | Has commits not in the target branch            |
 | `same commit as <target>`   | Branch points to same commit as target          |
 | `has uncommitted changes`   | Worktree has modified or untracked files        |
 | `submodule has uncommitted changes` | Submodule has modified or untracked files |
 | `locked`                    | Worktree is locked                              |
 | `current directory`         | Cannot remove current working directory         |
-| `detached HEAD`             | Worktree has detached HEAD (no branch)          |
 
 ### Debug Output
 
@@ -337,6 +392,15 @@ twig clean --check
 clean:
   feature/old-branch (merged)
   feature/deleted-worktree (prunable, merged)
+
+# Clean with detached HEAD worktrees
+twig clean --check -v
+clean:
+  /repo-worktree/experiment (detached, merged)
+
+skip:
+  /repo-worktree/spike
+    ✗ not merged
 ```
 
 ## Exit Code
