@@ -49,14 +49,14 @@ Any other input aborts the operation without removing anything.
 
 All conditions must pass for a worktree to be cleaned:
 
-| Condition          | Description                                      |
-|--------------------|--------------------------------------------------|
-| Merged             | Branch is merged to target or upstream is gone   |
-| No changes         | No uncommitted changes                           |
-| No dirty submodule | Submodules have no uncommitted changes           |
-| Not locked         | Worktree is not locked                           |
-| Not current        | Not the current directory                        |
-| Not main           | Not the main worktree                            |
+| Condition          | Description                                       |
+|--------------------|---------------------------------------------------|
+| Merged             | Branch is merged, squash merged, or upstream gone |
+| No changes         | No uncommitted changes                            |
+| No dirty submodule | Submodules have no uncommitted changes            |
+| Not locked         | Worktree is not locked                            |
+| Not current        | Not the current directory                         |
+| Not main           | Not the main worktree                             |
 
 Files matching the `symlinks`/`extra_symlinks` patterns (see
 [Configuration](../configuration.md#symlinks)) are excluded from the
@@ -114,9 +114,9 @@ associated with a worktree are detected - regular branches created with
 
 Safety checks for prunable branches:
 
-| Condition | Description                                     |
-|-----------|-------------------------------------------------|
-| Merged    | Branch is merged to target or upstream is gone  |
+| Condition | Description                                       |
+|-----------|---------------------------------------------------|
+| Merged    | Branch is merged, squash merged, or upstream gone |
 
 Other checks (locked, changes, current directory) don't apply since
 the worktree no longer exists.
@@ -132,12 +132,30 @@ The clean command detects merged branches using:
 
 1. `git branch --merged` - traditional merge commits
 2. Upstream gone status - squash/rebase merges via PR
+3. Patch comparison - squash merges whose branch still exists
 
-**Limitation:** Squash and rebase merge detection relies on
-upstream gone status. If the remote branch is not deleted after
-merging the PR, the branch is reported as "not merged". Enable
-GitHub's "Automatically delete head branches" repository setting
-to ensure remote branches are cleaned up after PR merge.
+Patch comparison runs only for branches the first two methods
+leave undecided. The branch is rebuilt as the single commit a
+squash merge would produce (its tree on top of the merge base with
+the target), and `git rev-list --cherry-pick` then checks whether
+every patch it carries already exists in the target. An empty
+result means the whole branch is contained in the target.
+
+Branches with no commits of their own produce an empty patch,
+which is never treated as contained, so ongoing work is not
+reported as merged.
+
+**Limitation:** Patch comparison needs the merged content to match
+the branch. A squash merge that resolved conflicts, or a branch
+amended after the merge, carries patches the target does not have
+and is reported as "not merged". Detection never reports a branch
+that is only partially contained in the target.
+
+**Limitation:** A rebase merge spreads the branch over several
+commits in the target, so the combined patch matches none of them
+unless the branch holds a single commit. Enable GitHub's
+"Automatically delete head branches" repository setting so rebase
+merged branches are detected through upstream gone status.
 
 **Limitation:** Local-only fast-forward merges are not detected.
 When a branch is fast-forward merged locally (without `--no-ff`),
@@ -150,7 +168,9 @@ worked on.
 | Merge commit (`--no-ff`)                | `git branch --merged` | Yes      |
 | Squash merge (PR)                       | Upstream gone         | Yes      |
 | Rebase merge (PR)                       | Upstream gone         | Yes      |
-| Squash merge (PR, branch not deleted)   | (none)                | No       |
+| Squash merge (PR, branch not deleted)   | Patch comparison      | Yes      |
+| Squash merge (conflicts resolved)       | (none)                | No       |
+| Rebase merge (branch not deleted)       | Patch comparison      | 1 commit |
 | Local fast-forward                      | (none)                | No       |
 
 Worktrees with a detached HEAD are exempt from this table: they use the
@@ -316,6 +336,7 @@ Clean reasons:
 |------------------|-------------------------------------------------|
 | `merged`         | Branch is merged to target branch               |
 | `upstream gone`  | Remote tracking branch was deleted              |
+| `squash merged`  | Branch content is squashed into target branch   |
 | `prunable, ...`  | Worktree directory was deleted externally       |
 | `detached, ...`  | Worktree has no branch; HEAD is in target       |
 

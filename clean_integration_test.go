@@ -2001,3 +2001,168 @@ func TestCleanCommand_Integration_DetachedWorktrees(t *testing.T) {
 		}
 	})
 }
+func TestCleanCommand_SquashMerged_Integration(t *testing.T) {
+	t.Parallel()
+
+	// setupSquashMerged creates a worktree with one commit and squash merges it
+	// into main, the shape a squash-merged pull request leaves behind when the
+	// remote branch is not deleted.
+	setupSquashMerged := func(t *testing.T, repoDir, mainDir, branch string) string {
+		t.Helper()
+		wtPath := filepath.Join(repoDir, branch)
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", branch, wtPath)
+		if err := os.WriteFile(filepath.Join(wtPath, "feature.txt"), []byte("one\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, wtPath, "add", "feature.txt")
+		testutil.RunGit(t, wtPath, "commit", "-m", "feature work")
+		testutil.RunGit(t, mainDir, "merge", "--squash", branch)
+		testutil.RunGit(t, mainDir, "commit", "-m", "squashed "+branch)
+		return wtPath
+	}
+
+	newCmd := func(t *testing.T, mainDir string) *CleanCommand {
+		t.Helper()
+		cfgResult, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &CleanCommand{
+			FS:     osFS{},
+			Git:    NewGitRunner(mainDir),
+			Config: cfgResult.Config,
+			Log:    NewNopLogger(),
+		}
+	}
+
+	t.Run("RemovesSquashMergedWorktree", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+		wtPath := setupSquashMerged(t, repoDir, mainDir, "feat/squashed")
+
+		cmd := newCmd(t, mainDir)
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Yes: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+		cand := result.Candidates[0]
+		if cand.Skipped {
+			t.Fatalf("squash merged branch should be cleaned, skipped with %q", cand.SkipReason)
+		}
+		if cand.CleanReason != CleanSquashMerged {
+			t.Errorf("clean reason = %q, want %q", cand.CleanReason, CleanSquashMerged)
+		}
+		for _, removed := range result.Removed {
+			if removed.Err != nil {
+				t.Fatalf("removal of %s failed: %v", removed.Branch, removed.Err)
+			}
+		}
+		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+			t.Errorf("worktree %s should be removed", wtPath)
+		}
+		if out := testutil.RunGit(t, mainDir, "branch", "--list"); strings.Contains(out, "feat/squashed") {
+			t.Errorf("branch should be deleted, still listed: %s", out)
+		}
+	})
+
+	t.Run("DetectsAfterTargetMovedOn", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+		setupSquashMerged(t, repoDir, mainDir, "feat/squashed")
+
+		// The target keeps changing the same file the branch introduced.
+		if err := os.WriteFile(filepath.Join(mainDir, "feature.txt"), []byte("one\ntwo\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", "feature.txt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "follow-up on main")
+
+		cmd := newCmd(t, mainDir)
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+		cand := result.Candidates[0]
+		if cand.Skipped {
+			t.Fatalf("squash merged branch should be cleaned, skipped with %q", cand.SkipReason)
+		}
+		if cand.CleanReason != CleanSquashMerged {
+			t.Errorf("clean reason = %q, want %q", cand.CleanReason, CleanSquashMerged)
+		}
+	})
+
+	t.Run("CleansSquashMergedWithChangesOnStale", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+		wtPath := setupSquashMerged(t, repoDir, mainDir, "feat/squashed")
+
+		if err := os.WriteFile(filepath.Join(wtPath, "debug.log"), []byte("scratch\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := newCmd(t, mainDir)
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+		cand := result.Candidates[0]
+		if cand.Skipped {
+			t.Fatalf("--stale should clean the branch, skipped with %q", cand.SkipReason)
+		}
+		if cand.CleanReason != CleanSquashMerged {
+			t.Errorf("clean reason = %q, want %q", cand.CleanReason, CleanSquashMerged)
+		}
+	})
+
+	t.Run("KeepsWorkInProgressBranch", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := testutil.SetupTestRepo(t)
+
+		// A branch with no commits of its own, left dirty by ongoing work.
+		wtPath := filepath.Join(repoDir, "feat/wip")
+		testutil.RunGit(t, mainDir, "worktree", "add", "-b", "feat/wip", wtPath)
+		if err := os.WriteFile(filepath.Join(wtPath, "draft.txt"), []byte("draft\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Move the target ahead so the branch is strictly behind it.
+		if err := os.WriteFile(filepath.Join(mainDir, "main.txt"), []byte("main\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", "main.txt")
+		testutil.RunGit(t, mainDir, "commit", "-m", "main work")
+
+		cmd := newCmd(t, mainDir)
+
+		result, err := cmd.Run(t.Context(), mainDir, CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if len(result.Candidates) != 1 {
+			t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+		}
+		cand := result.Candidates[0]
+		if !cand.Skipped {
+			t.Error("work-in-progress branch should be kept")
+		}
+		if cand.CleanReason != "" {
+			t.Errorf("clean reason = %q, want empty", cand.CleanReason)
+		}
+	})
+}

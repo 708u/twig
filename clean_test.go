@@ -192,6 +192,179 @@ func TestCleanCommand_Run_MinimizesGitSpawns(t *testing.T) {
 	})
 }
 
+// TestCleanCommand_Run_SquashMerged verifies that a branch whose content was
+// squashed into the target is cleaned, that a branch without an equivalent in
+// the target is kept, and that the probe runs only for branches the cheap
+// classification leaves undecided.
+func TestCleanCommand_Run_SquashMerged(t *testing.T) {
+	t.Parallel()
+
+	newMock := func() *testutil.MockGitExecutor {
+		return &testutil.MockGitExecutor{
+			Worktrees: []testutil.MockWorktree{
+				{Path: "/repo/main", Branch: "main", HEAD: "commit-main"},
+				{Path: "/repo/feat/merged", Branch: "feat/merged", HEAD: "commit-merged"},
+				{Path: "/repo/feat/squashed", Branch: "feat/squashed", HEAD: "commit-squashed"},
+				{Path: "/repo/feat/wip", Branch: "feat/wip", HEAD: "commit-wip"},
+			},
+			MergedBranches: map[string][]string{
+				"main": {"main", "feat/merged"},
+			},
+			SquashMergedBranches: []string{"feat/squashed"},
+		}
+	}
+
+	newCmd := func(exec GitExecutor) *CleanCommand {
+		return &CleanCommand{
+			FS:     &testutil.MockFS{},
+			Git:    &GitRunner{Executor: exec, Log: NewNopLogger()},
+			Config: &Config{WorktreeSourceDir: "/repo/main", DefaultSource: "main"},
+			Log:    NewNopLogger(),
+		}
+	}
+
+	t.Run("detects squash merged branch", func(t *testing.T) {
+		t.Parallel()
+
+		counter := newCountingExecutor(newMock())
+		cmd := newCmd(counter)
+
+		result, err := cmd.Run(t.Context(), "/other/dir", CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		byBranch := make(map[string]CleanCandidate, len(result.Candidates))
+		for _, c := range result.Candidates {
+			byBranch[c.Branch] = c
+		}
+
+		squashed := byBranch["feat/squashed"]
+		if squashed.Skipped {
+			t.Errorf("feat/squashed should be cleanable, skipped with %q", squashed.SkipReason)
+		}
+		if squashed.CleanReason != CleanSquashMerged {
+			t.Errorf("feat/squashed clean reason = %q, want %q", squashed.CleanReason, CleanSquashMerged)
+		}
+
+		wip := byBranch["feat/wip"]
+		if !wip.Skipped {
+			t.Error("feat/wip should be skipped")
+		}
+		if wip.SkipReason != SkipNotMerged {
+			t.Errorf("feat/wip skip reason = %q, want %q", wip.SkipReason, SkipNotMerged)
+		}
+
+		merged := byBranch["feat/merged"]
+		if merged.CleanReason != CleanMerged {
+			t.Errorf("feat/merged clean reason = %q, want %q", merged.CleanReason, CleanMerged)
+		}
+
+		// Only the two branches the pre-fetched classification leaves undecided
+		// are probed; the merged branch is answered without git spawns.
+		if got := counter.counts["merge-base"]; got != 2 {
+			t.Errorf("merge-base called %d times, want 2", got)
+		}
+		if got := counter.counts["commit-tree"]; got != 2 {
+			t.Errorf("commit-tree called %d times, want 2", got)
+		}
+	})
+
+	t.Run("deletes squash merged branch with force", func(t *testing.T) {
+		t.Parallel()
+
+		mock := newMock()
+		counter := newCountingExecutor(mock)
+		cmd := newCmd(counter)
+
+		result, err := cmd.Run(t.Context(), "/other/dir", CleanOptions{Yes: true})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.CleanableCount() != 2 {
+			t.Fatalf("cleanable count = %d, want 2", result.CleanableCount())
+		}
+		// A squashed branch has no commit in common with the target, so -d
+		// would refuse to delete it.
+		if got := counter.counts["branch -D"]; got != 1 {
+			t.Errorf("branch -D called %d times, want 1", got)
+		}
+		if got := counter.counts["branch -d"]; got != 1 {
+			t.Errorf("branch -d called %d times, want 1", got)
+		}
+	})
+
+	t.Run("skips probe when force bypasses merge check", func(t *testing.T) {
+		t.Parallel()
+
+		counter := newCountingExecutor(newMock())
+		cmd := newCmd(counter)
+
+		if _, err := cmd.Run(t.Context(), "/other/dir", CleanOptions{
+			Check: true,
+			Force: WorktreeForceLevelUnclean,
+		}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if got := counter.counts["merge-base"]; got != 0 {
+			t.Errorf("merge-base called %d times, want 0", got)
+		}
+	})
+}
+
+// TestCleanCommand_Run_SquashMergedWithChanges verifies that a squash merged
+// branch holding uncommitted changes is reported with its clean reason so
+// --stale can act on it.
+func TestCleanCommand_Run_SquashMergedWithChanges(t *testing.T) {
+	t.Parallel()
+
+	mockGit := &testutil.MockGitExecutor{
+		Worktrees: []testutil.MockWorktree{
+			{Path: "/repo/main", Branch: "main", HEAD: "commit-main"},
+			{Path: "/repo/feat/squashed", Branch: "feat/squashed", HEAD: "commit-squashed"},
+		},
+		MergedBranches: map[string][]string{
+			"main": {"main"},
+		},
+		SquashMergedBranches: []string{"feat/squashed"},
+		StatusOutputMap: map[string]string{
+			"/repo/feat/squashed": " M main.go\n",
+		},
+		// The branch carries its own commits, so it is not on the first-parent
+		// lineage of the target and the WIP protection does not apply.
+		FirstParentAncestors: map[string][]string{
+			"main": {"commit-main"},
+		},
+	}
+
+	cmd := &CleanCommand{
+		FS:     &testutil.MockFS{},
+		Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
+		Config: &Config{WorktreeSourceDir: "/repo/main", DefaultSource: "main"},
+		Log:    NewNopLogger(),
+	}
+
+	result, err := cmd.Run(t.Context(), "/other/dir", CleanOptions{Check: true, Stale: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Candidates) != 1 {
+		t.Fatalf("got %d candidates, want 1", len(result.Candidates))
+	}
+
+	cand := result.Candidates[0]
+	if cand.CleanReason != CleanSquashMerged {
+		t.Errorf("clean reason = %q, want %q", cand.CleanReason, CleanSquashMerged)
+	}
+	if cand.Skipped {
+		t.Errorf("--stale should clean the branch, skipped with %q", cand.SkipReason)
+	}
+	if !cand.StaleOverride {
+		t.Error("stale override should be applied")
+	}
+}
+
 func TestCleanResult_CleanableCount(t *testing.T) {
 	t.Parallel()
 
