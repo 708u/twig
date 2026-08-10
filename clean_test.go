@@ -2,6 +2,7 @@ package twig
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -697,6 +698,67 @@ func TestCleanResult_Format(t *testing.T) {
 			wantStdout: "clean:\n  feat/a (merged)\n  feat/dirty (merged, stale)\n\nskip:\n  feat/wip\n    ✗ not merged\n",
 			wantStderr: "",
 		},
+		{
+			name: "detached_candidate_shows_path_and_reason",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{WorktreePath: "/repo/detached", Detached: true, Skipped: false, CleanReason: CleanMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "clean:\n  /repo/detached (detached, merged)\n",
+			wantStderr: "",
+		},
+		{
+			name: "detached_prunable_candidate",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{WorktreePath: "/repo/detached", Detached: true, Prunable: true, Skipped: false, CleanReason: CleanMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "clean:\n  /repo/detached (prunable, detached, merged)\n",
+			wantStderr: "",
+		},
+		{
+			name: "detached_skipped_shows_path",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+					{WorktreePath: "/repo/detached", Detached: true, Skipped: true, SkipReason: SkipNotMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  /repo/detached\n    ✗ not merged\n",
+			wantStderr: "",
+		},
+		{
+			name: "detached_execution_results_verbose",
+			result: CleanResult{
+				Removed: []RemovedWorktree{
+					{WorktreePath: "/repo/detached", Detached: true},
+				},
+				Check: false,
+			},
+			opts:       FormatOptions{Verbose: true},
+			wantStdout: "Removed worktree: /repo/detached\n",
+			wantStderr: "",
+		},
+		{
+			name: "detached_execution_error_shows_path",
+			result: CleanResult{
+				Removed: []RemovedWorktree{
+					{WorktreePath: "/repo/detached", Detached: true, Err: errors.New("boom")},
+				},
+				Check: false,
+			},
+			opts:       FormatOptions{},
+			wantStdout: "",
+			wantStderr: "error: /repo/detached: boom\n",
+		},
 		// ColorEnabled tests - output should be identical when color disabled
 		{
 			name: "color_disabled_same_as_no_color",
@@ -845,7 +907,7 @@ func TestCleanCommand_Run(t *testing.T) {
 			wantSkipped:    1,
 		},
 		{
-			name: "skips_detached_head",
+			name: "skips_detached_head_not_contained_in_target",
 			cwd:  "/other/dir",
 			opts: CleanOptions{},
 			config: &Config{
@@ -856,7 +918,7 @@ func TestCleanCommand_Run(t *testing.T) {
 				return &testutil.MockGitExecutor{
 					Worktrees: []testutil.MockWorktree{
 						{Path: "/repo/main", Branch: "main"},
-						{Path: "/repo/feat/a", Detached: true},
+						{Path: "/repo/detached", Detached: true, HEAD: "own-commit"},
 					},
 					MergedBranches: map[string][]string{
 						"main": {"main"},
@@ -865,6 +927,103 @@ func TestCleanCommand_Run(t *testing.T) {
 			},
 			wantCandidates: 1,
 			wantSkipped:    1,
+		},
+		{
+			name: "cleans_detached_head_contained_in_target",
+			cwd:  "/other/dir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/detached", Detached: true, HEAD: "merged-commit"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main"},
+					},
+					Ancestors: map[string][]string{
+						"main": {"merged-commit"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0,
+		},
+		{
+			name: "skips_detached_head_in_current_directory",
+			cwd:  "/repo/detached/subdir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/detached", Detached: true, HEAD: "merged-commit"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main"},
+					},
+					Ancestors: map[string][]string{
+						"main": {"merged-commit"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1,
+		},
+		{
+			name: "skips_locked_detached_head",
+			cwd:  "/other/dir",
+			opts: CleanOptions{},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/detached", Detached: true, HEAD: "merged-commit", Locked: true},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main"},
+					},
+					Ancestors: map[string][]string{
+						"main": {"merged-commit"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    1,
+		},
+		{
+			name: "force_cleans_detached_head_not_contained_in_target",
+			cwd:  "/other/dir",
+			opts: CleanOptions{Force: WorktreeForceLevelUnclean, Check: true},
+			config: &Config{
+				WorktreeSourceDir: "/repo/main",
+				DefaultSource:     "main",
+			},
+			setupGit: func() *testutil.MockGitExecutor {
+				return &testutil.MockGitExecutor{
+					Worktrees: []testutil.MockWorktree{
+						{Path: "/repo/main", Branch: "main"},
+						{Path: "/repo/detached", Detached: true, HEAD: "own-commit"},
+					},
+					MergedBranches: map[string][]string{
+						"main": {"main"},
+					},
+				}
+			},
+			wantCandidates: 1,
+			wantSkipped:    0,
 		},
 		{
 			name: "uses_target_flag",
@@ -1186,6 +1345,136 @@ func TestCleanCommand_Run(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCleanCommand_Run_DetachedWorktrees(t *testing.T) {
+	t.Parallel()
+
+	newCmd := func(mockGit *testutil.MockGitExecutor) *CleanCommand {
+		return &CleanCommand{
+			FS:     &testutil.MockFS{},
+			Git:    &GitRunner{Executor: mockGit, Log: NewNopLogger()},
+			Config: &Config{WorktreeSourceDir: "/repo/main", DefaultSource: "main"},
+			Log:    NewNopLogger(),
+		}
+	}
+
+	t.Run("contained_head_is_cleanable_without_branch", func(t *testing.T) {
+		t.Parallel()
+
+		mockGit := &testutil.MockGitExecutor{
+			Worktrees: []testutil.MockWorktree{
+				{Path: "/repo/main", Branch: "main"},
+				{Path: "/repo/detached", Detached: true, HEAD: "merged-commit"},
+			},
+			MergedBranches: map[string][]string{"main": {"main"}},
+			Ancestors:      map[string][]string{"main": {"merged-commit"}},
+		}
+
+		result, err := newCmd(mockGit).Run(t.Context(), "/other/dir", CleanOptions{Check: true})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Candidates) != 1 {
+			t.Fatalf("got %d candidates, want 1", len(result.Candidates))
+		}
+
+		got := result.Candidates[0]
+		if got.Skipped {
+			t.Errorf("candidate skipped with reason %q, want cleanable", got.SkipReason)
+		}
+		if !got.Detached {
+			t.Error("Detached = false, want true")
+		}
+		if got.Branch != "" {
+			t.Errorf("Branch = %q, want empty", got.Branch)
+		}
+		if got.WorktreePath != "/repo/detached" {
+			t.Errorf("WorktreePath = %q, want /repo/detached", got.WorktreePath)
+		}
+		if got.CleanReason != CleanMerged {
+			t.Errorf("CleanReason = %q, want %q", got.CleanReason, CleanMerged)
+		}
+		if got.DisplayName() != "/repo/detached" {
+			t.Errorf("DisplayName() = %q, want /repo/detached", got.DisplayName())
+		}
+	})
+
+	t.Run("stale_does_not_bypass_changes", func(t *testing.T) {
+		t.Parallel()
+
+		mockGit := &testutil.MockGitExecutor{
+			Worktrees: []testutil.MockWorktree{
+				{Path: "/repo/main", Branch: "main"},
+				{Path: "/repo/detached", Detached: true, HEAD: "merged-commit"},
+			},
+			MergedBranches:  map[string][]string{"main": {"main"}},
+			Ancestors:       map[string][]string{"main": {"merged-commit"}},
+			StatusOutputMap: map[string]string{"/repo/detached": " M work.go\n"},
+		}
+
+		result, err := newCmd(mockGit).Run(t.Context(), "/other/dir", CleanOptions{Check: true, Stale: true})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Candidates) != 1 {
+			t.Fatalf("got %d candidates, want 1", len(result.Candidates))
+		}
+
+		got := result.Candidates[0]
+		if !got.Skipped {
+			t.Fatal("candidate is cleanable, want skipped: uncommitted work is all a detached worktree holds")
+		}
+		if got.SkipReason != SkipHasChanges {
+			t.Errorf("SkipReason = %q, want %q", got.SkipReason, SkipHasChanges)
+		}
+		if got.CleanReason != "" {
+			t.Errorf("CleanReason = %q, want empty so --stale cannot override", got.CleanReason)
+		}
+	})
+
+	t.Run("removal_skips_branch_delete", func(t *testing.T) {
+		t.Parallel()
+
+		var captured []string
+		mockGit := &testutil.MockGitExecutor{
+			Worktrees: []testutil.MockWorktree{
+				{Path: "/repo/main", Branch: "main"},
+				{Path: "/repo/detached", Detached: true, HEAD: "merged-commit"},
+			},
+			MergedBranches: map[string][]string{"main": {"main"}},
+			Ancestors:      map[string][]string{"main": {"merged-commit"}},
+			CapturedArgs:   &captured,
+		}
+
+		result, err := newCmd(mockGit).Run(t.Context(), "/other/dir", CleanOptions{Yes: true})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Removed) != 1 {
+			t.Fatalf("got %d removed, want 1", len(result.Removed))
+		}
+		if result.Removed[0].Err != nil {
+			t.Fatalf("removal failed: %v", result.Removed[0].Err)
+		}
+		if !result.Removed[0].Detached {
+			t.Error("Removed[0].Detached = false, want true")
+		}
+
+		var removedPath string
+		for i, arg := range captured {
+			if arg == "remove" && i+1 < len(captured) {
+				removedPath = captured[i+1]
+			}
+			if arg == "branch" && i+1 < len(captured) &&
+				(captured[i+1] == "-d" || captured[i+1] == "-D") {
+				t.Errorf("branch delete was called for a detached worktree: %v", captured)
+			}
+		}
+		if removedPath != "/repo/detached" {
+			t.Errorf("removed path = %q, want /repo/detached", removedPath)
+		}
+	})
 }
 
 func TestCleanCommand_ResolveTarget(t *testing.T) {

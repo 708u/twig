@@ -894,8 +894,8 @@ func TestRemoveCommand_Check(t *testing.T) {
 			wantClean:     CleanUpstreamGone,
 		},
 		// Skip cases
-		// Note: Detached HEAD worktrees are handled directly in CleanCommand.Run
-		// since they have no branch name and cannot be found by WorktreeFindByBranch.
+		// Note: Check is keyed by branch name, so detached HEAD worktrees never
+		// reach these cases; they go through checkDetached instead.
 		{
 			name:   "skip_current_directory",
 			branch: "feat/a",
@@ -1327,7 +1327,8 @@ func TestRemoveCommand_Check(t *testing.T) {
 			wantCanRemove: true,
 		},
 		// Never bypassed (even with -ff)
-		// Note: Detached HEAD worktrees are handled directly in CleanCommand.Run.
+		// Note: Check is keyed by branch name, so detached HEAD worktrees never
+		// reach these cases; they go through checkDetached instead.
 		{
 			name:   "force_locked_does_not_bypass_current_dir",
 			branch: "feat/a",
