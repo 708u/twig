@@ -40,12 +40,14 @@ homebrew_casks:
       bash: completion/twig.bash
       zsh: completion/twig.zsh
       fish: completion/twig.fish
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/twig"]
-          end
+    # Homebrew 7.0 deprecated the postflight stanza that hooks emit.
+    # Switch back to hooks with use_steps once goreleaser#6870 ships.
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/twig"]
+        end
+      end
 
 archives:
   - formats: [tar.gz]
