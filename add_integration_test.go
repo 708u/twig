@@ -2569,6 +2569,38 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("SyncedLFSEditFromSlimWorktreeKeepsContentInBoth", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		if _, err := newAddCommand(t, mainDir, "", false).Run(t.Context(), "feat/slim-sync"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		slimPath := filepath.Join(repoDir, "feat", "slim-sync")
+		if err := os.WriteFile(filepath.Join(slimPath, "big/a.bin"), []byte("edited large a"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := newAddCommandWith(t, slimPath, nil, nil, AddOptions{Sync: true}).Run(t.Context(), "feat/sync-child")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if !result.ChangesSynced {
+			t.Error("ChangesSynced = false, want true")
+		}
+
+		for _, dir := range []string{slimPath, result.WorktreePath} {
+			content, err := os.ReadFile(filepath.Join(dir, "big/a.bin"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(content) != "edited large a" {
+				t.Errorf("%s: big/a.bin = %q, want the synced edit", dir, content)
+			}
+		}
+	})
+
 	t.Run("NoSparseCheckoutKeepsLFSExclusion", func(t *testing.T) {
 		t.Parallel()
 

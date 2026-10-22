@@ -622,8 +622,11 @@ func (g *GitRunner) StashPush(ctx context.Context, message string, pathspecs ...
 }
 
 // StashApplyByHash applies the stash with the given hash without dropping it.
+// The stash holds the user's own edits, but an lfs.fetchexclude in the
+// worktree's config makes git-lfs write matching files back as pointers.
+// The empty -c value lifts it for this command only.
 func (g *GitRunner) StashApplyByHash(ctx context.Context, hash string) ([]byte, error) {
-	return g.Run(ctx, GitCmdStash, GitStashApply, hash)
+	return g.WithConfig(lfsFetchExcludeKey, "").Run(ctx, GitCmdStash, GitStashApply, hash)
 }
 
 // StashPopByHash applies and drops the stash with the given hash.

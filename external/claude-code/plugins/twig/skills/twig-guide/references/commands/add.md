@@ -277,8 +277,9 @@ worktree keeps those settings when twig has none of its own. With
 with `--no-lfs-fetch-exclude`, step 4 runs
 `git config --worktree --unset-all lfs.fetchexclude` instead. git copies
 this config since 2.36, so older git has nothing to reset. A sparse
-checkout enabled in the shared `.git/config` rather than the
-worktree-specific config is not reset.
+checkout enabled or an `lfs.fetchexclude` set in the shared `.git/config`
+or the global config, rather than the worktree-specific config, is not
+reset.
 
 Excluded LFS files are checked out as pointer files and `git status`
 stays clean. Paths outside `sparse_checkout` are not written.
@@ -288,7 +289,8 @@ excluded files later.
 Changes carried with `--sync` or `--carry` are applied even when they are
 outside `sparse_checkout`: git writes those files to the worktree and
 marks them as present. Carried edits to LFS files keep their content even
-when `lfs.fetchexclude` matches them.
+when `lfs.fetchexclude` matches them, in the new worktree and in the source
+worktree that `--sync` restores.
 
 If step 3, 4, or 5 fails, the new worktree is removed (including a
 worktree locked with `--lock`) along with parent directories left empty,

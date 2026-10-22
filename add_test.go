@@ -1560,6 +1560,23 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			},
 		},
 		{
+			name:            "lfs_fetch_exclude_rejects_empty_pattern",
+			lfsFetchExclude: []string{"assets/**"},
+			lfsFlag:         []string{""},
+			wantErr:         "lfs_fetch_exclude pattern must not be empty",
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd},
+			},
+		},
+		{
+			name:           "sparse_checkout_rejects_empty_pattern",
+			sparseCheckout: []string{"/*", " "},
+			wantErr:        "sparse_checkout pattern must not be empty",
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd},
+			},
+		},
+		{
 			name:            "lfs_fetch_exclude_rejects_comma",
 			lfsFetchExclude: []string{"assets/{png,jpg}/**"},
 			wantErr:         "must not contain a comma",

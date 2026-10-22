@@ -275,9 +275,17 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	lfsFetchExclude := overridePatterns(c.Config.LFSFetchExclude, c.LFSFetchExclude, c.NoLFSFetchExclude)
 	sparseCheckout := overridePatterns(c.Config.SparseCheckout, c.SparseCheckout, c.NoSparseCheckout)
 	for _, p := range lfsFetchExclude {
+		if strings.TrimSpace(p) == "" {
+			return result, fmt.Errorf("lfs_fetch_exclude pattern must not be empty")
+		}
 		// git-lfs splits lfs.fetchexclude on commas
 		if strings.Contains(p, ",") {
 			return result, fmt.Errorf("lfs_fetch_exclude pattern must not contain a comma: %q", p)
+		}
+	}
+	for _, p := range sparseCheckout {
+		if strings.TrimSpace(p) == "" {
+			return result, fmt.Errorf("sparse_checkout pattern must not be empty")
 		}
 	}
 	if len(sparseCheckout) > 0 {
@@ -291,15 +299,15 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		}
 	}
 
-	plan := checkoutPlan{sparseCheckout: sparseCheckout}
-	if len(lfsFetchExclude) > 0 {
-		plan.lfsFetchExclude = strings.Join(lfsFetchExclude, ",")
+	plan := checkoutPlan{
+		sparseCheckout:  sparseCheckout,
+		lfsFetchExclude: strings.Join(lfsFetchExclude, ","),
 	}
 	if c.NoLFSFetchExclude || c.NoSparseCheckout || plan.lfsFetchExclude != "" {
 		var err error
 		plan.worktreeConfig, err = c.Git.WorktreeConfigEnabled(ctx)
 		if err != nil {
-			return result, fmt.Errorf("failed to read extensions.worktreeConfig: %w", err)
+			return result, fmt.Errorf("failed to read extensions.worktreeConfig: %w", withGitStderr(err))
 		}
 	}
 	// git worktree add copies the source worktree's config.worktree into the
@@ -420,14 +428,11 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 
 	// Apply stashed changes to new worktree
 	if stashHash != "" {
-		// An lfs.fetchexclude in the new worktree's config, set by twig or
-		// copied from the source worktree, would smudge carried LFS edits
-		// as pointers. The empty -c value lifts it for this command only.
-		_, err = c.Git.WithConfig(lfsFetchExcludeKey, "").InDir(wtPath).StashApplyByHash(ctx, stashHash)
+		_, err = c.Git.InDir(wtPath).StashApplyByHash(ctx, stashHash)
 		if err != nil {
 			rbErr := c.removeCreatedWorktree(ctx, wtPath, name, branchCreated)
 			_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
-			return result, rollbackError(fmt.Errorf("failed to apply changes to new worktree: %w", err), rbErr)
+			return result, rollbackError(fmt.Errorf("failed to apply changes to new worktree: %w", withGitStderr(err)), rbErr)
 		}
 		if isCarry {
 			// Carry: drop stash (source becomes clean)
@@ -596,7 +601,7 @@ func (c *AddCommand) createWorktree(ctx context.Context, addGit *GitRunner, bran
 
 	output, err = addGit.WorktreeAdd(ctx, path, branch, opts...)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to create worktree: %w", err)
+		return nil, false, fmt.Errorf("failed to create worktree: %w", withGitStderr(err))
 	}
 
 	return output, !exists, nil
@@ -659,7 +664,7 @@ func (c *AddCommand) inheritedCheckoutConfig(ctx context.Context) (WorktreeCheck
 	}
 	inherited, err := c.Git.WorktreeCheckoutConfig(ctx)
 	if err != nil {
-		return WorktreeCheckoutConfig{}, fmt.Errorf("failed to read worktree config: %w", err)
+		return WorktreeCheckoutConfig{}, fmt.Errorf("failed to read worktree config: %w", withGitStderr(err))
 	}
 	return inherited, nil
 }
