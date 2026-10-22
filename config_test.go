@@ -823,3 +823,98 @@ func TestLoadConfig_Hooks(t *testing.T) {
 		}
 	})
 }
+
+func TestLoadConfig_CheckoutSettings(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		project             string
+		local               string
+		wantLFSFetchExclude []string
+		wantSparseCheckout  []string
+	}{
+		{
+			name: "Unset",
+		},
+		{
+			name: "ProjectOnly",
+			project: `lfs_fetch_exclude = ["assets/**"]
+sparse_checkout = ["/*", "!/plans/"]
+`,
+			wantLFSFetchExclude: []string{"assets/**"},
+			wantSparseCheckout:  []string{"/*", "!/plans/"},
+		},
+		{
+			name: "LocalOnly",
+			local: `lfs_fetch_exclude = ["images/**", "videos/**"]
+sparse_checkout = ["/*", "!/docs/"]
+`,
+			wantLFSFetchExclude: []string{"images/**", "videos/**"},
+			wantSparseCheckout:  []string{"/*", "!/docs/"},
+		},
+		{
+			name: "LocalOverridesProject",
+			project: `lfs_fetch_exclude = ["assets/**"]
+sparse_checkout = ["/*", "!/plans/"]
+`,
+			local: `lfs_fetch_exclude = ["images/**"]
+sparse_checkout = ["/*", "!/docs/"]
+`,
+			wantLFSFetchExclude: []string{"images/**"},
+			wantSparseCheckout:  []string{"/*", "!/docs/"},
+		},
+		{
+			name: "EmptyLocalDoesNotOverride",
+			project: `lfs_fetch_exclude = ["assets/**"]
+sparse_checkout = ["/*", "!/plans/"]
+`,
+			local: `lfs_fetch_exclude = []
+sparse_checkout = []
+`,
+			wantLFSFetchExclude: []string{"assets/**"},
+			wantSparseCheckout:  []string{"/*", "!/plans/"},
+		},
+		{
+			name: "EachFieldResolvedSeparately",
+			project: `lfs_fetch_exclude = ["assets/**"]
+`,
+			local: `sparse_checkout = ["/*", "!/docs/"]
+`,
+			wantLFSFetchExclude: []string{"assets/**"},
+			wantSparseCheckout:  []string{"/*", "!/docs/"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmpDir := t.TempDir()
+			twigDir := filepath.Join(tmpDir, configDir)
+			if err := os.MkdirAll(twigDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(twigDir, configFileName), []byte(tt.project), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if tt.local != "" {
+				if err := os.WriteFile(filepath.Join(twigDir, localConfigFileName), []byte(tt.local), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			result, err := LoadConfig(tmpDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !reflect.DeepEqual(result.Config.LFSFetchExclude, tt.wantLFSFetchExclude) {
+				t.Errorf("LFSFetchExclude = %v, want %v", result.Config.LFSFetchExclude, tt.wantLFSFetchExclude)
+			}
+			if !reflect.DeepEqual(result.Config.SparseCheckout, tt.wantSparseCheckout) {
+				t.Errorf("SparseCheckout = %v, want %v", result.Config.SparseCheckout, tt.wantSparseCheckout)
+			}
+		})
+	}
+}

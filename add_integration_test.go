@@ -5,6 +5,7 @@ package twig
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -2258,6 +2259,184 @@ submodule_reference = true
 			t.Errorf("NoReferenceSubmodules length = %d, want 1", len(addResult.SubmoduleInit.NoReferenceSubmodules))
 		} else if addResult.SubmoduleInit.NoReferenceSubmodules[0] != "mysub" {
 			t.Errorf("NoReferenceSubmodules[0] = %q, want %q", addResult.SubmoduleInit.NoReferenceSubmodules[0], "mysub")
+		}
+	})
+}
+
+// setupLFSRepo creates a repository with LFS files under big/ and other/, a
+// plain directory plans/, and a branch lfs-update that changes big/a.bin.
+// Skips the test when git-lfs is not installed.
+func setupLFSRepo(t *testing.T) (repoDir, mainDir string) {
+	t.Helper()
+
+	if _, err := exec.LookPath("git-lfs"); err != nil {
+		t.Skip("git-lfs is not installed")
+	}
+
+	repoDir, mainDir = testutil.SetupTestRepo(t)
+	testutil.RunGit(t, mainDir, "lfs", "install", "--local")
+	testutil.RunGit(t, mainDir, "lfs", "track", "big/*.bin", "other/*.bin")
+
+	files := map[string]string{
+		"big/a.bin":   "large a",
+		"big/b.bin":   "large b",
+		"other/c.bin": "large c",
+		"plans/p.txt": "plan",
+		"README":      "readme",
+	}
+	for name, content := range files {
+		path := filepath.Join(mainDir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	testutil.RunGit(t, mainDir, "add", ".gitattributes", "big", "other", "plans", "README")
+	testutil.RunGit(t, mainDir, "commit", "-m", "add lfs files")
+
+	testutil.RunGit(t, mainDir, "checkout", "-b", "lfs-update")
+	if err := os.WriteFile(filepath.Join(mainDir, "big/a.bin"), []byte("large a v2"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunGit(t, mainDir, "commit", "-am", "update a.bin")
+	testutil.RunGit(t, mainDir, "checkout", "main")
+
+	return repoDir, mainDir
+}
+
+func isLFSPointer(t *testing.T, path string) bool {
+	t.Helper()
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", path, err)
+	}
+	return strings.HasPrefix(string(content), "version https://git-lfs.github.com/spec/")
+}
+
+func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
+	t.Parallel()
+
+	lfsFetchExclude := []string{"big/**"}
+	sparseCheckout := []string{"/*", "!/plans/"}
+
+	newAddCommand := func(t *testing.T, mainDir string, carryFrom string, full bool) *AddCommand {
+		t.Helper()
+
+		result, err := LoadConfig(mainDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := result.Config
+		cfg.LFSFetchExclude = lfsFetchExclude
+		cfg.SparseCheckout = sparseCheckout
+		return NewAddCommand(osFS{}, NewGitRunner(mainDir), cfg, nil, AddOptions{
+			CarryFrom: carryFrom,
+			Full:      full,
+		})
+	}
+
+	t.Run("ExcludedPathsAreNotCheckedOut", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		if _, err := newAddCommand(t, mainDir, "", false).Run(t.Context(), "feat/slim"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		wtPath := filepath.Join(repoDir, "feat", "slim")
+
+		for _, name := range []string{"big/a.bin", "big/b.bin"} {
+			if !isLFSPointer(t, filepath.Join(wtPath, name)) {
+				t.Errorf("%s is not an LFS pointer", name)
+			}
+		}
+		if isLFSPointer(t, filepath.Join(wtPath, "other/c.bin")) {
+			t.Errorf("other/c.bin is an LFS pointer, want content")
+		}
+		if _, err := os.Stat(filepath.Join(wtPath, "plans")); !os.IsNotExist(err) {
+			t.Errorf("plans/ exists outside sparse checkout: %v", err)
+		}
+		if status := testutil.RunGit(t, wtPath, "status", "--porcelain"); status != "" {
+			t.Errorf("git status --porcelain = %q, want empty", status)
+		}
+	})
+
+	t.Run("LFSExclusionKeptAfterSwitchingBranch", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		if _, err := newAddCommand(t, mainDir, "", false).Run(t.Context(), "feat/switch"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		wtPath := filepath.Join(repoDir, "feat", "switch")
+
+		testutil.RunGit(t, wtPath, "checkout", "lfs-update")
+
+		if !isLFSPointer(t, filepath.Join(wtPath, "big/a.bin")) {
+			t.Errorf("big/a.bin changed by checkout is not an LFS pointer")
+		}
+		if status := testutil.RunGit(t, wtPath, "status", "--porcelain"); status != "" {
+			t.Errorf("git status --porcelain = %q, want empty", status)
+		}
+	})
+
+	t.Run("CarriedChangesRemain", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		if err := os.WriteFile(filepath.Join(mainDir, "README"), []byte("edited"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(mainDir, "plans/p.txt"), []byte("edited plan"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := newAddCommand(t, mainDir, mainDir, false).Run(t.Context(), "feat/carry")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if !result.ChangesCarried {
+			t.Error("ChangesCarried = false, want true")
+		}
+		wtPath := filepath.Join(repoDir, "feat", "carry")
+
+		for name, want := range map[string]string{
+			"README":      "edited",
+			"plans/p.txt": "edited plan",
+		} {
+			content, err := os.ReadFile(filepath.Join(wtPath, name))
+			if err != nil {
+				t.Errorf("failed to read carried %s: %v", name, err)
+				continue
+			}
+			if string(content) != want {
+				t.Errorf("%s = %q, want %q", name, content, want)
+			}
+		}
+	})
+
+	t.Run("FullChecksOutEverything", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		if _, err := newAddCommand(t, mainDir, "", true).Run(t.Context(), "feat/full"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		wtPath := filepath.Join(repoDir, "feat", "full")
+
+		for _, name := range []string{"big/a.bin", "big/b.bin", "other/c.bin"} {
+			if isLFSPointer(t, filepath.Join(wtPath, name)) {
+				t.Errorf("%s is an LFS pointer, want content", name)
+			}
+		}
+		if _, err := os.Stat(filepath.Join(wtPath, "plans/p.txt")); err != nil {
+			t.Errorf("plans/p.txt missing: %v", err)
 		}
 	})
 }

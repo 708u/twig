@@ -348,6 +348,8 @@ Use --file with --sync or --carry to target specific files:
 			// --submodule-reference forces enable, otherwise use config
 			submoduleReference := cmd.Flags().Changed("submodule-reference")
 
+			full, _ := cmd.Flags().GetBool("full")
+
 			// --reason requires --lock
 			if lockReason != "" && !lock {
 				return fmt.Errorf("--reason requires --lock")
@@ -383,6 +385,7 @@ Use --file with --sync or --carry to target specific files:
 					LockReason:         lockReason,
 					InitSubmodules:     initSubmodules,
 					SubmoduleReference: submoduleReference,
+					Full:               full,
 				})
 			}
 			result, err := addCmd.Run(cmd.Context(), args[0])
@@ -667,6 +670,7 @@ stop processing of remaining branches.`,
 	addCmd.Flags().StringArrayP("file", "F", nil, "File patterns to sync/carry (requires --sync or --carry)")
 	addCmd.Flags().Bool("init-submodules", false, "Initialize submodules in new worktree")
 	addCmd.Flags().Bool("submodule-reference", false, "Use main worktree as reference for submodule init")
+	addCmd.Flags().Bool("full", false, "Ignore lfs_fetch_exclude and sparse_checkout")
 	addCmd.RegisterFlagCompletionFunc("file", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		// Resolve target directory from -C flag
 		dir, err := resolveCompletionDirectory(cmd)

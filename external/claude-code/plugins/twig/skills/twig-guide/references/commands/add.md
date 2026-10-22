@@ -26,6 +26,7 @@ twig add <name> [flags]
 | `--reason <string>`     |       | Reason for locking (requires `--lock`)             |
 | `--init-submodules`     |       | Initialize submodules in new worktree              |
 | `--submodule-reference` |       | Use main worktree as reference for submodule init  |
+| `--full`                |       | Ignore `lfs_fetch_exclude` and `sparse_checkout`   |
 
 ## Behavior
 
@@ -238,6 +239,58 @@ Priority:
 1. CLI flag `--submodule-reference` (forces enable)
 2. Config `submodule_reference`
 3. Default: disabled
+
+### Checkout Settings
+
+`lfs_fetch_exclude` and `sparse_checkout` limit what the new worktree
+checks out. Both must take effect during the checkout itself, so `hooks`
+cannot replace them.
+
+```toml
+# .twig/settings.local.toml
+lfs_fetch_exclude = ["assets/images/**"]
+sparse_checkout = ["/*", "!/docs/archive/"]
+```
+
+Order of operations:
+
+1. Stash changes (with `--sync` or `--carry`)
+2. `git worktree add`, with `-c lfs.fetchexclude=<patterns>` when
+   `lfs_fetch_exclude` is set and `--no-checkout` when `sparse_checkout`
+   is set
+3. With `sparse_checkout`: `git sparse-checkout set --no-cone <patterns>`,
+   then `git checkout` with the same `-c` to populate the worktree
+4. With `lfs_fetch_exclude` and `extensions.worktreeConfig` enabled:
+   `git config --worktree lfs.fetchexclude <patterns>`
+5. Submodule initialization, stash apply, symlinks, and hooks as usual
+
+Excluded LFS files are checked out as pointer files and `git status`
+stays clean. Paths outside `sparse_checkout` are not written.
+See [Configuration](../configuration.md#lfs_fetch_exclude) for fetching
+excluded files later.
+
+Changes carried with `--sync` or `--carry` are applied even when they are
+outside `sparse_checkout`: git writes those files to the worktree and
+marks them as present.
+
+If step 3 or 4 fails, the new worktree is removed and stashed changes are
+restored to the source worktree.
+
+Use `--full` to ignore both settings, for example when a worktree needs
+every file:
+
+```bash
+twig add feat/assets --full
+```
+
+The summary line reports the applied settings:
+
+```txt
+twig add: feat/new (2 symlinks, 1 lfs excludes, 2 sparse patterns)
+```
+
+The `twig-worktree-hooks` Claude Code plugin runs `twig add` without
+`--full`, so worktrees created by Claude Code always use these settings.
 
 ### Post-Create Hooks
 

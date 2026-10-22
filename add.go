@@ -10,6 +10,14 @@ import (
 	"strings"
 )
 
+const lfsFetchExcludeKey = "lfs.fetchexclude"
+
+// git sparse-checkout set --no-cone is available since git 2.35.
+const (
+	minSparseGitMajor = 2
+	minSparseGitMinor = 35
+)
+
 // AddCommand creates git worktrees with symlinks.
 type AddCommand struct {
 	FS                 FileSystem
@@ -23,6 +31,7 @@ type AddCommand struct {
 	LockReason         string
 	InitSubmodules     bool
 	SubmoduleReference bool
+	Full               bool
 }
 
 // AddOptions holds options for the add command.
@@ -34,6 +43,7 @@ type AddOptions struct {
 	LockReason         string
 	InitSubmodules     bool
 	SubmoduleReference bool
+	Full               bool // ignore lfs_fetch_exclude and sparse_checkout
 }
 
 // NewAddCommand creates an AddCommand with explicit dependencies (for testing).
@@ -53,6 +63,7 @@ func NewAddCommand(fs FileSystem, git *GitRunner, cfg *Config, log *slog.Logger,
 		LockReason:         opts.LockReason,
 		InitSubmodules:     opts.InitSubmodules,
 		SubmoduleReference: opts.SubmoduleReference,
+		Full:               opts.Full,
 	}
 }
 
@@ -87,14 +98,16 @@ type HookResult struct {
 
 // AddResult holds the result of an add operation.
 type AddResult struct {
-	Branch         string
-	WorktreePath   string
-	Symlinks       []SymlinkResult
-	GitOutput      []byte
-	ChangesSynced  bool
-	ChangesCarried bool
-	SubmoduleInit  SubmoduleInitResult
-	HookResults    []HookResult
+	Branch          string
+	WorktreePath    string
+	Symlinks        []SymlinkResult
+	GitOutput       []byte
+	ChangesSynced   bool
+	ChangesCarried  bool
+	SubmoduleInit   SubmoduleInitResult
+	HookResults     []HookResult
+	LFSFetchExclude []string
+	SparseCheckout  []string
 }
 
 // AddFormatOptions configures add output formatting.
@@ -168,6 +181,12 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 		if r.ChangesCarried {
 			stdout.WriteString("Carried uncommitted changes (source is now clean)\n")
 		}
+		if len(r.LFSFetchExclude) > 0 {
+			fmt.Fprintf(&stdout, "Excluded LFS files: %s\n", strings.Join(r.LFSFetchExclude, ", "))
+		}
+		if len(r.SparseCheckout) > 0 {
+			fmt.Fprintf(&stdout, "Applied sparse checkout: %s\n", strings.Join(r.SparseCheckout, ", "))
+		}
 		if r.SubmoduleInit.Attempted && r.SubmoduleInit.Count > 0 {
 			fmt.Fprintf(&stdout, "Initialized %d submodule(s)\n", r.SubmoduleInit.Count)
 		}
@@ -193,11 +212,19 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 		submoduleInfo = fmt.Sprintf(", %d submodules", r.SubmoduleInit.Count)
 	}
 
+	var checkoutInfo string
+	if len(r.LFSFetchExclude) > 0 {
+		checkoutInfo += fmt.Sprintf(", %d lfs excludes", len(r.LFSFetchExclude))
+	}
+	if len(r.SparseCheckout) > 0 {
+		checkoutInfo += fmt.Sprintf(", %d sparse patterns", len(r.SparseCheckout))
+	}
+
 	var hookInfo string
 	if hookRanCount > 0 {
 		hookInfo = fmt.Sprintf(", %d hooks ran", hookRanCount)
 	}
-	fmt.Fprintf(&stdout, "twig add: %s (%d symlinks%s%s%s)\n", r.Branch, createdCount, syncInfo, submoduleInfo, hookInfo)
+	fmt.Fprintf(&stdout, "twig add: %s (%d symlinks%s%s%s%s)\n", r.Branch, createdCount, syncInfo, submoduleInfo, checkoutInfo, hookInfo)
 
 	return FormatResult{Stdout: stdout.String(), Stderr: stderr.String()}
 }
@@ -220,6 +247,31 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 
 	wtPath := filepath.Join(c.Config.WorktreeDestBaseDir, name)
 	result.WorktreePath = wtPath
+
+	var lfsFetchExclude, sparseCheckout []string
+	if !c.Full {
+		lfsFetchExclude = c.Config.LFSFetchExclude
+		sparseCheckout = c.Config.SparseCheckout
+	}
+	if len(sparseCheckout) > 0 {
+		major, minor, err := c.Git.Version(ctx)
+		if err != nil {
+			return result, fmt.Errorf("failed to check git version: %w", err)
+		}
+		if major < minSparseGitMajor || (major == minSparseGitMajor && minor < minSparseGitMinor) {
+			return result, fmt.Errorf("sparse_checkout requires git %d.%d or later (found %d.%d)",
+				minSparseGitMajor, minSparseGitMinor, major, minor)
+		}
+	}
+
+	// Runs worktree add and the first checkout. -c reaches the git-lfs smudge
+	// filter, so excluded LFS files are written as pointers.
+	checkoutGit := c.Git
+	var lfsFetchExcludeValue string
+	if len(lfsFetchExclude) > 0 {
+		lfsFetchExcludeValue = strings.Join(lfsFetchExclude, ",")
+		checkoutGit = c.Git.WithConfig(lfsFetchExcludeKey, lfsFetchExcludeValue)
+	}
 
 	// Determine stash mode and source
 	var stashMsg string
@@ -272,7 +324,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		}
 	}
 
-	gitOutput, err := c.createWorktree(ctx, name, wtPath)
+	gitOutput, err := c.createWorktree(ctx, checkoutGit, name, wtPath, len(sparseCheckout) > 0)
 	if err != nil {
 		if stashHash != "" {
 			_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
@@ -280,6 +332,19 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		return result, err
 	}
 	result.GitOutput = gitOutput
+
+	if len(sparseCheckout) > 0 || lfsFetchExcludeValue != "" {
+		err = c.applyCheckoutSettings(ctx, checkoutGit.InDir(wtPath), sparseCheckout, lfsFetchExcludeValue)
+		if err != nil {
+			_, _ = c.Git.WorktreeRemove(ctx, wtPath, WithForceRemove(WorktreeForceLevelUnclean))
+			if stashHash != "" {
+				_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
+			}
+			return result, err
+		}
+		result.LFSFetchExclude = lfsFetchExclude
+		result.SparseCheckout = sparseCheckout
+	}
 
 	// Initialize submodules in new worktree (CLI flag forces enable)
 	if c.InitSubmodules || c.Config.ShouldInitSubmodules() {
@@ -361,7 +426,41 @@ func (c *AddCommand) runHooks(ctx context.Context, dir string) []HookResult {
 	return results
 }
 
-func (c *AddCommand) createWorktree(ctx context.Context, branch, path string) ([]byte, error) {
+// applyCheckoutSettings populates a worktree created with --no-checkout using
+// the sparse checkout patterns, then keeps the LFS exclusion for later
+// checkouts when worktree-specific config is available.
+func (c *AddCommand) applyCheckoutSettings(ctx context.Context, wtGit *GitRunner, sparseCheckout []string, lfsFetchExclude string) error {
+	if len(sparseCheckout) > 0 {
+		if _, err := wtGit.SparseCheckoutSet(ctx, sparseCheckout); err != nil {
+			return fmt.Errorf("failed to set sparse checkout: %w", err)
+		}
+		if _, err := wtGit.CheckoutHEAD(ctx); err != nil {
+			return fmt.Errorf("failed to check out worktree: %w", err)
+		}
+	}
+
+	if lfsFetchExclude == "" {
+		return nil
+	}
+	// Without extensions.worktreeConfig, `git config --worktree` writes to the
+	// shared config and would affect every worktree. Enabling the extension
+	// rewrites repository-wide config, so it is left to git sparse-checkout.
+	enabled, err := wtGit.WorktreeConfigEnabled(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to read extensions.worktreeConfig: %w", err)
+	}
+	if !enabled {
+		c.Log.DebugContext(ctx, "skip worktree config: extensions.worktreeConfig is not enabled",
+			"key", lfsFetchExcludeKey)
+		return nil
+	}
+	if _, err := wtGit.SetWorktreeConfig(ctx, lfsFetchExcludeKey, lfsFetchExclude); err != nil {
+		return fmt.Errorf("failed to set %s: %w", lfsFetchExcludeKey, err)
+	}
+	return nil
+}
+
+func (c *AddCommand) createWorktree(ctx context.Context, addGit *GitRunner, branch, path string, noCheckout bool) ([]byte, error) {
 	if _, err := c.FS.Stat(path); err == nil {
 		return nil, fmt.Errorf("directory already exists: %s", path)
 	}
@@ -407,7 +506,11 @@ func (c *AddCommand) createWorktree(ctx context.Context, branch, path string) ([
 		}
 	}
 
-	output, err := c.Git.WorktreeAdd(ctx, path, branch, opts...)
+	if noCheckout {
+		opts = append(opts, WithNoCheckout())
+	}
+
+	output, err := addGit.WorktreeAdd(ctx, path, branch, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create worktree: %w", err)
 	}

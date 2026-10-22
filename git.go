@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -47,6 +49,13 @@ const (
 	GitCmdReset      = "reset"
 	GitCmdMergeBase  = "merge-base"
 	GitCmdCommitTree = "commit-tree"
+)
+
+// Git command names used to set up a new worktree.
+const (
+	GitCmdSparseCheckout = "sparse-checkout"
+	GitCmdConfig         = "config"
+	GitCmdVersion        = "version"
 )
 
 // Git worktree subcommands.
@@ -127,6 +136,8 @@ type GitRunner struct {
 	Executor GitExecutor
 	Dir      string
 	Log      *slog.Logger
+
+	configs []string // key=value pairs passed as -c to every command
 }
 
 type gitRunnerOptions struct {
@@ -160,20 +171,40 @@ func NewGitRunner(dir string, opts ...GitRunnerOption) *GitRunner {
 
 // InDir returns a GitRunner that executes commands in the specified directory.
 func (g *GitRunner) InDir(dir string) *GitRunner {
-	return &GitRunner{Executor: g.Executor, Dir: dir, Log: g.Log}
+	return &GitRunner{Executor: g.Executor, Dir: dir, Log: g.Log, configs: g.configs}
+}
+
+// WithConfig returns a GitRunner that passes -c key=value to every command.
+// The value applies only to the spawned git process and its children
+// (e.g. LFS filters), leaving repository config untouched.
+func (g *GitRunner) WithConfig(key, value string) *GitRunner {
+	configs := append(slices.Clone(g.configs), key+"="+value)
+	return &GitRunner{Executor: g.Executor, Dir: g.Dir, Log: g.Log, configs: configs}
 }
 
 // Run executes git command with -C flag.
 func (g *GitRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
-	fullArgs := append([]string{"-C", g.Dir}, args...)
+	fullArgs := []string{"-C", g.Dir}
+	for _, kv := range g.configs {
+		fullArgs = append(fullArgs, "-c", kv)
+	}
+	fullArgs = append(fullArgs, args...)
 	g.Log.Debug(strings.Join(append([]string{"git"}, fullArgs...), " "), "category", LogCategoryGit)
 	return g.Executor.Run(ctx, fullArgs...)
 }
 
 type worktreeAddOptions struct {
 	createBranch bool
+	noCheckout   bool
 	lock         bool
 	lockReason   string
+}
+
+func (o worktreeAddOptions) checkoutArgs() []string {
+	if o.noCheckout {
+		return []string{"--no-checkout"}
+	}
+	return nil
 }
 
 func (o worktreeAddOptions) lockArgs() []string {
@@ -193,6 +224,14 @@ type WorktreeAddOption func(*worktreeAddOptions)
 func WithCreateBranch() WorktreeAddOption {
 	return func(o *worktreeAddOptions) {
 		o.createBranch = true
+	}
+}
+
+// WithNoCheckout skips populating the working tree, leaving room to
+// configure sparse checkout before the first checkout.
+func WithNoCheckout() WorktreeAddOption {
+	return func(o *worktreeAddOptions) {
+		o.noCheckout = true
 	}
 }
 
@@ -592,6 +631,7 @@ func (g *GitRunner) StashDropByHash(ctx context.Context, hash string) ([]byte, e
 
 func (g *GitRunner) worktreeAdd(ctx context.Context, path, branch string, o worktreeAddOptions) ([]byte, error) {
 	args := []string{GitCmdWorktree, GitWorktreeAdd}
+	args = append(args, o.checkoutArgs()...)
 	args = append(args, o.lockArgs()...)
 	args = append(args, path, branch)
 	return g.Run(ctx, args...)
@@ -599,6 +639,7 @@ func (g *GitRunner) worktreeAdd(ctx context.Context, path, branch string, o work
 
 func (g *GitRunner) worktreeAddWithNewBranch(ctx context.Context, branch, path string, o worktreeAddOptions) ([]byte, error) {
 	args := []string{GitCmdWorktree, GitWorktreeAdd}
+	args = append(args, o.checkoutArgs()...)
 	args = append(args, o.lockArgs()...)
 	args = append(args, "-b", branch, path)
 	return g.Run(ctx, args...)
@@ -1044,6 +1085,65 @@ func (g *GitRunner) MainWorktreePath(ctx context.Context) (string, error) {
 	}
 	gitDir := strings.TrimSpace(string(out))
 	return filepath.Dir(gitDir), nil
+}
+
+// Version returns the major and minor version of git.
+func (g *GitRunner) Version(ctx context.Context) (major, minor int, err error) {
+	out, err := g.Run(ctx, GitCmdVersion)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Vendor builds append suffixes: "git version 2.39.5 (Apple Git-154)",
+	// "git version 2.45.1.windows.1".
+	fields := strings.Fields(string(out))
+	if len(fields) < 3 {
+		return 0, 0, fmt.Errorf("unexpected git version output: %q", out)
+	}
+	parts := strings.Split(fields[2], ".")
+	if len(parts) < 2 {
+		return 0, 0, fmt.Errorf("unexpected git version output: %q", out)
+	}
+	if major, err = strconv.Atoi(parts[0]); err != nil {
+		return 0, 0, fmt.Errorf("unexpected git version output: %q", out)
+	}
+	if minor, err = strconv.Atoi(parts[1]); err != nil {
+		return 0, 0, fmt.Errorf("unexpected git version output: %q", out)
+	}
+	return major, minor, nil
+}
+
+// SparseCheckoutSet sets non-cone sparse checkout patterns for the worktree.
+// git enables extensions.worktreeConfig for the repository as a side effect.
+func (g *GitRunner) SparseCheckoutSet(ctx context.Context, patterns []string) ([]byte, error) {
+	args := append([]string{GitCmdSparseCheckout, "set", "--no-cone"}, patterns...)
+	return g.Run(ctx, args...)
+}
+
+// CheckoutHEAD populates a worktree created with WithNoCheckout.
+// Without an index, git treats this as the initial checkout and writes every
+// file allowed by the sparse checkout patterns.
+func (g *GitRunner) CheckoutHEAD(ctx context.Context) ([]byte, error) {
+	return g.Run(ctx, GitCmdCheckout)
+}
+
+// WorktreeConfigEnabled reports whether extensions.worktreeConfig is true,
+// which is required for `git config --worktree` to stay per-worktree.
+func (g *GitRunner) WorktreeConfigEnabled(ctx context.Context) (bool, error) {
+	out, err := g.Run(ctx, GitCmdConfig, "--bool", "--get", "extensions.worktreeConfig")
+	if err != nil {
+		// git config --get exits 1 when the key is not set
+		var exitErr interface{ ExitCode() int }
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return false, nil
+		}
+		return false, err
+	}
+	return strings.TrimSpace(string(out)) == "true", nil
+}
+
+// SetWorktreeConfig writes key=value to the worktree-specific config.
+func (g *GitRunner) SetWorktreeConfig(ctx context.Context, key, value string) ([]byte, error) {
+	return g.Run(ctx, GitCmdConfig, "--worktree", key, value)
 }
 
 // IsAncestor reports whether commit is reachable from target, including

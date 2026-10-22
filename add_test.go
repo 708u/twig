@@ -1,6 +1,7 @@
 package twig
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"path/filepath"
@@ -1254,4 +1255,284 @@ func TestAddResult_Format_Hooks(t *testing.T) {
 			t.Errorf("Stdout = %q, want %q", got.Stdout, want)
 		}
 	})
+}
+
+// checkoutSettingsExecutor records every git command (without -C) and answers
+// the commands that MockGitExecutor does not model.
+type checkoutSettingsExecutor struct {
+	inner             *testutil.MockGitExecutor
+	version           string
+	worktreeConfig    bool
+	sparseCheckoutErr error
+	calls             [][]string
+}
+
+func (e *checkoutSettingsExecutor) Run(ctx context.Context, args ...string) ([]byte, error) {
+	cmd := args
+	if len(cmd) >= 2 && cmd[0] == "-C" {
+		cmd = cmd[2:]
+	}
+	e.calls = append(e.calls, cmd)
+
+	sub := cmd
+	for len(sub) >= 2 && sub[0] == "-c" {
+		sub = sub[2:]
+	}
+	switch {
+	case len(sub) > 0 && sub[0] == GitCmdVersion:
+		return []byte("git version " + e.version + "\n"), nil
+	case slices.Equal(sub, []string{GitCmdConfig, "--bool", "--get", "extensions.worktreeConfig"}):
+		if !e.worktreeConfig {
+			return nil, &testutil.MockExitError{Code: 1}
+		}
+		return []byte("true\n"), nil
+	case len(sub) > 0 && sub[0] == GitCmdSparseCheckout:
+		return nil, e.sparseCheckoutErr
+	}
+	return e.inner.Run(ctx, args...)
+}
+
+// find returns the index of the first recorded call that starts with prefix
+// after skipping -c options, or -1.
+func (e *checkoutSettingsExecutor) find(prefix ...string) int {
+	for i, call := range e.calls {
+		sub := call
+		for len(sub) >= 2 && sub[0] == "-c" {
+			sub = sub[2:]
+		}
+		if len(sub) >= len(prefix) && slices.Equal(sub[:len(prefix)], prefix) {
+			return i
+		}
+	}
+	return -1
+}
+
+func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
+	t.Parallel()
+
+	const lfsArg = "lfs.fetchexclude=assets/**,images/**"
+
+	tests := []struct {
+		name            string
+		lfsFetchExclude []string
+		sparseCheckout  []string
+		full            bool
+		version         string
+		worktreeConfig  bool
+		// wantCalls lists command prefixes that must appear in this order.
+		wantCalls [][]string
+		// wantAbsent lists command prefixes that must not appear.
+		wantAbsent [][]string
+		wantErr    string
+	}{
+		{
+			name:            "lfs_fetch_exclude_only",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			wantCalls: [][]string{
+				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
+			},
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
+				{GitCmdSparseCheckout},
+				{GitCmdConfig, "--worktree"},
+			},
+		},
+		{
+			name:            "lfs_fetch_exclude_kept_when_worktree_config_enabled",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			worktreeConfig:  true,
+			wantCalls: [][]string{
+				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
+				{"-c", lfsArg, GitCmdConfig, "--worktree", "lfs.fetchexclude", "assets/**,images/**"},
+			},
+			wantAbsent: [][]string{
+				{GitCmdSparseCheckout},
+			},
+		},
+		{
+			name:           "sparse_checkout_only",
+			sparseCheckout: []string{"/*", "!/plans/"},
+			wantCalls: [][]string{
+				{GitCmdVersion},
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{GitCmdSparseCheckout, "set", "--no-cone", "/*", "!/plans/"},
+				{GitCmdCheckout},
+			},
+			wantAbsent: [][]string{
+				{"-c"},
+				{GitCmdConfig},
+			},
+		},
+		{
+			name:            "both",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			worktreeConfig:  true,
+			wantCalls: [][]string{
+				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{"-c", lfsArg, GitCmdSparseCheckout, "set", "--no-cone", "/*", "!/plans/"},
+				{"-c", lfsArg, GitCmdCheckout},
+				{"-c", lfsArg, GitCmdConfig, "--worktree", "lfs.fetchexclude", "assets/**,images/**"},
+			},
+		},
+		{
+			name:            "full_ignores_both",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			worktreeConfig:  true,
+			full:            true,
+			wantCalls: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd, "-b"},
+			},
+			wantAbsent: [][]string{
+				{"-c"},
+				{GitCmdVersion},
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
+				{GitCmdSparseCheckout},
+				{GitCmdConfig},
+			},
+		},
+		{
+			name:           "sparse_checkout_requires_git_2_35",
+			sparseCheckout: []string{"/*", "!/plans/"},
+			version:        "2.34.1",
+			wantErr:        "sparse_checkout requires git 2.35 or later (found 2.34)",
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			version := tt.version
+			if version == "" {
+				version = "2.39.5 (Apple Git-154)"
+			}
+			exec := &checkoutSettingsExecutor{
+				inner:          &testutil.MockGitExecutor{},
+				version:        version,
+				worktreeConfig: tt.worktreeConfig,
+			}
+			cmd := &AddCommand{
+				FS:  &testutil.MockFS{},
+				Git: &GitRunner{Executor: exec, Log: NewNopLogger()},
+				Config: &Config{
+					WorktreeSourceDir:   "/repo/main",
+					WorktreeDestBaseDir: "/repo/main-worktree",
+					LFSFetchExclude:     tt.lfsFetchExclude,
+					SparseCheckout:      tt.sparseCheckout,
+				},
+				Log:  NewNopLogger(),
+				Full: tt.full,
+			}
+
+			result, err := cmd.Run(t.Context(), "feature/checkout")
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("err = %v, want containing %q", err, tt.wantErr)
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			last := -1
+			for _, want := range tt.wantCalls {
+				idx := -1
+				for i := last + 1; i < len(exec.calls); i++ {
+					call := exec.calls[i]
+					if len(call) >= len(want) && slices.Equal(call[:len(want)], want) {
+						idx = i
+						break
+					}
+				}
+				if idx < 0 {
+					t.Fatalf("call %v not found after index %d in %v", want, last, exec.calls)
+				}
+				last = idx
+			}
+			for _, absent := range tt.wantAbsent {
+				if absent[0] == "-c" {
+					for _, call := range exec.calls {
+						if slices.Contains(call, "-c") {
+							t.Errorf("unexpected -c in %v", call)
+						}
+					}
+					continue
+				}
+				if i := exec.find(absent...); i >= 0 {
+					t.Errorf("unexpected call %v", exec.calls[i])
+				}
+			}
+
+			if tt.wantErr == "" && !tt.full {
+				if !slices.Equal(result.LFSFetchExclude, tt.lfsFetchExclude) {
+					t.Errorf("LFSFetchExclude = %v, want %v", result.LFSFetchExclude, tt.lfsFetchExclude)
+				}
+				if !slices.Equal(result.SparseCheckout, tt.sparseCheckout) {
+					t.Errorf("SparseCheckout = %v, want %v", result.SparseCheckout, tt.sparseCheckout)
+				}
+			}
+			if tt.full && (result.LFSFetchExclude != nil || result.SparseCheckout != nil) {
+				t.Errorf("full: result = %v / %v, want nil", result.LFSFetchExclude, result.SparseCheckout)
+			}
+		})
+	}
+}
+
+func TestAddCommand_Run_SparseCheckoutFailureRemovesWorktree(t *testing.T) {
+	t.Parallel()
+
+	exec := &checkoutSettingsExecutor{
+		inner:             &testutil.MockGitExecutor{},
+		version:           "2.53.0",
+		sparseCheckoutErr: errors.New("sparse-checkout failed"),
+	}
+	cmd := &AddCommand{
+		FS:  &testutil.MockFS{},
+		Git: &GitRunner{Executor: exec, Log: NewNopLogger()},
+		Config: &Config{
+			WorktreeSourceDir:   "/repo/main",
+			WorktreeDestBaseDir: "/repo/main-worktree",
+			SparseCheckout:      []string{"/*"},
+		},
+		Log: NewNopLogger(),
+	}
+
+	_, err := cmd.Run(t.Context(), "feature/sparse")
+	if err == nil || !strings.Contains(err.Error(), "failed to set sparse checkout") {
+		t.Fatalf("err = %v, want sparse checkout failure", err)
+	}
+	if exec.find(GitCmdWorktree, GitWorktreeRemove) < 0 {
+		t.Errorf("worktree was not removed: %v", exec.calls)
+	}
+}
+
+func TestAddResult_Format_CheckoutSettings(t *testing.T) {
+	t.Parallel()
+
+	result := AddResult{
+		Branch:          "feat/x",
+		WorktreePath:    "/repo/feat/x",
+		LFSFetchExclude: []string{"assets/**"},
+		SparseCheckout:  []string{"/*", "!/plans/"},
+	}
+
+	got := result.Format(AddFormatOptions{}).Stdout
+	want := "twig add: feat/x (0 symlinks, 1 lfs excludes, 2 sparse patterns)\n"
+	if got != want {
+		t.Errorf("default stdout = %q, want %q", got, want)
+	}
+
+	verbose := result.Format(AddFormatOptions{Verbose: true}).Stdout
+	for _, line := range []string{
+		"Excluded LFS files: assets/**\n",
+		"Applied sparse checkout: /*, !/plans/\n",
+	} {
+		if !strings.Contains(verbose, line) {
+			t.Errorf("verbose stdout = %q, want to contain %q", verbose, line)
+		}
+	}
 }

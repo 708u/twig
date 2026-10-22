@@ -131,6 +131,52 @@ itself succeeds.
 See [add subcommand](commands/add.md#post-create-hooks)
 for details.
 
+### lfs_fetch_exclude
+
+Git LFS paths to leave as pointer files in new worktrees.
+
+```toml
+lfs_fetch_exclude = ["assets/images/**"]
+```
+
+Default: `[]` (all LFS files are checked out)
+
+The patterns are joined with commas and passed to `git worktree add` as
+`-c lfs.fetchexclude=<patterns>`. When `extensions.worktreeConfig` is
+enabled, the same value is also written with `git config --worktree`, so
+later merges, rebases, and branch switches in that worktree keep the
+exclusion. Otherwise only the initial checkout excludes the files.
+
+To fetch excluded files later, run in the worktree:
+
+```bash
+git lfs pull -I '<path>' -X ''
+```
+
+`-X ''` is required because the worktree config would otherwise exclude
+the path again.
+
+See [add subcommand](commands/add.md#checkout-settings) for details.
+
+### sparse_checkout
+
+Non-cone sparse checkout patterns applied to new worktrees.
+
+```toml
+sparse_checkout = ["/*", "!/docs/archive/"]
+```
+
+Default: `[]` (sparse checkout disabled)
+
+Patterns use the gitignore-style syntax of `git sparse-checkout set
+--no-cone`. Requires git 2.35 or later.
+
+`git sparse-checkout set` enables `extensions.worktreeConfig` in the
+shared repository config (`.git/config`). The setting applies to every
+worktree of the repository, and git understands it since 2.20.
+
+See [add subcommand](commands/add.md#checkout-settings) for details.
+
 ## Merge Rules
 
 When both files exist, settings are merged:
@@ -145,6 +191,8 @@ When both files exist, settings are merged:
 | `submodule_reference`           | Local overrides project | `false`                        |
 | `clean_stale`                   | Local overrides project | `false`                        |
 | `hooks`                         | Local overrides project | `[]`                           |
+| `lfs_fetch_exclude`             | Local overrides project | `[]`                           |
+| `sparse_checkout`               | Local overrides project | `[]`                           |
 
 ## symlinks vs extra_symlinks
 
@@ -185,6 +233,8 @@ init_submodules = true
 submodule_reference = true
 clean_stale = true
 hooks = ["npm install", "direnv allow"]
+lfs_fetch_exclude = ["assets/images/**"]
+sparse_checkout = ["/*", "!/docs/archive/"]
 ```
 
 ```toml
