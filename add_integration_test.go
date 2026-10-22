@@ -2334,12 +2334,14 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		cfg.SparseCheckout = sparse
 		return NewAddCommand(osFS{}, NewGitRunner(dir), cfg, nil, opts)
 	}
-	newAddCommand := func(t *testing.T, mainDir string, carryFrom string, full bool) *AddCommand {
+	// disableAll passes both --no-lfs-fetch-exclude and --no-sparse-checkout.
+	newAddCommand := func(t *testing.T, mainDir string, carryFrom string, disableAll bool) *AddCommand {
 		t.Helper()
 
 		return newAddCommandWith(t, mainDir, lfsFetchExclude, sparseCheckout, AddOptions{
-			CarryFrom: carryFrom,
-			Full:      full,
+			CarryFrom:         carryFrom,
+			NoLFSFetchExclude: disableAll,
+			NoSparseCheckout:  disableAll,
 		})
 	}
 
@@ -2375,7 +2377,7 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("InheritedSettingsKeptWithoutFull", func(t *testing.T) {
+	t.Run("InheritedSettingsKeptWithoutDisableFlags", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := setupLFSRepo(t)
@@ -2509,7 +2511,7 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("FullFromSlimWorktreeChecksOutEverything", func(t *testing.T) {
+	t.Run("DisablingBothFromSlimWorktreeChecksOutEverything", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := setupLFSRepo(t)
@@ -2520,7 +2522,7 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		slimPath := filepath.Join(repoDir, "feat", "slim-source")
 
 		// git worktree add copies the source worktree's config.worktree
-		result, err := newAddCommand(t, slimPath, "", true).Run(t.Context(), "feat/full-child")
+		result, err := newAddCommand(t, slimPath, "", true).Run(t.Context(), "feat/all-child")
 		if err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -2567,15 +2569,65 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("FullChecksOutEverything", func(t *testing.T) {
+	t.Run("NoSparseCheckoutKeepsLFSExclusion", func(t *testing.T) {
 		t.Parallel()
 
 		repoDir, mainDir := setupLFSRepo(t)
 
-		if _, err := newAddCommand(t, mainDir, "", true).Run(t.Context(), "feat/full"); err != nil {
+		cmd := newAddCommandWith(t, mainDir, lfsFetchExclude, sparseCheckout, AddOptions{NoSparseCheckout: true})
+		if _, err := cmd.Run(t.Context(), "feat/no-sparse"); err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
-		wtPath := filepath.Join(repoDir, "feat", "full")
+		wtPath := filepath.Join(repoDir, "feat", "no-sparse")
+
+		if _, err := os.Stat(filepath.Join(wtPath, "plans/p.txt")); err != nil {
+			t.Errorf("plans/p.txt missing: %v", err)
+		}
+		if !isLFSPointer(t, filepath.Join(wtPath, "big/a.bin")) {
+			t.Errorf("big/a.bin is not an LFS pointer")
+		}
+	})
+
+	t.Run("FlagPatternsReplaceConfiguredPatterns", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		cmd := newAddCommandWith(t, mainDir, lfsFetchExclude, sparseCheckout, AddOptions{
+			LFSFetchExclude: []string{"other/**"},
+			SparseCheckout:  []string{"/*", "!/README"},
+		})
+		if _, err := cmd.Run(t.Context(), "feat/flags"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		wtPath := filepath.Join(repoDir, "feat", "flags")
+
+		if isLFSPointer(t, filepath.Join(wtPath, "big/a.bin")) {
+			t.Errorf("big/a.bin is an LFS pointer, want content")
+		}
+		if !isLFSPointer(t, filepath.Join(wtPath, "other/c.bin")) {
+			t.Errorf("other/c.bin is not an LFS pointer")
+		}
+		if _, err := os.Stat(filepath.Join(wtPath, "plans/p.txt")); err != nil {
+			t.Errorf("plans/p.txt missing: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(wtPath, "README")); !os.IsNotExist(err) {
+			t.Errorf("README exists outside sparse checkout: %v", err)
+		}
+		if status := testutil.RunGit(t, wtPath, "status", "--porcelain"); status != "" {
+			t.Errorf("git status --porcelain = %q, want empty", status)
+		}
+	})
+
+	t.Run("DisablingBothChecksOutEverything", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		if _, err := newAddCommand(t, mainDir, "", true).Run(t.Context(), "feat/all"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		wtPath := filepath.Join(repoDir, "feat", "all")
 
 		for _, name := range []string{"big/a.bin", "big/b.bin", "other/c.bin"} {
 			if isLFSPointer(t, filepath.Join(wtPath, name)) {

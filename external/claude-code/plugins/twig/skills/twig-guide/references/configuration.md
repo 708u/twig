@@ -158,6 +158,8 @@ git lfs pull -I '<path>' -X ''
 `-X ''` is required because the worktree config would otherwise exclude
 the path again.
 
+`twig add --lfs-fetch-exclude <pattern>` replaces the patterns and
+`twig add --no-lfs-fetch-exclude` disables the setting for one run.
 See [add subcommand](commands/add.md#checkout-settings) for details.
 
 ### sparse_checkout
@@ -177,6 +179,8 @@ Patterns use the gitignore-style syntax of `git sparse-checkout set
 shared repository config (`.git/config`). The setting applies to every
 worktree of the repository, and git understands it since 2.20.
 
+`twig add --sparse-checkout <pattern>` replaces the patterns and
+`twig add --no-sparse-checkout` disables the setting for one run.
 See [add subcommand](commands/add.md#checkout-settings) for details.
 
 ## Merge Rules

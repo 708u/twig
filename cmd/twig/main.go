@@ -348,7 +348,16 @@ Use --file with --sync or --carry to target specific files:
 			// --submodule-reference forces enable, otherwise use config
 			submoduleReference := cmd.Flags().Changed("submodule-reference")
 
-			full, _ := cmd.Flags().GetBool("full")
+			lfsFetchExclude, _ := cmd.Flags().GetStringArray("lfs-fetch-exclude")
+			noLFSFetchExclude, _ := cmd.Flags().GetBool("no-lfs-fetch-exclude")
+			if len(lfsFetchExclude) > 0 && noLFSFetchExclude {
+				return fmt.Errorf("--lfs-fetch-exclude cannot be used with --no-lfs-fetch-exclude")
+			}
+			sparseCheckout, _ := cmd.Flags().GetStringArray("sparse-checkout")
+			noSparseCheckout, _ := cmd.Flags().GetBool("no-sparse-checkout")
+			if len(sparseCheckout) > 0 && noSparseCheckout {
+				return fmt.Errorf("--sparse-checkout cannot be used with --no-sparse-checkout")
+			}
 
 			// --reason requires --lock
 			if lockReason != "" && !lock {
@@ -385,7 +394,10 @@ Use --file with --sync or --carry to target specific files:
 					LockReason:         lockReason,
 					InitSubmodules:     initSubmodules,
 					SubmoduleReference: submoduleReference,
-					Full:               full,
+					LFSFetchExclude:    lfsFetchExclude,
+					NoLFSFetchExclude:  noLFSFetchExclude,
+					SparseCheckout:     sparseCheckout,
+					NoSparseCheckout:   noSparseCheckout,
 				})
 			}
 			result, err := addCmd.Run(cmd.Context(), args[0])
@@ -670,7 +682,10 @@ stop processing of remaining branches.`,
 	addCmd.Flags().StringArrayP("file", "F", nil, "File patterns to sync/carry (requires --sync or --carry)")
 	addCmd.Flags().Bool("init-submodules", false, "Initialize submodules in new worktree")
 	addCmd.Flags().Bool("submodule-reference", false, "Use main worktree as reference for submodule init")
-	addCmd.Flags().Bool("full", false, "Ignore lfs_fetch_exclude and sparse_checkout")
+	addCmd.Flags().StringArray("lfs-fetch-exclude", nil, "LFS path pattern to leave as pointers, replacing lfs_fetch_exclude (repeatable)")
+	addCmd.Flags().Bool("no-lfs-fetch-exclude", false, "Check out all LFS files, ignoring lfs_fetch_exclude")
+	addCmd.Flags().StringArray("sparse-checkout", nil, "Sparse checkout pattern, replacing sparse_checkout (repeatable)")
+	addCmd.Flags().Bool("no-sparse-checkout", false, "Check out all paths, ignoring sparse_checkout")
 	addCmd.RegisterFlagCompletionFunc("file", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		// Resolve target directory from -C flag
 		dir, err := resolveCompletionDirectory(cmd)

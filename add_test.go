@@ -1340,7 +1340,10 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 		name            string
 		lfsFetchExclude []string
 		sparseCheckout  []string
-		full            bool
+		lfsFlag         []string // --lfs-fetch-exclude
+		noLFS           bool     // --no-lfs-fetch-exclude
+		sparseFlag      []string // --sparse-checkout
+		noSparse        bool     // --no-sparse-checkout
 		version         string
 		worktreeConfig  bool
 		inheritedConfig string
@@ -1401,11 +1404,12 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			},
 		},
 		{
-			name:            "full_ignores_both",
+			name:            "no_flags_ignore_both",
 			lfsFetchExclude: []string{"assets/**", "images/**"},
 			sparseCheckout:  []string{"/*", "!/plans/"},
 			worktreeConfig:  true,
-			full:            true,
+			noLFS:           true,
+			noSparse:        true,
 			wantCalls: [][]string{
 				{GitCmdWorktree, GitWorktreeAdd, "-b"},
 			},
@@ -1417,12 +1421,13 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			},
 		},
 		{
-			name:            "full_resets_settings_inherited_from_source",
+			name:            "no_flags_reset_inherited_settings",
 			lfsFetchExclude: []string{"assets/**", "images/**"},
 			sparseCheckout:  []string{"/*", "!/plans/"},
 			worktreeConfig:  true,
 			inheritedConfig: inheritedCfg,
-			full:            true,
+			noLFS:           true,
+			noSparse:        true,
 			wantCalls: [][]string{
 				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
 				{GitCmdSparseCheckout, "disable"},
@@ -1452,7 +1457,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			},
 		},
 		{
-			name:            "inherited_settings_kept_without_full",
+			name:            "inherited_settings_kept_without_no_flags",
 			worktreeConfig:  true,
 			inheritedConfig: inheritedCfg,
 			wantCalls: [][]string{
@@ -1466,10 +1471,11 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			},
 		},
 		{
-			name:            "full_skips_reset_when_git_does_not_copy_config",
+			name:            "no_flags_skip_reset_when_git_does_not_copy_config",
 			worktreeConfig:  true,
 			inheritedConfig: inheritedCfg,
-			full:            true,
+			noLFS:           true,
+			noSparse:        true,
 			version:         "2.35.1",
 			wantCalls: [][]string{
 				{GitCmdWorktree, GitWorktreeAdd, "-b"},
@@ -1481,10 +1487,10 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			},
 		},
 		{
-			name:            "full_keeps_disabled_sparse_checkout",
+			name:            "no_sparse_checkout_keeps_disabled_sparse_checkout",
 			worktreeConfig:  true,
 			inheritedConfig: "core.sparsecheckout false\n",
-			full:            true,
+			noSparse:        true,
 			wantCalls: [][]string{
 				{GitCmdWorktree, GitWorktreeAdd, "-b"},
 			},
@@ -1492,6 +1498,56 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
 				{GitCmdSparseCheckout},
 				{GitCmdCheckout},
+			},
+		},
+		{
+			name:            "no_sparse_checkout_keeps_lfs_fetch_exclude",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			worktreeConfig:  true,
+			inheritedConfig: "core.sparsecheckout true\n",
+			noSparse:        true,
+			wantCalls: [][]string{
+				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{"-c", lfsArg, GitCmdSparseCheckout, "disable"},
+				{"-c", lfsArg, GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "assets/**,images/**"},
+				{"-c", lfsArg, GitCmdCheckout},
+			},
+			wantAbsent: [][]string{
+				{GitCmdSparseCheckout, "set"},
+				{GitCmdConfig, "--worktree", "--unset-all"},
+			},
+		},
+		{
+			name:            "no_lfs_fetch_exclude_resets_only_lfs",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			worktreeConfig:  true,
+			inheritedConfig: inheritedCfg,
+			noLFS:           true,
+			wantCalls: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/plans/"},
+				{GitCmdConfig, "--worktree", "--unset-all", "lfs.fetchexclude"},
+				{GitCmdCheckout},
+			},
+			wantAbsent: [][]string{
+				{"-c"},
+				{GitCmdSparseCheckout, "disable"},
+				setLFS,
+			},
+		},
+		{
+			name:            "flags_replace_configured_patterns",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			lfsFlag:         []string{"videos/**"},
+			sparseFlag:      []string{"/*", "!/docs/"},
+			wantCalls: [][]string{
+				{"-c", "lfs.fetchexclude=videos/**", GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{"-c", "lfs.fetchexclude=videos/**", GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/docs/"},
+				{"-c", "lfs.fetchexclude=videos/**", GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "videos/**"},
+				{"-c", "lfs.fetchexclude=videos/**", GitCmdCheckout},
 			},
 		},
 		{
@@ -1536,8 +1592,11 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 					LFSFetchExclude:     tt.lfsFetchExclude,
 					SparseCheckout:      tt.sparseCheckout,
 				},
-				Log:  NewNopLogger(),
-				Full: tt.full,
+				Log:               NewNopLogger(),
+				LFSFetchExclude:   tt.lfsFlag,
+				NoLFSFetchExclude: tt.noLFS,
+				SparseCheckout:    tt.sparseFlag,
+				NoSparseCheckout:  tt.noSparse,
 			}
 
 			result, err := cmd.Run(t.Context(), "feature/checkout")
@@ -1578,16 +1637,26 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 				}
 			}
 
-			if tt.wantErr == "" && !tt.full {
-				if !slices.Equal(result.LFSFetchExclude, tt.lfsFetchExclude) {
-					t.Errorf("LFSFetchExclude = %v, want %v", result.LFSFetchExclude, tt.lfsFetchExclude)
+			if tt.wantErr == "" {
+				wantLFS, wantSparse := tt.lfsFetchExclude, tt.sparseCheckout
+				if len(tt.lfsFlag) > 0 {
+					wantLFS = tt.lfsFlag
 				}
-				if !slices.Equal(result.SparseCheckout, tt.sparseCheckout) {
-					t.Errorf("SparseCheckout = %v, want %v", result.SparseCheckout, tt.sparseCheckout)
+				if tt.noLFS {
+					wantLFS = nil
 				}
-			}
-			if tt.full && (result.LFSFetchExclude != nil || result.SparseCheckout != nil) {
-				t.Errorf("full: result = %v / %v, want nil", result.LFSFetchExclude, result.SparseCheckout)
+				if len(tt.sparseFlag) > 0 {
+					wantSparse = tt.sparseFlag
+				}
+				if tt.noSparse {
+					wantSparse = nil
+				}
+				if !slices.Equal(result.LFSFetchExclude, wantLFS) {
+					t.Errorf("LFSFetchExclude = %v, want %v", result.LFSFetchExclude, wantLFS)
+				}
+				if !slices.Equal(result.SparseCheckout, wantSparse) {
+					t.Errorf("SparseCheckout = %v, want %v", result.SparseCheckout, wantSparse)
+				}
 			}
 		})
 	}

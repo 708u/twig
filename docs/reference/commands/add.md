@@ -14,19 +14,22 @@ twig add <name> [flags]
 
 ## Flags
 
-| Flag                    | Short | Description                                        |
-|-------------------------|-------|----------------------------------------------------|
-| `--sync`                | `-s`  | Sync uncommitted changes to new worktree           |
-| `--carry [<branch>]`    | `-c`  | Carry uncommitted changes (optionally from branch) |
-| `--file <pattern>`      | `-F`  | File patterns to carry (requires `--carry`)        |
-| `--quiet`               | `-q`  | Output only the worktree path                      |
-| `--verbose`             | `-v`  | Enable verbose output                              |
-| `--source <branch>`     |       | Use specified branch's worktree as source          |
-| `--lock`                |       | Lock the worktree after creation                   |
-| `--reason <string>`     |       | Reason for locking (requires `--lock`)             |
-| `--init-submodules`     |       | Initialize submodules in new worktree              |
-| `--submodule-reference` |       | Use main worktree as reference for submodule init  |
-| `--full`                |       | Ignore `lfs_fetch_exclude` and `sparse_checkout`   |
+| Flag                            | Short | Description                                        |
+|---------------------------------|-------|----------------------------------------------------|
+| `--sync`                        | `-s`  | Sync uncommitted changes to new worktree           |
+| `--carry [<branch>]`            | `-c`  | Carry uncommitted changes (optionally from branch) |
+| `--file <pattern>`              | `-F`  | File patterns to carry (requires `--carry`)        |
+| `--quiet`                       | `-q`  | Output only the worktree path                      |
+| `--verbose`                     | `-v`  | Enable verbose output                              |
+| `--source <branch>`             |       | Use specified branch's worktree as source          |
+| `--lock`                        |       | Lock the worktree after creation                   |
+| `--reason <string>`             |       | Reason for locking (requires `--lock`)             |
+| `--init-submodules`             |       | Initialize submodules in new worktree              |
+| `--submodule-reference`         |       | Use main worktree as reference for submodule init  |
+| `--lfs-fetch-exclude <pattern>` |       | Replace `lfs_fetch_exclude` (repeatable)           |
+| `--no-lfs-fetch-exclude`        |       | Check out every LFS file                           |
+| `--sparse-checkout <pattern>`   |       | Replace `sparse_checkout` (repeatable)             |
+| `--no-sparse-checkout`          |       | Check out every path                               |
 
 ## Behavior
 
@@ -270,7 +273,8 @@ Order of operations:
 `git worktree add` copies the source worktree's worktree-specific config
 to the new worktree, so a worktree created from a sparse or LFS-excluded
 worktree keeps those settings when twig has none of its own. With
-`--full`, step 3 runs `git sparse-checkout disable` and step 4 runs
+`--no-sparse-checkout`, step 3 runs `git sparse-checkout disable`, and
+with `--no-lfs-fetch-exclude`, step 4 runs
 `git config --worktree --unset-all lfs.fetchexclude` instead. git copies
 this config since 2.36, so older git has nothing to reset. A sparse
 checkout enabled in the shared `.git/config` rather than the
@@ -300,11 +304,28 @@ When the worktree is created with `--no-checkout`, git runs the
 receives `HEAD` as the previous ref, not the null object ID that
 `git worktree add` passes.
 
-Use `--full` to ignore both settings and reset those copied from the
-source worktree, for example when a worktree needs every file:
+Flags override each setting for a single run:
+
+| Flag                            | Effect                                         |
+|---------------------------------|------------------------------------------------|
+| `--lfs-fetch-exclude <pattern>` | Use these patterns instead of the config       |
+| `--no-lfs-fetch-exclude`        | Check out every LFS file                       |
+| `--sparse-checkout <pattern>`   | Use these patterns instead of the config       |
+| `--no-sparse-checkout`          | Check out every path                           |
+
+Pattern flags can be repeated and replace the configured list as a whole.
+A `--no-*` flag also resets the setting copied from the source worktree,
+and cannot be combined with the pattern flag for the same setting.
 
 ```bash
-twig add feat/assets --full
+# Every file, for example to work on the excluded assets
+twig add feat/assets --no-lfs-fetch-exclude --no-sparse-checkout
+
+# Keep the sparse checkout but fetch all LFS files
+twig add feat/images --no-lfs-fetch-exclude
+
+# Exclude a different LFS directory this time
+twig add feat/docs --lfs-fetch-exclude 'videos/**'
 ```
 
 The summary line reports the applied settings:
@@ -314,7 +335,8 @@ twig add: feat/new (2 symlinks, 1 lfs excludes, 2 sparse patterns)
 ```
 
 The `twig-worktree-hooks` Claude Code plugin runs `twig add` without
-`--full`, so worktrees created by Claude Code always use these settings.
+these flags, so worktrees created by Claude Code always use the
+configured settings.
 
 ### Post-Create Hooks
 

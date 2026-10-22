@@ -35,10 +35,12 @@ symlinks = []
 # Commands to run after worktree creation (run in new worktree directory)
 # hooks = ["npm install", "direnv allow"]
 
-# Git LFS paths left as pointer files in new worktrees (ignored with --full)
+# Git LFS paths left as pointer files in new worktrees
+# (override per run with --lfs-fetch-exclude or --no-lfs-fetch-exclude)
 # lfs_fetch_exclude = ["assets/images/**"]
 
-# Non-cone sparse checkout patterns for new worktrees (ignored with --full)
+# Non-cone sparse checkout patterns for new worktrees
+# (override per run with --sparse-checkout or --no-sparse-checkout)
 # sparse_checkout = ["/*", "!/docs/archive/"]
 `
 
