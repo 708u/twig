@@ -142,7 +142,8 @@ lfs_fetch_exclude = ["assets/images/**"]
 Default: `[]` (all LFS files are checked out)
 
 The patterns are joined with commas and passed to `git worktree add` as
-`-c lfs.fetchexclude=<patterns>`. When `extensions.worktreeConfig` is
+`-c lfs.fetchexclude=<patterns>`. A pattern must not contain a comma,
+because git-lfs splits the value on commas. When `extensions.worktreeConfig` is
 enabled, the same value is also written with `git config --worktree`, so
 later merges, rebases, and branch switches in that worktree keep the
 exclusion. Otherwise only the initial checkout excludes the files.
@@ -169,7 +170,7 @@ sparse_checkout = ["/*", "!/docs/archive/"]
 Default: `[]` (sparse checkout disabled)
 
 Patterns use the gitignore-style syntax of `git sparse-checkout set
---no-cone`. Requires git 2.35 or later.
+--no-cone`. Requires git 2.36 or later.
 
 `git sparse-checkout set` enables `extensions.worktreeConfig` in the
 shared repository config (`.git/config`). The setting applies to every

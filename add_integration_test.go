@@ -2420,6 +2420,41 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("FullFromSlimWorktreeChecksOutEverything", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		if _, err := newAddCommand(t, mainDir, "", false).Run(t.Context(), "feat/slim-source"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		slimPath := filepath.Join(repoDir, "feat", "slim-source")
+
+		// git worktree add copies the source worktree's config.worktree
+		result, err := newAddCommand(t, slimPath, "", true).Run(t.Context(), "feat/full-child")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		wtPath := result.WorktreePath
+
+		for _, name := range []string{"big/a.bin", "big/b.bin", "other/c.bin"} {
+			if isLFSPointer(t, filepath.Join(wtPath, name)) {
+				t.Errorf("%s is an LFS pointer, want content", name)
+			}
+		}
+		if _, err := os.Stat(filepath.Join(wtPath, "plans/p.txt")); err != nil {
+			t.Errorf("plans/p.txt missing: %v", err)
+		}
+		if status := testutil.RunGit(t, wtPath, "status", "--porcelain"); status != "" {
+			t.Errorf("git status --porcelain = %q, want empty", status)
+		}
+		// A branch switch must not bring the exclusion back
+		testutil.RunGit(t, wtPath, "checkout", "lfs-update")
+		if isLFSPointer(t, filepath.Join(wtPath, "big/a.bin")) {
+			t.Errorf("big/a.bin is an LFS pointer after checkout, want content")
+		}
+	})
+
 	t.Run("FullChecksOutEverything", func(t *testing.T) {
 		t.Parallel()
 

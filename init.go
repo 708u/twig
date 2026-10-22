@@ -34,6 +34,12 @@ symlinks = []
 
 # Commands to run after worktree creation (run in new worktree directory)
 # hooks = ["npm install", "direnv allow"]
+
+# Git LFS paths left as pointer files in new worktrees (ignored with --full)
+# lfs_fetch_exclude = ["assets/images/**"]
+
+# Non-cone sparse checkout patterns for new worktrees (ignored with --full)
+# sparse_checkout = ["/*", "!/docs/archive/"]
 `
 
 // InitCommand initializes twig configuration in a directory.

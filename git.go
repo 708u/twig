@@ -131,6 +131,16 @@ func newGitError(op GitOp, err error) *GitError {
 	return gitErr
 }
 
+// withGitStderr appends git's stderr to err, which exec.ExitError leaves out
+// of its message.
+func withGitStderr(err error) error {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
+	}
+	return err
+}
+
 // GitRunner provides git operations using GitExecutor.
 type GitRunner struct {
 	Executor GitExecutor
@@ -1128,8 +1138,9 @@ func (g *GitRunner) CheckoutHEAD(ctx context.Context) ([]byte, error) {
 
 // WorktreeConfigEnabled reports whether extensions.worktreeConfig is true,
 // which is required for `git config --worktree` to stay per-worktree.
+// git honors extensions only in the repository config, hence --local.
 func (g *GitRunner) WorktreeConfigEnabled(ctx context.Context) (bool, error) {
-	out, err := g.Run(ctx, GitCmdConfig, "--bool", "--get", "extensions.worktreeConfig")
+	out, err := g.Run(ctx, GitCmdConfig, "--local", "--bool", "--get", "extensions.worktreeConfig")
 	if err != nil {
 		// git config --get exits 1 when the key is not set
 		var exitErr interface{ ExitCode() int }
@@ -1139,6 +1150,52 @@ func (g *GitRunner) WorktreeConfigEnabled(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return strings.TrimSpace(string(out)) == "true", nil
+}
+
+// WorktreeCheckoutConfig holds the checkout-related keys of a worktree's
+// config.worktree.
+type WorktreeCheckoutConfig struct {
+	SparseCheckout  bool
+	LFSFetchExclude string
+}
+
+// WorktreeCheckoutConfig reads core.sparseCheckout and lfs.fetchexclude from
+// the worktree-specific config. Call only when extensions.worktreeConfig is
+// enabled; otherwise git reads the shared config instead.
+func (g *GitRunner) WorktreeCheckoutConfig(ctx context.Context) (WorktreeCheckoutConfig, error) {
+	var cfg WorktreeCheckoutConfig
+	out, err := g.Run(ctx, GitCmdConfig, "--worktree", "--get-regexp", `^(core\.sparsecheckout|lfs\.fetchexclude)$`)
+	if err != nil {
+		// git config --get-regexp exits 1 when no key matches
+		var exitErr interface{ ExitCode() int }
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return cfg, nil
+		}
+		return cfg, err
+	}
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		key, value, _ := strings.Cut(line, " ")
+		switch key {
+		case "core.sparsecheckout":
+			switch strings.ToLower(value) {
+			case "true", "yes", "on", "1":
+				cfg.SparseCheckout = true
+			}
+		case "lfs.fetchexclude":
+			cfg.LFSFetchExclude = value
+		}
+	}
+	return cfg, nil
+}
+
+// SparseCheckoutDisable turns off sparse checkout for the worktree.
+func (g *GitRunner) SparseCheckoutDisable(ctx context.Context) ([]byte, error) {
+	return g.Run(ctx, GitCmdSparseCheckout, "disable")
+}
+
+// UnsetWorktreeConfig removes key from the worktree-specific config.
+func (g *GitRunner) UnsetWorktreeConfig(ctx context.Context, key string) ([]byte, error) {
+	return g.Run(ctx, GitCmdConfig, "--worktree", "--unset", key)
 }
 
 // SetWorktreeConfig writes key=value to the worktree-specific config.

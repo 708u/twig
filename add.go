@@ -12,10 +12,12 @@ import (
 
 const lfsFetchExcludeKey = "lfs.fetchexclude"
 
-// git sparse-checkout set --no-cone is available since git 2.35.
+// Older git enables extensions.worktreeConfig in git sparse-checkout set
+// without moving core.bare and core.worktree to the main worktree's config,
+// which breaks bare-repository layouts.
 const (
 	minSparseGitMajor = 2
-	minSparseGitMinor = 35
+	minSparseGitMinor = 36
 )
 
 // AddCommand creates git worktrees with symlinks.
@@ -253,6 +255,12 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		lfsFetchExclude = c.Config.LFSFetchExclude
 		sparseCheckout = c.Config.SparseCheckout
 	}
+	for _, p := range lfsFetchExclude {
+		// git-lfs splits lfs.fetchexclude on commas
+		if strings.Contains(p, ",") {
+			return result, fmt.Errorf("lfs_fetch_exclude pattern must not contain a comma: %q", p)
+		}
+	}
 	if len(sparseCheckout) > 0 {
 		major, minor, err := c.Git.Version(ctx)
 		if err != nil {
@@ -264,13 +272,32 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		}
 	}
 
+	plan := checkoutPlan{sparseCheckout: sparseCheckout}
+	if len(lfsFetchExclude) > 0 {
+		plan.lfsFetchExclude = strings.Join(lfsFetchExclude, ",")
+	}
+	// git worktree add copies the source worktree's config.worktree into the
+	// new worktree, so settings applied to the source must be undone when
+	// they are not wanted here.
+	var err error
+	plan.worktreeConfig, err = c.Git.WorktreeConfigEnabled(ctx)
+	if err != nil {
+		return result, fmt.Errorf("failed to read extensions.worktreeConfig: %w", err)
+	}
+	if plan.worktreeConfig {
+		inherited, err := c.Git.WorktreeCheckoutConfig(ctx)
+		if err != nil {
+			return result, fmt.Errorf("failed to read worktree config: %w", err)
+		}
+		plan.resetSparse = inherited.SparseCheckout && len(plan.sparseCheckout) == 0
+		plan.resetLFS = inherited.LFSFetchExclude != "" && plan.lfsFetchExclude == ""
+	}
+
 	// Runs worktree add and the first checkout. -c reaches the git-lfs smudge
 	// filter, so excluded LFS files are written as pointers.
 	checkoutGit := c.Git
-	var lfsFetchExcludeValue string
-	if len(lfsFetchExclude) > 0 {
-		lfsFetchExcludeValue = strings.Join(lfsFetchExclude, ",")
-		checkoutGit = c.Git.WithConfig(lfsFetchExcludeKey, lfsFetchExcludeValue)
+	if plan.lfsFetchExclude != "" {
+		checkoutGit = c.Git.WithConfig(lfsFetchExcludeKey, plan.lfsFetchExclude)
 	}
 
 	// Determine stash mode and source
@@ -324,7 +351,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		}
 	}
 
-	gitOutput, err := c.createWorktree(ctx, checkoutGit, name, wtPath, len(sparseCheckout) > 0)
+	gitOutput, err := c.createWorktree(ctx, checkoutGit, name, wtPath, plan.noCheckout())
 	if err != nil {
 		if stashHash != "" {
 			_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
@@ -333,10 +360,11 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	}
 	result.GitOutput = gitOutput
 
-	if len(sparseCheckout) > 0 || lfsFetchExcludeValue != "" {
-		err = c.applyCheckoutSettings(ctx, checkoutGit.InDir(wtPath), sparseCheckout, lfsFetchExcludeValue)
+	if plan.active() {
+		err = c.applyCheckoutSettings(ctx, checkoutGit.InDir(wtPath), plan)
 		if err != nil {
-			_, _ = c.Git.WorktreeRemove(ctx, wtPath, WithForceRemove(WorktreeForceLevelUnclean))
+			// --lock has already locked the worktree
+			_, _ = c.Git.WorktreeRemove(ctx, wtPath, WithForceRemove(WorktreeForceLevelLocked))
 			if stashHash != "" {
 				_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
 			}
@@ -426,36 +454,60 @@ func (c *AddCommand) runHooks(ctx context.Context, dir string) []HookResult {
 	return results
 }
 
-// applyCheckoutSettings populates a worktree created with --no-checkout using
-// the sparse checkout patterns, then keeps the LFS exclusion for later
-// checkouts when worktree-specific config is available.
-func (c *AddCommand) applyCheckoutSettings(ctx context.Context, wtGit *GitRunner, sparseCheckout []string, lfsFetchExclude string) error {
-	if len(sparseCheckout) > 0 {
-		if _, err := wtGit.SparseCheckoutSet(ctx, sparseCheckout); err != nil {
-			return fmt.Errorf("failed to set sparse checkout: %w", err)
+// checkoutPlan describes how the new worktree's checkout differs from a
+// plain git worktree add.
+type checkoutPlan struct {
+	sparseCheckout  []string
+	lfsFetchExclude string // comma-joined lfs_fetch_exclude
+	worktreeConfig  bool   // extensions.worktreeConfig before the worktree is added
+	resetSparse     bool   // sparse checkout inherited from the source worktree
+	resetLFS        bool   // lfs.fetchexclude inherited from the source worktree
+}
+
+func (p checkoutPlan) active() bool {
+	return len(p.sparseCheckout) > 0 || p.lfsFetchExclude != "" || p.resetSparse || p.resetLFS
+}
+
+// noCheckout reports whether the worktree must be populated only after its
+// config.worktree is adjusted.
+func (p checkoutPlan) noCheckout() bool {
+	return len(p.sparseCheckout) > 0 || p.resetSparse || p.resetLFS
+}
+
+// applyCheckoutSettings adjusts the new worktree's sparse checkout and
+// lfs.fetchexclude, then populates it if it was created with --no-checkout.
+func (c *AddCommand) applyCheckoutSettings(ctx context.Context, wtGit *GitRunner, p checkoutPlan) error {
+	if len(p.sparseCheckout) > 0 {
+		if _, err := wtGit.SparseCheckoutSet(ctx, p.sparseCheckout); err != nil {
+			return fmt.Errorf("failed to set sparse checkout: %w", withGitStderr(err))
 		}
-		if _, err := wtGit.CheckoutHEAD(ctx); err != nil {
-			return fmt.Errorf("failed to check out worktree: %w", err)
+	} else if p.resetSparse {
+		if _, err := wtGit.SparseCheckoutDisable(ctx); err != nil {
+			return fmt.Errorf("failed to disable sparse checkout: %w", withGitStderr(err))
 		}
 	}
 
-	if lfsFetchExclude == "" {
-		return nil
-	}
-	// Without extensions.worktreeConfig, `git config --worktree` writes to the
-	// shared config and would affect every worktree. Enabling the extension
-	// rewrites repository-wide config, so it is left to git sparse-checkout.
-	enabled, err := wtGit.WorktreeConfigEnabled(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to read extensions.worktreeConfig: %w", err)
-	}
-	if !enabled {
+	// git sparse-checkout set enables extensions.worktreeConfig. Without it,
+	// git config --worktree fails once a linked worktree exists, and twig does
+	// not enable it because that rewrites repository-wide config.
+	switch {
+	case p.lfsFetchExclude != "" && (p.worktreeConfig || len(p.sparseCheckout) > 0):
+		if _, err := wtGit.SetWorktreeConfig(ctx, lfsFetchExcludeKey, p.lfsFetchExclude); err != nil {
+			return fmt.Errorf("failed to set %s: %w", lfsFetchExcludeKey, withGitStderr(err))
+		}
+	case p.lfsFetchExclude != "":
 		c.Log.DebugContext(ctx, "skip worktree config: extensions.worktreeConfig is not enabled",
 			"key", lfsFetchExcludeKey)
-		return nil
+	case p.resetLFS:
+		if _, err := wtGit.UnsetWorktreeConfig(ctx, lfsFetchExcludeKey); err != nil {
+			return fmt.Errorf("failed to unset %s: %w", lfsFetchExcludeKey, withGitStderr(err))
+		}
 	}
-	if _, err := wtGit.SetWorktreeConfig(ctx, lfsFetchExcludeKey, lfsFetchExclude); err != nil {
-		return fmt.Errorf("failed to set %s: %w", lfsFetchExcludeKey, err)
+
+	if p.noCheckout() {
+		if _, err := wtGit.CheckoutHEAD(ctx); err != nil {
+			return fmt.Errorf("failed to check out worktree: %w", withGitStderr(err))
+		}
 	}
 	return nil
 }

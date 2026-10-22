@@ -256,13 +256,20 @@ Order of operations:
 
 1. Stash changes (with `--sync` or `--carry`)
 2. `git worktree add`, with `-c lfs.fetchexclude=<patterns>` when
-   `lfs_fetch_exclude` is set and `--no-checkout` when `sparse_checkout`
-   is set
-3. With `sparse_checkout`: `git sparse-checkout set --no-cone <patterns>`,
-   then `git checkout` with the same `-c` to populate the worktree
+   `lfs_fetch_exclude` is set and `--no-checkout` when the worktree
+   config must be adjusted first (see below)
+3. With `sparse_checkout`: `git sparse-checkout set --no-cone <patterns>`
 4. With `lfs_fetch_exclude` and `extensions.worktreeConfig` enabled:
    `git config --worktree lfs.fetchexclude <patterns>`
-5. Submodule initialization, stash apply, symlinks, and hooks as usual
+5. After `--no-checkout`: `git checkout` with the same `-c` to populate
+   the worktree
+6. Submodule initialization, stash apply, symlinks, and hooks as usual
+
+`git worktree add` copies the source worktree's worktree-specific config
+to the new worktree. When the source worktree uses sparse checkout or
+`lfs.fetchexclude` and the new worktree does not (because the setting is
+unset or `--full` is given), step 3 runs `git sparse-checkout disable` and
+step 4 runs `git config --worktree --unset lfs.fetchexclude` instead.
 
 Excluded LFS files are checked out as pointer files and `git status`
 stays clean. Paths outside `sparse_checkout` are not written.
@@ -273,8 +280,9 @@ Changes carried with `--sync` or `--carry` are applied even when they are
 outside `sparse_checkout`: git writes those files to the worktree and
 marks them as present.
 
-If step 3 or 4 fails, the new worktree is removed and stashed changes are
-restored to the source worktree.
+If step 3, 4, or 5 fails, the new worktree is removed (including a
+worktree locked with `--lock`) and stashed changes are restored to the
+source worktree. The error includes git's message.
 
 Use `--full` to ignore both settings, for example when a worktree needs
 every file:
