@@ -1320,7 +1320,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 		lfsArg       = "lfs.fetchexclude=assets/**,images/**"
 		inheritedCfg = "core.sparsecheckout true\nlfs.fetchexclude big/**\n"
 	)
-	setLFS := []string{GitCmdConfig, "--worktree", "lfs.fetchexclude"}
+	setLFS := []string{GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude"}
 
 	tests := []struct {
 		name            string
@@ -1355,7 +1355,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			worktreeConfig:  true,
 			wantCalls: [][]string{
 				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
-				{"-c", lfsArg, GitCmdConfig, "--worktree", "lfs.fetchexclude", "assets/**,images/**"},
+				{"-c", lfsArg, GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "assets/**,images/**"},
 			},
 			wantAbsent: [][]string{
 				{GitCmdSparseCheckout},
@@ -1368,7 +1368,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 				{GitCmdVersion},
 				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
 				{GitCmdSparseCheckout, "set", "--no-cone", "/*", "!/plans/"},
-				{GitCmdCheckout},
+				{GitCmdCheckout, "--no-recurse-submodules"},
 			},
 			wantAbsent: [][]string{
 				{"-c"},
@@ -1382,7 +1382,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			wantCalls: [][]string{
 				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
 				{"-c", lfsArg, GitCmdSparseCheckout, "set", "--no-cone", "/*", "!/plans/"},
-				{"-c", lfsArg, GitCmdConfig, "--worktree", "lfs.fetchexclude", "assets/**,images/**"},
+				{"-c", lfsArg, GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "assets/**,images/**"},
 				{"-c", lfsArg, GitCmdCheckout},
 			},
 		},
@@ -1413,7 +1413,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			wantCalls: [][]string{
 				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
 				{GitCmdSparseCheckout, "disable"},
-				{GitCmdConfig, "--worktree", "--unset", "lfs.fetchexclude"},
+				{GitCmdConfig, "--worktree", "--unset-all", "lfs.fetchexclude"},
 				{GitCmdCheckout},
 			},
 			wantAbsent: [][]string{
@@ -1430,31 +1430,47 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			wantCalls: [][]string{
 				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
 				{"-c", lfsArg, GitCmdSparseCheckout, "set", "--no-cone", "/*", "!/plans/"},
-				{"-c", lfsArg, GitCmdConfig, "--worktree", "lfs.fetchexclude", "assets/**,images/**"},
+				{"-c", lfsArg, GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "assets/**,images/**"},
 				{"-c", lfsArg, GitCmdCheckout},
 			},
 			wantAbsent: [][]string{
 				{GitCmdSparseCheckout, "disable"},
-				{GitCmdConfig, "--worktree", "--unset"},
+				{GitCmdConfig, "--worktree", "--unset-all"},
 			},
 		},
 		{
-			name:            "inherited_sparse_checkout_disabled_without_settings",
+			name:            "inherited_settings_kept_without_full",
 			worktreeConfig:  true,
-			inheritedConfig: "core.sparsecheckout true\n",
+			inheritedConfig: inheritedCfg,
+			wantCalls: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd, "-b"},
+			},
+			wantAbsent: [][]string{
+				{GitCmdConfig},
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
+				{GitCmdSparseCheckout},
+				{GitCmdCheckout},
+			},
+		},
+		{
+			name:            "full_resets_implicit_true_sparse_checkout",
+			worktreeConfig:  true,
+			inheritedConfig: "core.sparsecheckout\n",
+			full:            true,
 			wantCalls: [][]string{
 				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
 				{GitCmdSparseCheckout, "disable"},
 				{GitCmdCheckout},
 			},
 			wantAbsent: [][]string{
-				{GitCmdConfig, "--worktree", "--unset"},
+				{GitCmdConfig, "--worktree", "--unset-all"},
 			},
 		},
 		{
-			name:            "inherited_disabled_sparse_checkout_kept",
+			name:            "full_keeps_disabled_sparse_checkout",
 			worktreeConfig:  true,
 			inheritedConfig: "core.sparsecheckout false\n",
+			full:            true,
 			wantCalls: [][]string{
 				{GitCmdWorktree, GitWorktreeAdd, "-b"},
 			},
@@ -1567,7 +1583,7 @@ func TestAddCommand_Run_SparseCheckoutFailureRemovesWorktree(t *testing.T) {
 	t.Parallel()
 
 	exec := &checkoutSettingsExecutor{
-		inner:             &testutil.MockGitExecutor{},
+		inner:             &testutil.MockGitExecutor{HasChanges: true, StashHash: "abc123"},
 		version:           "2.53.0",
 		sparseCheckoutErr: errors.New("sparse-checkout failed"),
 	}
@@ -1581,6 +1597,7 @@ func TestAddCommand_Run_SparseCheckoutFailureRemovesWorktree(t *testing.T) {
 		},
 		Log:  NewNopLogger(),
 		Lock: true,
+		Sync: true,
 	}
 
 	_, err := cmd.Run(t.Context(), "feature/sparse")
@@ -1590,6 +1607,12 @@ func TestAddCommand_Run_SparseCheckoutFailureRemovesWorktree(t *testing.T) {
 	// -f -f is required to remove a worktree created with --lock
 	if exec.find(GitCmdWorktree, GitWorktreeRemove, "-f", "-f") < 0 {
 		t.Errorf("locked worktree was not force removed: %v", exec.calls)
+	}
+	if exec.find(GitCmdBranch, "-D", "feature/sparse") < 0 {
+		t.Errorf("created branch was not deleted: %v", exec.calls)
+	}
+	if exec.find(GitCmdStash, GitStashApply, "abc123") < 0 {
+		t.Errorf("stash was not restored: %v", exec.calls)
 	}
 }
 

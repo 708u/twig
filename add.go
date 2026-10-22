@@ -276,21 +276,22 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	if len(lfsFetchExclude) > 0 {
 		plan.lfsFetchExclude = strings.Join(lfsFetchExclude, ",")
 	}
-	// git worktree add copies the source worktree's config.worktree into the
-	// new worktree, so settings applied to the source must be undone when
-	// they are not wanted here.
-	var err error
-	plan.worktreeConfig, err = c.Git.WorktreeConfigEnabled(ctx)
-	if err != nil {
-		return result, fmt.Errorf("failed to read extensions.worktreeConfig: %w", err)
+	if c.Full || plan.lfsFetchExclude != "" {
+		var err error
+		plan.worktreeConfig, err = c.Git.WorktreeConfigEnabled(ctx)
+		if err != nil {
+			return result, fmt.Errorf("failed to read extensions.worktreeConfig: %w", err)
+		}
 	}
-	if plan.worktreeConfig {
+	// git worktree add copies the source worktree's config.worktree into the
+	// new worktree. That inheritance is kept unless --full asks for every file.
+	if c.Full && plan.worktreeConfig {
 		inherited, err := c.Git.WorktreeCheckoutConfig(ctx)
 		if err != nil {
 			return result, fmt.Errorf("failed to read worktree config: %w", err)
 		}
-		plan.resetSparse = inherited.SparseCheckout && len(plan.sparseCheckout) == 0
-		plan.resetLFS = inherited.LFSFetchExclude != "" && plan.lfsFetchExclude == ""
+		plan.resetSparse = inherited.SparseCheckout
+		plan.resetLFS = inherited.LFSFetchExclude != ""
 	}
 
 	// Runs worktree add and the first checkout. -c reaches the git-lfs smudge
@@ -351,7 +352,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		}
 	}
 
-	gitOutput, err := c.createWorktree(ctx, checkoutGit, name, wtPath, plan.noCheckout())
+	gitOutput, branchCreated, err := c.createWorktree(ctx, checkoutGit, name, wtPath, plan.noCheckout())
 	if err != nil {
 		if stashHash != "" {
 			_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
@@ -363,8 +364,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	if plan.active() {
 		err = c.applyCheckoutSettings(ctx, checkoutGit.InDir(wtPath), plan)
 		if err != nil {
-			// --lock has already locked the worktree
-			_, _ = c.Git.WorktreeRemove(ctx, wtPath, WithForceRemove(WorktreeForceLevelLocked))
+			c.removeCreatedWorktree(ctx, wtPath, name, branchCreated)
 			if stashHash != "" {
 				_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
 			}
@@ -401,7 +401,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	if stashHash != "" {
 		_, err = c.Git.InDir(wtPath).StashApplyByHash(ctx, stashHash)
 		if err != nil {
-			_, _ = c.Git.WorktreeRemove(ctx, wtPath, WithForceRemove(WorktreeForceLevelUnclean))
+			c.removeCreatedWorktree(ctx, wtPath, name, branchCreated)
 			_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
 			return result, fmt.Errorf("failed to apply changes to new worktree: %w", err)
 		}
@@ -512,37 +512,39 @@ func (c *AddCommand) applyCheckoutSettings(ctx context.Context, wtGit *GitRunner
 	return nil
 }
 
-func (c *AddCommand) createWorktree(ctx context.Context, addGit *GitRunner, branch, path string, noCheckout bool) ([]byte, error) {
+// createWorktree adds the worktree and reports whether its local branch did
+// not exist before, either created with -b or tracking a remote branch.
+func (c *AddCommand) createWorktree(ctx context.Context, addGit *GitRunner, branch, path string, noCheckout bool) (output []byte, branchCreated bool, err error) {
 	if _, err := c.FS.Stat(path); err == nil {
-		return nil, fmt.Errorf("directory already exists: %s", path)
+		return nil, false, fmt.Errorf("directory already exists: %s", path)
 	}
 
 	var opts []WorktreeAddOption
 	exists, err := c.Git.LocalBranchExists(ctx, branch)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check branch existence: %w", err)
+		return nil, false, fmt.Errorf("failed to check branch existence: %w", err)
 	}
 	if exists {
 		var branches []string
 		branches, err = c.Git.WorktreeListBranches(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list worktree branches: %w", err)
+			return nil, false, fmt.Errorf("failed to list worktree branches: %w", err)
 		}
 		if slices.Contains(branches, branch) {
-			return nil, fmt.Errorf("branch %s is already checked out in another worktree", branch)
+			return nil, false, fmt.Errorf("branch %s is already checked out in another worktree", branch)
 		}
 	} else {
 		var remote string
 		remote, err = c.Git.FindRemoteForBranch(ctx, branch)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		if remote != "" {
 			// Remote branch found, fetch it
 			err = c.Git.Fetch(ctx, remote, branch)
 			if err != nil {
-				return nil, fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
+				return nil, false, fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
 			}
 			// After fetch, git worktree add will auto-track the remote branch
 		} else {
@@ -562,10 +564,19 @@ func (c *AddCommand) createWorktree(ctx context.Context, addGit *GitRunner, bran
 		opts = append(opts, WithNoCheckout())
 	}
 
-	output, err := addGit.WorktreeAdd(ctx, path, branch, opts...)
+	output, err = addGit.WorktreeAdd(ctx, path, branch, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create worktree: %w", err)
+		return nil, false, fmt.Errorf("failed to create worktree: %w", err)
 	}
 
-	return output, nil
+	return output, !exists, nil
+}
+
+// removeCreatedWorktree undoes createWorktree after a later step fails.
+// --lock may have locked the worktree, so removal uses -f -f.
+func (c *AddCommand) removeCreatedWorktree(ctx context.Context, path, branch string, branchCreated bool) {
+	_, _ = c.Git.WorktreeRemove(ctx, path, WithForceRemove(WorktreeForceLevelLocked))
+	if branchCreated {
+		_, _ = c.Git.BranchDelete(ctx, branch, WithForceDelete())
+	}
 }

@@ -47,7 +47,8 @@ With `--sync`, uncommitted changes are copied to the new worktree:
 4. Restores changes in the source worktree
 
 If worktree creation or stash apply fails, changes are restored
-to the source worktree automatically.
+to the source worktree automatically. When stash apply fails, the new
+worktree and a branch created for it are removed.
 
 ### Carry Option
 
@@ -109,7 +110,8 @@ When `--file` is specified:
 Without `--file`, all uncommitted changes are carried (default behavior).
 
 If worktree creation or stash apply fails, changes are restored
-to the source worktree automatically.
+to the source worktree automatically. When stash apply fails, the new
+worktree and a branch created for it are removed.
 
 Constraints:
 
@@ -266,10 +268,12 @@ Order of operations:
 6. Submodule initialization, stash apply, symlinks, and hooks as usual
 
 `git worktree add` copies the source worktree's worktree-specific config
-to the new worktree. When the source worktree uses sparse checkout or
-`lfs.fetchexclude` and the new worktree does not (because the setting is
-unset or `--full` is given), step 3 runs `git sparse-checkout disable` and
-step 4 runs `git config --worktree --unset lfs.fetchexclude` instead.
+to the new worktree, so a worktree created from a sparse or LFS-excluded
+worktree keeps those settings when twig has none of its own. With
+`--full`, step 3 runs `git sparse-checkout disable` and step 4 runs
+`git config --worktree --unset-all lfs.fetchexclude` instead. A sparse
+checkout enabled in the shared `.git/config` rather than the
+worktree-specific config is not reset.
 
 Excluded LFS files are checked out as pointer files and `git status`
 stays clean. Paths outside `sparse_checkout` are not written.
@@ -281,11 +285,19 @@ outside `sparse_checkout`: git writes those files to the worktree and
 marks them as present.
 
 If step 3, 4, or 5 fails, the new worktree is removed (including a
-worktree locked with `--lock`) and stashed changes are restored to the
-source worktree. The error includes git's message.
+worktree locked with `--lock`), a branch created for it is deleted, and
+stashed changes are restored to the source worktree. The error includes
+git's message. `extensions.worktreeConfig` enabled by
+`git sparse-checkout set` stays enabled, because it is repository-wide
+config shared with other worktrees.
 
-Use `--full` to ignore both settings, for example when a worktree needs
-every file:
+When the worktree is created with `--no-checkout`, git runs the
+`post-checkout` hook from step 5 instead of `git worktree add`. The hook
+receives `HEAD` as the previous ref, not the null object ID that
+`git worktree add` passes.
+
+Use `--full` to ignore both settings and reset those copied from the
+source worktree, for example when a worktree needs every file:
 
 ```bash
 twig add feat/assets --full

@@ -2322,21 +2322,110 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 	lfsFetchExclude := []string{"big/**"}
 	sparseCheckout := []string{"/*", "!/plans/"}
 
-	newAddCommand := func(t *testing.T, mainDir string, carryFrom string, full bool) *AddCommand {
+	newAddCommandWith := func(t *testing.T, dir string, lfs, sparse []string, opts AddOptions) *AddCommand {
 		t.Helper()
 
-		result, err := LoadConfig(mainDir)
+		result, err := LoadConfig(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
 		cfg := result.Config
-		cfg.LFSFetchExclude = lfsFetchExclude
-		cfg.SparseCheckout = sparseCheckout
-		return NewAddCommand(osFS{}, NewGitRunner(mainDir), cfg, nil, AddOptions{
+		cfg.LFSFetchExclude = lfs
+		cfg.SparseCheckout = sparse
+		return NewAddCommand(osFS{}, NewGitRunner(dir), cfg, nil, opts)
+	}
+	newAddCommand := func(t *testing.T, mainDir string, carryFrom string, full bool) *AddCommand {
+		t.Helper()
+
+		return newAddCommandWith(t, mainDir, lfsFetchExclude, sparseCheckout, AddOptions{
 			CarryFrom: carryFrom,
 			Full:      full,
 		})
 	}
+
+	t.Run("LFSOnlyWithoutWorktreeConfig", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		cmd := newAddCommandWith(t, mainDir, lfsFetchExclude, nil, AddOptions{})
+		if _, err := cmd.Run(t.Context(), "feat/lfs-only"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		wtPath := filepath.Join(repoDir, "feat", "lfs-only")
+
+		for _, name := range []string{"big/a.bin", "big/b.bin"} {
+			if !isLFSPointer(t, filepath.Join(wtPath, name)) {
+				t.Errorf("%s is not an LFS pointer", name)
+			}
+		}
+		if isLFSPointer(t, filepath.Join(wtPath, "other/c.bin")) {
+			t.Errorf("other/c.bin is an LFS pointer, want content")
+		}
+		if _, err := os.Stat(filepath.Join(wtPath, "plans/p.txt")); err != nil {
+			t.Errorf("plans/p.txt missing: %v", err)
+		}
+		if status := testutil.RunGit(t, wtPath, "status", "--porcelain"); status != "" {
+			t.Errorf("git status --porcelain = %q, want empty", status)
+		}
+		// twig must not enable the extension to persist the exclusion
+		cmdOut, err := exec.Command("git", "-C", mainDir, "config", "--local", "extensions.worktreeConfig").Output()
+		if err == nil {
+			t.Errorf("extensions.worktreeConfig = %q, want unset", strings.TrimSpace(string(cmdOut)))
+		}
+	})
+
+	t.Run("InheritedSettingsKeptWithoutFull", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		if _, err := newAddCommand(t, mainDir, "", false).Run(t.Context(), "feat/slim-parent"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		slimPath := filepath.Join(repoDir, "feat", "slim-parent")
+
+		// No twig settings: git's own inheritance of config.worktree applies
+		result, err := newAddCommandWith(t, slimPath, nil, nil, AddOptions{}).Run(t.Context(), "feat/slim-child")
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		wtPath := result.WorktreePath
+
+		if !isLFSPointer(t, filepath.Join(wtPath, "big/a.bin")) {
+			t.Errorf("big/a.bin is not an LFS pointer")
+		}
+		if _, err := os.Stat(filepath.Join(wtPath, "plans")); !os.IsNotExist(err) {
+			t.Errorf("plans/ exists, want inherited sparse checkout: %v", err)
+		}
+	})
+
+	t.Run("SparseCheckoutWithRecursiveSubmodules", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		subRepo := filepath.Join(repoDir, "sub-repo")
+		if err := os.MkdirAll(subRepo, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, subRepo, "init")
+		testutil.RunGit(t, subRepo, "config", "user.email", "test@example.com")
+		testutil.RunGit(t, subRepo, "config", "user.name", "Test")
+		testutil.RunGit(t, subRepo, "commit", "--allow-empty", "-m", "initial")
+		testutil.RunGit(t, mainDir, "-c", "protocol.file.allow=always",
+			"submodule", "add", subRepo, "sub")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add submodule")
+		testutil.RunGit(t, mainDir, "config", "submodule.recurse", "true")
+
+		if _, err := newAddCommand(t, mainDir, "", false).Run(t.Context(), "feat/recurse"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		wtPath := filepath.Join(repoDir, "feat", "recurse")
+		if _, err := os.Stat(filepath.Join(wtPath, "plans")); !os.IsNotExist(err) {
+			t.Errorf("plans/ exists outside sparse checkout: %v", err)
+		}
+	})
 
 	t.Run("ExcludedPathsAreNotCheckedOut", func(t *testing.T) {
 		t.Parallel()

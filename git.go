@@ -1131,9 +1131,10 @@ func (g *GitRunner) SparseCheckoutSet(ctx context.Context, patterns []string) ([
 
 // CheckoutHEAD populates a worktree created with WithNoCheckout.
 // Without an index, git treats this as the initial checkout and writes every
-// file allowed by the sparse checkout patterns.
+// file allowed by the sparse checkout patterns. Submodules are left alone,
+// as git worktree add does, regardless of submodule.recurse.
 func (g *GitRunner) CheckoutHEAD(ctx context.Context) ([]byte, error) {
-	return g.Run(ctx, GitCmdCheckout)
+	return g.Run(ctx, GitCmdCheckout, "--no-recurse-submodules")
 }
 
 // WorktreeConfigEnabled reports whether extensions.worktreeConfig is true,
@@ -1174,12 +1175,15 @@ func (g *GitRunner) WorktreeCheckoutConfig(ctx context.Context) (WorktreeCheckou
 		return cfg, err
 	}
 	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		key, value, _ := strings.Cut(line, " ")
+		key, value, hasValue := strings.Cut(line, " ")
 		switch key {
 		case "core.sparsecheckout":
+			// A key without a value is an implicit true
 			switch strings.ToLower(value) {
 			case "true", "yes", "on", "1":
 				cfg.SparseCheckout = true
+			default:
+				cfg.SparseCheckout = !hasValue
 			}
 		case "lfs.fetchexclude":
 			cfg.LFSFetchExclude = value
@@ -1193,14 +1197,25 @@ func (g *GitRunner) SparseCheckoutDisable(ctx context.Context) ([]byte, error) {
 	return g.Run(ctx, GitCmdSparseCheckout, "disable")
 }
 
-// UnsetWorktreeConfig removes key from the worktree-specific config.
+// UnsetWorktreeConfig removes every value of key from the worktree-specific
+// config. A missing key is not an error.
 func (g *GitRunner) UnsetWorktreeConfig(ctx context.Context, key string) ([]byte, error) {
-	return g.Run(ctx, GitCmdConfig, "--worktree", "--unset", key)
+	out, err := g.Run(ctx, GitCmdConfig, "--worktree", "--unset-all", key)
+	if err != nil {
+		// git config --unset-all exits 5 when the key is not set
+		var exitErr interface{ ExitCode() int }
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 5 {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return out, nil
 }
 
-// SetWorktreeConfig writes key=value to the worktree-specific config.
+// SetWorktreeConfig writes key=value to the worktree-specific config,
+// replacing every existing value of key.
 func (g *GitRunner) SetWorktreeConfig(ctx context.Context, key, value string) ([]byte, error) {
-	return g.Run(ctx, GitCmdConfig, "--worktree", key, value)
+	return g.Run(ctx, GitCmdConfig, "--worktree", "--replace-all", key, value)
 }
 
 // IsAncestor reports whether commit is reachable from target, including
