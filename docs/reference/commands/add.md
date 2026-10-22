@@ -271,7 +271,8 @@ Order of operations:
 to the new worktree, so a worktree created from a sparse or LFS-excluded
 worktree keeps those settings when twig has none of its own. With
 `--full`, step 3 runs `git sparse-checkout disable` and step 4 runs
-`git config --worktree --unset-all lfs.fetchexclude` instead. A sparse
+`git config --worktree --unset-all lfs.fetchexclude` instead. git copies
+this config since 2.36, so older git has nothing to reset. A sparse
 checkout enabled in the shared `.git/config` rather than the
 worktree-specific config is not reset.
 
@@ -282,14 +283,17 @@ excluded files later.
 
 Changes carried with `--sync` or `--carry` are applied even when they are
 outside `sparse_checkout`: git writes those files to the worktree and
-marks them as present.
+marks them as present. Carried edits to LFS files keep their content even
+when `lfs.fetchexclude` matches them.
 
 If step 3, 4, or 5 fails, the new worktree is removed (including a
-worktree locked with `--lock`), a branch created for it is deleted, and
-stashed changes are restored to the source worktree. The error includes
-git's message. `extensions.worktreeConfig` enabled by
-`git sparse-checkout set` stays enabled, because it is repository-wide
-config shared with other worktrees.
+worktree locked with `--lock`) along with parent directories left empty,
+a branch created for it is deleted, and stashed changes are restored to
+the source worktree. The error includes git's message, and reports the
+rollback as failed if the worktree or branch could not be removed.
+`extensions.worktreeConfig` enabled by `git sparse-checkout set` stays
+enabled, because it is repository-wide config shared with other
+worktrees.
 
 When the worktree is created with `--no-checkout`, git runs the
 `post-checkout` hook from step 5 instead of `git worktree add`. The hook

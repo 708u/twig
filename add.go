@@ -20,6 +20,13 @@ const (
 	minSparseGitMinor = 36
 )
 
+// Version from which git worktree add copies the source worktree's
+// config.worktree.
+const (
+	minConfigCopyGitMajor = 2
+	minConfigCopyGitMinor = 36
+)
+
 // AddCommand creates git worktrees with symlinks.
 type AddCommand struct {
 	FS                 FileSystem
@@ -109,7 +116,10 @@ type AddResult struct {
 	SubmoduleInit   SubmoduleInitResult
 	HookResults     []HookResult
 	LFSFetchExclude []string
-	SparseCheckout  []string
+	// LFSFetchExcludeInitialOnly is true when the exclusion covers only the
+	// first checkout because extensions.worktreeConfig is not enabled.
+	LFSFetchExcludeInitialOnly bool
+	SparseCheckout             []string
 }
 
 // AddFormatOptions configures add output formatting.
@@ -185,6 +195,9 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 		}
 		if len(r.LFSFetchExclude) > 0 {
 			fmt.Fprintf(&stdout, "Excluded LFS files: %s\n", strings.Join(r.LFSFetchExclude, ", "))
+			if r.LFSFetchExcludeInitialOnly {
+				stdout.WriteString("LFS exclusion covers the initial checkout only: extensions.worktreeConfig is not enabled\n")
+			}
 		}
 		if len(r.SparseCheckout) > 0 {
 			fmt.Fprintf(&stdout, "Applied sparse checkout: %s\n", strings.Join(r.SparseCheckout, ", "))
@@ -262,13 +275,13 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		}
 	}
 	if len(sparseCheckout) > 0 {
-		major, minor, err := c.Git.Version(ctx)
+		ok, found, err := c.gitAtLeast(ctx, minSparseGitMajor, minSparseGitMinor)
 		if err != nil {
-			return result, fmt.Errorf("failed to check git version: %w", err)
+			return result, err
 		}
-		if major < minSparseGitMajor || (major == minSparseGitMajor && minor < minSparseGitMinor) {
-			return result, fmt.Errorf("sparse_checkout requires git %d.%d or later (found %d.%d)",
-				minSparseGitMajor, minSparseGitMinor, major, minor)
+		if !ok {
+			return result, fmt.Errorf("sparse_checkout requires git %d.%d or later (found %s)",
+				minSparseGitMajor, minSparseGitMinor, found)
 		}
 	}
 
@@ -286,9 +299,9 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	// git worktree add copies the source worktree's config.worktree into the
 	// new worktree. That inheritance is kept unless --full asks for every file.
 	if c.Full && plan.worktreeConfig {
-		inherited, err := c.Git.WorktreeCheckoutConfig(ctx)
+		inherited, err := c.inheritedCheckoutConfig(ctx)
 		if err != nil {
-			return result, fmt.Errorf("failed to read worktree config: %w", err)
+			return result, err
 		}
 		plan.resetSparse = inherited.SparseCheckout
 		plan.resetLFS = inherited.LFSFetchExclude != ""
@@ -364,13 +377,14 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	if plan.active() {
 		err = c.applyCheckoutSettings(ctx, checkoutGit.InDir(wtPath), plan)
 		if err != nil {
-			c.removeCreatedWorktree(ctx, wtPath, name, branchCreated)
+			rbErr := c.removeCreatedWorktree(ctx, wtPath, name, branchCreated)
 			if stashHash != "" {
 				_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
 			}
-			return result, err
+			return result, rollbackError(err, rbErr)
 		}
 		result.LFSFetchExclude = lfsFetchExclude
+		result.LFSFetchExcludeInitialOnly = plan.lfsFetchExclude != "" && !plan.persistLFS()
 		result.SparseCheckout = sparseCheckout
 	}
 
@@ -399,11 +413,14 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 
 	// Apply stashed changes to new worktree
 	if stashHash != "" {
-		_, err = c.Git.InDir(wtPath).StashApplyByHash(ctx, stashHash)
+		// An lfs.fetchexclude in the new worktree's config, set by twig or
+		// copied from the source worktree, would smudge carried LFS edits
+		// as pointers. The empty -c value lifts it for this command only.
+		_, err = c.Git.WithConfig(lfsFetchExcludeKey, "").InDir(wtPath).StashApplyByHash(ctx, stashHash)
 		if err != nil {
-			c.removeCreatedWorktree(ctx, wtPath, name, branchCreated)
+			rbErr := c.removeCreatedWorktree(ctx, wtPath, name, branchCreated)
 			_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
-			return result, fmt.Errorf("failed to apply changes to new worktree: %w", err)
+			return result, rollbackError(fmt.Errorf("failed to apply changes to new worktree: %w", err), rbErr)
 		}
 		if isCarry {
 			// Carry: drop stash (source becomes clean)
@@ -468,6 +485,12 @@ func (p checkoutPlan) active() bool {
 	return len(p.sparseCheckout) > 0 || p.lfsFetchExclude != "" || p.resetSparse || p.resetLFS
 }
 
+// persistLFS reports whether git config --worktree can keep lfs.fetchexclude.
+// git sparse-checkout set enables extensions.worktreeConfig before it is set.
+func (p checkoutPlan) persistLFS() bool {
+	return p.worktreeConfig || len(p.sparseCheckout) > 0
+}
+
 // noCheckout reports whether the worktree must be populated only after its
 // config.worktree is adjusted.
 func (p checkoutPlan) noCheckout() bool {
@@ -487,11 +510,11 @@ func (c *AddCommand) applyCheckoutSettings(ctx context.Context, wtGit *GitRunner
 		}
 	}
 
-	// git sparse-checkout set enables extensions.worktreeConfig. Without it,
-	// git config --worktree fails once a linked worktree exists, and twig does
-	// not enable it because that rewrites repository-wide config.
+	// Without extensions.worktreeConfig, git config --worktree fails once a
+	// linked worktree exists, and twig does not enable it because that
+	// rewrites repository-wide config.
 	switch {
-	case p.lfsFetchExclude != "" && (p.worktreeConfig || len(p.sparseCheckout) > 0):
+	case p.lfsFetchExclude != "" && p.persistLFS():
 		if _, err := wtGit.SetWorktreeConfig(ctx, lfsFetchExcludeKey, p.lfsFetchExclude); err != nil {
 			return fmt.Errorf("failed to set %s: %w", lfsFetchExcludeKey, withGitStderr(err))
 		}
@@ -574,9 +597,49 @@ func (c *AddCommand) createWorktree(ctx context.Context, addGit *GitRunner, bran
 
 // removeCreatedWorktree undoes createWorktree after a later step fails.
 // --lock may have locked the worktree, so removal uses -f -f.
-func (c *AddCommand) removeCreatedWorktree(ctx context.Context, path, branch string, branchCreated bool) {
-	_, _ = c.Git.WorktreeRemove(ctx, path, WithForceRemove(WorktreeForceLevelLocked))
-	if branchCreated {
-		_, _ = c.Git.BranchDelete(ctx, branch, WithForceDelete())
+func (c *AddCommand) removeCreatedWorktree(ctx context.Context, path, branch string, branchCreated bool) error {
+	if _, err := c.Git.WorktreeRemove(ctx, path, WithForceRemove(WorktreeForceLevelLocked)); err != nil {
+		return fmt.Errorf("failed to remove worktree %s: %w", path, err)
 	}
+	removeEmptyParentDirs(c.FS, c.Config.WorktreeDestBaseDir, path)
+	if branchCreated {
+		if _, err := c.Git.BranchDelete(ctx, branch, WithForceDelete()); err != nil {
+			return fmt.Errorf("failed to delete branch %s: %w", branch, err)
+		}
+	}
+	return nil
+}
+
+// rollbackError reports err together with a failed rollback, which leaves
+// the worktree or branch behind.
+func rollbackError(err, rollbackErr error) error {
+	if rollbackErr == nil {
+		return err
+	}
+	return fmt.Errorf("%w (rollback failed: %v)", err, rollbackErr)
+}
+
+// gitAtLeast reports whether git is major.minor or later, along with the
+// version found.
+func (c *AddCommand) gitAtLeast(ctx context.Context, major, minor int) (bool, string, error) {
+	gotMajor, gotMinor, err := c.Git.Version(ctx)
+	if err != nil {
+		return false, "", fmt.Errorf("failed to check git version: %w", err)
+	}
+	ok := gotMajor > major || (gotMajor == major && gotMinor >= minor)
+	return ok, fmt.Sprintf("%d.%d", gotMajor, gotMinor), nil
+}
+
+// inheritedCheckoutConfig returns the checkout settings git worktree add will
+// copy from the source worktree. Older git copies nothing.
+func (c *AddCommand) inheritedCheckoutConfig(ctx context.Context) (WorktreeCheckoutConfig, error) {
+	copies, _, err := c.gitAtLeast(ctx, minConfigCopyGitMajor, minConfigCopyGitMinor)
+	if err != nil || !copies {
+		return WorktreeCheckoutConfig{}, err
+	}
+	inherited, err := c.Git.WorktreeCheckoutConfig(ctx)
+	if err != nil {
+		return WorktreeCheckoutConfig{}, fmt.Errorf("failed to read worktree config: %w", err)
+	}
+	return inherited, nil
 }

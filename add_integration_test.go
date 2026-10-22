@@ -2544,6 +2544,29 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("CarriedLFSEditUnderExcludedPathKeepsContent", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		if err := os.WriteFile(filepath.Join(mainDir, "big/a.bin"), []byte("edited large a"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := newAddCommand(t, mainDir, mainDir, false).Run(t.Context(), "feat/carry-lfs"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		wtPath := filepath.Join(repoDir, "feat", "carry-lfs")
+
+		content, err := os.ReadFile(filepath.Join(wtPath, "big/a.bin"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(content) != "edited large a" {
+			t.Errorf("big/a.bin = %q, want the carried edit", content)
+		}
+	})
+
 	t.Run("FullChecksOutEverything", func(t *testing.T) {
 		t.Parallel()
 

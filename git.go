@@ -124,21 +124,33 @@ func newGitError(op GitOp, err error) *GitError {
 		Op:  op,
 		Err: err,
 	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
-		gitErr.Stderr = strings.TrimSpace(string(exitErr.Stderr))
-	}
+	gitErr.Stderr = gitStderr(err)
 	return gitErr
+}
+
+// gitStderr returns the trimmed stderr captured in an exec.ExitError.
+func gitStderr(err error) string {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return strings.TrimSpace(string(exitErr.Stderr))
+	}
+	return ""
 }
 
 // withGitStderr appends git's stderr to err, which exec.ExitError leaves out
 // of its message.
 func withGitStderr(err error) error {
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
+	if stderr := gitStderr(err); stderr != "" {
+		return fmt.Errorf("%w: %s", err, stderr)
 	}
 	return err
+}
+
+// isExitCode reports whether err is git exiting with code, as opposed to
+// failing to run.
+func isExitCode(err error, code int) bool {
+	var exitErr interface{ ExitCode() int }
+	return errors.As(err, &exitErr) && exitErr.ExitCode() == code
 }
 
 // GitRunner provides git operations using GitExecutor.
@@ -1125,7 +1137,7 @@ func (g *GitRunner) Version(ctx context.Context) (major, minor int, err error) {
 // SparseCheckoutSet sets non-cone sparse checkout patterns for the worktree.
 // git enables extensions.worktreeConfig for the repository as a side effect.
 func (g *GitRunner) SparseCheckoutSet(ctx context.Context, patterns []string) ([]byte, error) {
-	args := append([]string{GitCmdSparseCheckout, "set", "--no-cone"}, patterns...)
+	args := append([]string{GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options"}, patterns...)
 	return g.Run(ctx, args...)
 }
 
@@ -1144,8 +1156,7 @@ func (g *GitRunner) WorktreeConfigEnabled(ctx context.Context) (bool, error) {
 	out, err := g.Run(ctx, GitCmdConfig, "--local", "--bool", "--get", "extensions.worktreeConfig")
 	if err != nil {
 		// git config --get exits 1 when the key is not set
-		var exitErr interface{ ExitCode() int }
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		if isExitCode(err, 1) {
 			return false, nil
 		}
 		return false, err
@@ -1165,30 +1176,18 @@ type WorktreeCheckoutConfig struct {
 // enabled; otherwise git reads the shared config instead.
 func (g *GitRunner) WorktreeCheckoutConfig(ctx context.Context) (WorktreeCheckoutConfig, error) {
 	var cfg WorktreeCheckoutConfig
-	out, err := g.Run(ctx, GitCmdConfig, "--worktree", "--get-regexp", `^(core\.sparsecheckout|lfs\.fetchexclude)$`)
-	if err != nil {
-		// git config --get-regexp exits 1 when no key matches
-		var exitErr interface{ ExitCode() int }
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			return cfg, nil
-		}
+	// --bool applies git's own boolean rules, including a valueless key
+	out, err := g.Run(ctx, GitCmdConfig, "--worktree", "--bool", "--get", "core.sparseCheckout")
+	if err != nil && !isExitCode(err, 1) {
 		return cfg, err
 	}
-	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		key, value, hasValue := strings.Cut(line, " ")
-		switch key {
-		case "core.sparsecheckout":
-			// A key without a value is an implicit true
-			switch strings.ToLower(value) {
-			case "true", "yes", "on", "1":
-				cfg.SparseCheckout = true
-			default:
-				cfg.SparseCheckout = !hasValue
-			}
-		case "lfs.fetchexclude":
-			cfg.LFSFetchExclude = value
-		}
+	cfg.SparseCheckout = strings.TrimSpace(string(out)) == "true"
+
+	out, err = g.Run(ctx, GitCmdConfig, "--worktree", "--get-all", lfsFetchExcludeKey)
+	if err != nil && !isExitCode(err, 1) {
+		return cfg, err
 	}
+	cfg.LFSFetchExclude = strings.TrimSpace(string(out))
 	return cfg, nil
 }
 
@@ -1203,8 +1202,7 @@ func (g *GitRunner) UnsetWorktreeConfig(ctx context.Context, key string) ([]byte
 	out, err := g.Run(ctx, GitCmdConfig, "--worktree", "--unset-all", key)
 	if err != nil {
 		// git config --unset-all exits 5 when the key is not set
-		var exitErr interface{ ExitCode() int }
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 5 {
+		if isExitCode(err, 5) {
 			return nil, nil
 		}
 		return nil, err

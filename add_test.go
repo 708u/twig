@@ -1263,7 +1263,7 @@ type checkoutSettingsExecutor struct {
 	inner             *testutil.MockGitExecutor
 	version           string
 	worktreeConfig    bool
-	inheritedConfig   string // output of git config --worktree --get-regexp
+	inheritedConfig   string // "key value" lines of the source config.worktree
 	sparseCheckoutErr error
 	calls             [][]string
 }
@@ -1287,15 +1287,29 @@ func (e *checkoutSettingsExecutor) Run(ctx context.Context, args ...string) ([]b
 			return nil, &testutil.MockExitError{Code: 1}
 		}
 		return []byte("true\n"), nil
-	case len(sub) >= 3 && sub[0] == GitCmdConfig && sub[2] == "--get-regexp":
-		if e.inheritedConfig == "" {
-			return nil, &testutil.MockExitError{Code: 1}
-		}
-		return []byte(e.inheritedConfig), nil
+	case slices.Equal(sub, []string{GitCmdConfig, "--worktree", "--bool", "--get", "core.sparseCheckout"}):
+		return e.inheritedValues("core.sparsecheckout")
+	case slices.Equal(sub, []string{GitCmdConfig, "--worktree", "--get-all", "lfs.fetchexclude"}):
+		return e.inheritedValues("lfs.fetchexclude")
 	case len(sub) > 0 && sub[0] == GitCmdSparseCheckout:
 		return nil, e.sparseCheckoutErr
 	}
 	return e.inner.Run(ctx, args...)
+}
+
+// inheritedValues answers git config --get-all for key from inheritedConfig,
+// exiting 1 like git when the key is absent.
+func (e *checkoutSettingsExecutor) inheritedValues(key string) ([]byte, error) {
+	var values []string
+	for line := range strings.SplitSeq(e.inheritedConfig, "\n") {
+		if k, v, ok := strings.Cut(line, " "); ok && k == key {
+			values = append(values, v)
+		}
+	}
+	if len(values) == 0 {
+		return nil, &testutil.MockExitError{Code: 1}
+	}
+	return []byte(strings.Join(values, "\n") + "\n"), nil
 }
 
 // find returns the index of the first recorded call that starts with prefix
@@ -1367,7 +1381,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			wantCalls: [][]string{
 				{GitCmdVersion},
 				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
-				{GitCmdSparseCheckout, "set", "--no-cone", "/*", "!/plans/"},
+				{GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/plans/"},
 				{GitCmdCheckout, "--no-recurse-submodules"},
 			},
 			wantAbsent: [][]string{
@@ -1381,7 +1395,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			sparseCheckout:  []string{"/*", "!/plans/"},
 			wantCalls: [][]string{
 				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
-				{"-c", lfsArg, GitCmdSparseCheckout, "set", "--no-cone", "/*", "!/plans/"},
+				{"-c", lfsArg, GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/plans/"},
 				{"-c", lfsArg, GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "assets/**,images/**"},
 				{"-c", lfsArg, GitCmdCheckout},
 			},
@@ -1397,7 +1411,6 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			},
 			wantAbsent: [][]string{
 				{"-c"},
-				{GitCmdVersion},
 				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
 				{GitCmdSparseCheckout},
 				setLFS,
@@ -1429,7 +1442,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			inheritedConfig: inheritedCfg,
 			wantCalls: [][]string{
 				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
-				{"-c", lfsArg, GitCmdSparseCheckout, "set", "--no-cone", "/*", "!/plans/"},
+				{"-c", lfsArg, GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/plans/"},
 				{"-c", lfsArg, GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "assets/**,images/**"},
 				{"-c", lfsArg, GitCmdCheckout},
 			},
@@ -1453,17 +1466,18 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			},
 		},
 		{
-			name:            "full_resets_implicit_true_sparse_checkout",
+			name:            "full_skips_reset_when_git_does_not_copy_config",
 			worktreeConfig:  true,
-			inheritedConfig: "core.sparsecheckout\n",
+			inheritedConfig: inheritedCfg,
 			full:            true,
+			version:         "2.35.1",
 			wantCalls: [][]string{
-				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
-				{GitCmdSparseCheckout, "disable"},
-				{GitCmdCheckout},
+				{GitCmdWorktree, GitWorktreeAdd, "-b"},
 			},
 			wantAbsent: [][]string{
-				{GitCmdConfig, "--worktree", "--unset-all"},
+				{GitCmdConfig, "--worktree"},
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
+				{GitCmdSparseCheckout},
 			},
 		},
 		{
@@ -1587,8 +1601,12 @@ func TestAddCommand_Run_SparseCheckoutFailureRemovesWorktree(t *testing.T) {
 		version:           "2.53.0",
 		sparseCheckoutErr: errors.New("sparse-checkout failed"),
 	}
+	var removedDirs []string
 	cmd := &AddCommand{
-		FS:  &testutil.MockFS{},
+		FS: &testutil.MockFS{RemoveFunc: func(name string) error {
+			removedDirs = append(removedDirs, name)
+			return nil
+		}},
 		Git: &GitRunner{Executor: exec, Log: NewNopLogger()},
 		Config: &Config{
 			WorktreeSourceDir:   "/repo/main",
@@ -1613,6 +1631,9 @@ func TestAddCommand_Run_SparseCheckoutFailureRemovesWorktree(t *testing.T) {
 	}
 	if exec.find(GitCmdStash, GitStashApply, "abc123") < 0 {
 		t.Errorf("stash was not restored: %v", exec.calls)
+	}
+	if !slices.Equal(removedDirs, []string{"/repo/main-worktree/feature"}) {
+		t.Errorf("removed dirs = %v, want the empty parent directory", removedDirs)
 	}
 }
 
@@ -1639,6 +1660,57 @@ func TestAddResult_Format_CheckoutSettings(t *testing.T) {
 	} {
 		if !strings.Contains(verbose, line) {
 			t.Errorf("verbose stdout = %q, want to contain %q", verbose, line)
+		}
+	}
+}
+
+func TestAddResult_Format_LFSFetchExcludeInitialOnly(t *testing.T) {
+	t.Parallel()
+
+	const note = "LFS exclusion covers the initial checkout only: extensions.worktreeConfig is not enabled\n"
+	for _, initialOnly := range []bool{true, false} {
+		result := AddResult{
+			Branch:                     "feat/x",
+			WorktreePath:               "/repo/feat/x",
+			LFSFetchExclude:            []string{"assets/**"},
+			LFSFetchExcludeInitialOnly: initialOnly,
+		}
+		verbose := result.Format(AddFormatOptions{Verbose: true}).Stdout
+		if got := strings.Contains(verbose, note); got != initialOnly {
+			t.Errorf("initialOnly=%v: verbose stdout = %q, contains note = %v", initialOnly, verbose, got)
+		}
+		if strings.Contains(result.Format(AddFormatOptions{}).Stdout, note) {
+			t.Errorf("initialOnly=%v: default output must not contain the note", initialOnly)
+		}
+	}
+}
+
+func TestAddCommand_Run_RollbackFailureIsReported(t *testing.T) {
+	t.Parallel()
+
+	exec := &checkoutSettingsExecutor{
+		inner:             &testutil.MockGitExecutor{WorktreeRemoveErr: errors.New("permission denied")},
+		version:           "2.53.0",
+		sparseCheckoutErr: errors.New("sparse-checkout failed"),
+	}
+	cmd := &AddCommand{
+		FS:  &testutil.MockFS{},
+		Git: &GitRunner{Executor: exec, Log: NewNopLogger()},
+		Config: &Config{
+			WorktreeSourceDir:   "/repo/main",
+			WorktreeDestBaseDir: "/repo/main-worktree",
+			SparseCheckout:      []string{"/*"},
+		},
+		Log: NewNopLogger(),
+	}
+
+	_, err := cmd.Run(t.Context(), "feature/rollback")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	for _, want := range []string{"failed to set sparse checkout", "rollback failed", "permission denied"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want containing %q", err, want)
 		}
 	}
 }

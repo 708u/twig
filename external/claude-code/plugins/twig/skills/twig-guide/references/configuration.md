@@ -143,10 +143,11 @@ Default: `[]` (all LFS files are checked out)
 
 The patterns are joined with commas and passed to `git worktree add` as
 `-c lfs.fetchexclude=<patterns>`. A pattern must not contain a comma,
-because git-lfs splits the value on commas. When `extensions.worktreeConfig` is
-enabled, the same value is also written with `git config --worktree`, so
-later merges, rebases, and branch switches in that worktree keep the
-exclusion. Otherwise only the initial checkout excludes the files.
+because git-lfs splits the value on commas. When
+`extensions.worktreeConfig` is enabled, the same value is also written
+with `git config --worktree`, so later merges, rebases, and branch
+switches in that worktree keep the exclusion. Otherwise only the initial
+checkout excludes the files, which `twig add --verbose` reports.
 
 To fetch excluded files later, run in the worktree:
 
