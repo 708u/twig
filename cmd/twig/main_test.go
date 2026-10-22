@@ -1045,6 +1045,38 @@ func TestAddCmd(t *testing.T) {
 		}
 	})
 
+	t.Run("checkout_setting_override_conflicts_with_disable", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			args    []string
+			wantErr string
+		}{
+			{
+				args:    []string{"--lfs-fetch-exclude", "assets/**", "--no-lfs-fetch-exclude"},
+				wantErr: "--lfs-fetch-exclude cannot be used with --no-lfs-fetch-exclude",
+			},
+			{
+				args:    []string{"--sparse-checkout", "/*", "--no-sparse-checkout"},
+				wantErr: "--sparse-checkout cannot be used with --no-sparse-checkout",
+			},
+		}
+		for _, tt := range tests {
+			_, mainDir := testutil.SetupTestRepo(t, testutil.WithoutSettings())
+
+			cmd := newRootCmd(WithAddCommander(&mockAddCommander{}))
+
+			var stderr bytes.Buffer
+			cmd.SetErr(&stderr)
+			cmd.SetArgs(append([]string{"-C", mainDir, "add", "feat/test"}, tt.args...))
+
+			err := cmd.Execute()
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("args %v: err = %v, want containing %q", tt.args, err, tt.wantErr)
+			}
+		}
+	})
+
 	t.Run("file_with_carry", func(t *testing.T) {
 		t.Parallel()
 

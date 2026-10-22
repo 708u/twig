@@ -168,8 +168,10 @@ func (m *MockGitExecutor) Run(ctx context.Context, args ...string) ([]byte, erro
 func (m *MockGitExecutor) defaultRun(args ...string) ([]byte, error) {
 	// Extract -C <dir> option and track it for commands that need it
 	var dir string
-	for len(args) >= 2 && args[0] == "-C" {
-		dir = args[1]
+	for len(args) >= 2 && (args[0] == "-C" || args[0] == "-c") {
+		if args[0] == "-C" {
+			dir = args[1]
+		}
 		args = args[2:]
 	}
 

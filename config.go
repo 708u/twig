@@ -26,6 +26,8 @@ type Config struct {
 	SubmoduleReference  *bool    `toml:"submodule_reference"` // nil=unset, true=enable, false=disable
 	CleanStale          *bool    `toml:"clean_stale"`         // nil=unset, true=enable, false=disable
 	Hooks               []string `toml:"hooks"`
+	LFSFetchExclude     []string `toml:"lfs_fetch_exclude"`
+	SparseCheckout      []string `toml:"sparse_checkout"`
 }
 
 // ShouldInitSubmodules returns whether submodule initialization is enabled.
@@ -204,6 +206,24 @@ func LoadConfig(dir string, opts ...LoadConfigOption) (*LoadConfigResult, error)
 		hooks = localCfg.Hooks
 	}
 
+	// lfs_fetch_exclude: local overrides project
+	var lfsFetchExclude []string
+	if projCfg != nil && len(projCfg.LFSFetchExclude) > 0 {
+		lfsFetchExclude = projCfg.LFSFetchExclude
+	}
+	if localCfg != nil && len(localCfg.LFSFetchExclude) > 0 {
+		lfsFetchExclude = localCfg.LFSFetchExclude
+	}
+
+	// sparse_checkout: local overrides project
+	var sparseCheckout []string
+	if projCfg != nil && len(projCfg.SparseCheckout) > 0 {
+		sparseCheckout = projCfg.SparseCheckout
+	}
+	if localCfg != nil && len(localCfg.SparseCheckout) > 0 {
+		sparseCheckout = localCfg.SparseCheckout
+	}
+
 	return &LoadConfigResult{
 		Config: &Config{
 			Symlinks:            symlinks,
@@ -215,6 +235,8 @@ func LoadConfig(dir string, opts ...LoadConfigOption) (*LoadConfigResult, error)
 			SubmoduleReference:  submoduleReference,
 			CleanStale:          cleanStale,
 			Hooks:               hooks,
+			LFSFetchExclude:     lfsFetchExclude,
+			SparseCheckout:      sparseCheckout,
 		},
 		Warnings: warnings,
 	}, nil
