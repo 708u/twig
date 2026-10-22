@@ -1229,8 +1229,7 @@ func (g *GitRunner) SetWorktreeConfig(ctx context.Context, key, value string) ([
 func (g *GitRunner) IsAncestor(ctx context.Context, commit, target string) (bool, error) {
 	if _, err := g.Run(ctx, GitCmdMergeBase, "--is-ancestor", commit, target); err != nil {
 		// git reports "not an ancestor" as exit 1; other codes are real failures
-		var exitErr interface{ ExitCode() int }
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		if isExitCode(err, 1) {
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to check ancestry: %w", err)

@@ -44,6 +44,8 @@ type AddCommand struct {
 	NoLFSFetchExclude  bool
 	SparseCheckout     []string
 	NoSparseCheckout   bool
+
+	gitVersion *[2]int // major and minor, cached by gitAtLeast
 }
 
 // AddOptions holds options for the add command.
@@ -163,6 +165,10 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 		}
 	}
 
+	if r.LFSFetchExcludeInitialOnly {
+		stderr.WriteString("warning: lfs_fetch_exclude covers the initial checkout only: extensions.worktreeConfig is not enabled\n")
+	}
+
 	// Output submodule init warning
 	if r.SubmoduleInit.Skipped {
 		fmt.Fprintf(&stderr, "warning: %s\n", r.SubmoduleInit.Reason)
@@ -204,9 +210,6 @@ func (r AddResult) formatDefault(opts AddFormatOptions) FormatResult {
 		}
 		if len(r.LFSFetchExclude) > 0 {
 			fmt.Fprintf(&stdout, "Excluded LFS files: %s\n", strings.Join(r.LFSFetchExclude, ", "))
-			if r.LFSFetchExcludeInitialOnly {
-				stdout.WriteString("LFS exclusion covers the initial checkout only: extensions.worktreeConfig is not enabled\n")
-			}
 		}
 		if len(r.SparseCheckout) > 0 {
 			fmt.Fprintf(&stdout, "Applied sparse checkout: %s\n", strings.Join(r.SparseCheckout, ", "))
@@ -325,8 +328,13 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	// Runs worktree add and the first checkout. -c reaches the git-lfs smudge
 	// filter, so excluded LFS files are written as pointers.
 	checkoutGit := c.Git
-	if plan.lfsFetchExclude != "" {
+	switch {
+	case plan.lfsFetchExclude != "":
 		checkoutGit = c.Git.WithConfig(lfsFetchExcludeKey, plan.lfsFetchExclude)
+	case c.NoLFSFetchExclude:
+		// The empty value also overrides .lfsconfig and the shared or global
+		// config, which resetting config.worktree cannot reach.
+		checkoutGit = c.Git.WithConfig(lfsFetchExcludeKey, "")
 	}
 
 	// Determine stash mode and source
@@ -504,9 +512,10 @@ func (p checkoutPlan) persistLFS() bool {
 }
 
 // noCheckout reports whether the worktree must be populated only after its
-// config.worktree is adjusted.
+// sparse checkout is adjusted. An inherited lfs.fetchexclude needs no delay,
+// since -c overrides it during the first checkout.
 func (p checkoutPlan) noCheckout() bool {
-	return len(p.sparseCheckout) > 0 || p.resetSparse || p.resetLFS
+	return len(p.sparseCheckout) > 0 || p.resetSparse
 }
 
 // applyCheckoutSettings adjusts the new worktree's sparse checkout and
@@ -645,12 +654,16 @@ func rollbackError(err, rollbackErr error) error {
 }
 
 // gitAtLeast reports whether git is major.minor or later, along with the
-// version found.
+// version found. The version is read once per AddCommand.
 func (c *AddCommand) gitAtLeast(ctx context.Context, major, minor int) (bool, string, error) {
-	gotMajor, gotMinor, err := c.Git.Version(ctx)
-	if err != nil {
-		return false, "", fmt.Errorf("failed to check git version: %w", err)
+	if c.gitVersion == nil {
+		gotMajor, gotMinor, err := c.Git.Version(ctx)
+		if err != nil {
+			return false, "", fmt.Errorf("failed to check git version: %w", err)
+		}
+		c.gitVersion = &[2]int{gotMajor, gotMinor}
 	}
+	gotMajor, gotMinor := c.gitVersion[0], c.gitVersion[1]
 	ok := gotMajor > major || (gotMajor == major && gotMinor >= minor)
 	return ok, fmt.Sprintf("%d.%d", gotMajor, gotMinor), nil
 }

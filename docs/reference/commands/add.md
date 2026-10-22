@@ -261,8 +261,9 @@ Order of operations:
 
 1. Stash changes (with `--sync` or `--carry`)
 2. `git worktree add`, with `-c lfs.fetchexclude=<patterns>` when
-   `lfs_fetch_exclude` is set and `--no-checkout` when the worktree
-   config must be adjusted first (see below)
+   `lfs_fetch_exclude` is set (`-c lfs.fetchexclude=` with
+   `--no-lfs-fetch-exclude`), and `--no-checkout` when the sparse checkout
+   must be adjusted first (see below)
 3. With `sparse_checkout`: `git sparse-checkout set --no-cone <patterns>`
 4. With `lfs_fetch_exclude` and `extensions.worktreeConfig` enabled:
    `git config --worktree lfs.fetchexclude <patterns>`
@@ -277,9 +278,13 @@ worktree keeps those settings when twig has none of its own. With
 with `--no-lfs-fetch-exclude`, step 4 runs
 `git config --worktree --unset-all lfs.fetchexclude` instead. git copies
 this config since 2.36, so older git has nothing to reset. A sparse
-checkout enabled or an `lfs.fetchexclude` set in the shared `.git/config`
-or the global config, rather than the worktree-specific config, is not
-reset.
+checkout enabled in the shared `.git/config` is not reset.
+
+`--no-lfs-fetch-exclude` checks out every LFS file even when
+`lfs.fetchexclude` comes from `.lfsconfig`, the shared `.git/config`, or
+the global config. Only the value in the worktree-specific config is
+removed, so later checkouts in the worktree follow the other sources
+again.
 
 Excluded LFS files are checked out as pointer files and `git status`
 stays clean. Paths outside `sparse_checkout` are not written.

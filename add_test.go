@@ -1332,6 +1332,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 
 	const (
 		lfsArg       = "lfs.fetchexclude=assets/**,images/**"
+		noLFSArg     = "lfs.fetchexclude="
 		inheritedCfg = "core.sparsecheckout true\nlfs.fetchexclude big/**\n"
 	)
 	setLFS := []string{GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude"}
@@ -1411,10 +1412,9 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			noLFS:           true,
 			noSparse:        true,
 			wantCalls: [][]string{
-				{GitCmdWorktree, GitWorktreeAdd, "-b"},
+				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
 			},
 			wantAbsent: [][]string{
-				{"-c"},
 				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
 				{GitCmdSparseCheckout},
 				setLFS,
@@ -1429,13 +1429,12 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			noLFS:           true,
 			noSparse:        true,
 			wantCalls: [][]string{
-				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
-				{GitCmdSparseCheckout, "disable"},
-				{GitCmdConfig, "--worktree", "--unset-all", "lfs.fetchexclude"},
-				{GitCmdCheckout},
+				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{"-c", noLFSArg, GitCmdSparseCheckout, "disable"},
+				{"-c", noLFSArg, GitCmdConfig, "--worktree", "--unset-all", "lfs.fetchexclude"},
+				{"-c", noLFSArg, GitCmdCheckout},
 			},
 			wantAbsent: [][]string{
-				{"-c"},
 				{GitCmdSparseCheckout, "set"},
 			},
 		},
@@ -1478,7 +1477,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			noSparse:        true,
 			version:         "2.35.1",
 			wantCalls: [][]string{
-				{GitCmdWorktree, GitWorktreeAdd, "-b"},
+				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
 			},
 			wantAbsent: [][]string{
 				{GitCmdConfig, "--worktree"},
@@ -1526,15 +1525,29 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			inheritedConfig: inheritedCfg,
 			noLFS:           true,
 			wantCalls: [][]string{
-				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
-				{GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/plans/"},
-				{GitCmdConfig, "--worktree", "--unset-all", "lfs.fetchexclude"},
-				{GitCmdCheckout},
+				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{"-c", noLFSArg, GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/plans/"},
+				{"-c", noLFSArg, GitCmdConfig, "--worktree", "--unset-all", "lfs.fetchexclude"},
+				{"-c", noLFSArg, GitCmdCheckout},
 			},
 			wantAbsent: [][]string{
-				{"-c"},
 				{GitCmdSparseCheckout, "disable"},
 				setLFS,
+			},
+		},
+		{
+			name:            "no_lfs_fetch_exclude_resets_inherited_lfs_without_no_checkout",
+			worktreeConfig:  true,
+			inheritedConfig: "lfs.fetchexclude big/**\n",
+			noLFS:           true,
+			wantCalls: [][]string{
+				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
+				{"-c", noLFSArg, GitCmdConfig, "--worktree", "--unset-all", "lfs.fetchexclude"},
+			},
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
+				{GitCmdSparseCheckout},
+				{GitCmdCheckout},
 			},
 		},
 		{
@@ -1753,7 +1766,7 @@ func TestAddResult_Format_CheckoutSettings(t *testing.T) {
 func TestAddResult_Format_LFSFetchExcludeInitialOnly(t *testing.T) {
 	t.Parallel()
 
-	const note = "LFS exclusion covers the initial checkout only: extensions.worktreeConfig is not enabled\n"
+	const warning = "warning: lfs_fetch_exclude covers the initial checkout only: extensions.worktreeConfig is not enabled\n"
 	for _, initialOnly := range []bool{true, false} {
 		result := AddResult{
 			Branch:                     "feat/x",
@@ -1761,12 +1774,11 @@ func TestAddResult_Format_LFSFetchExcludeInitialOnly(t *testing.T) {
 			LFSFetchExclude:            []string{"assets/**"},
 			LFSFetchExcludeInitialOnly: initialOnly,
 		}
-		verbose := result.Format(AddFormatOptions{Verbose: true}).Stdout
-		if got := strings.Contains(verbose, note); got != initialOnly {
-			t.Errorf("initialOnly=%v: verbose stdout = %q, contains note = %v", initialOnly, verbose, got)
-		}
-		if strings.Contains(result.Format(AddFormatOptions{}).Stdout, note) {
-			t.Errorf("initialOnly=%v: default output must not contain the note", initialOnly)
+		for _, verbose := range []bool{false, true} {
+			stderr := result.Format(AddFormatOptions{Verbose: verbose}).Stderr
+			if got := strings.Contains(stderr, warning); got != initialOnly {
+				t.Errorf("initialOnly=%v verbose=%v: stderr = %q, contains warning = %v", initialOnly, verbose, stderr, got)
+			}
 		}
 	}
 }

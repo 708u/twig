@@ -2651,6 +2651,31 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("NoLFSFetchExcludeOverridesLFSConfigFile", func(t *testing.T) {
+		t.Parallel()
+
+		repoDir, mainDir := setupLFSRepo(t)
+
+		lfsConfig := "[lfs]\n\tfetchexclude = big/**\n"
+		if err := os.WriteFile(filepath.Join(mainDir, ".lfsconfig"), []byte(lfsConfig), 0644); err != nil {
+			t.Fatal(err)
+		}
+		testutil.RunGit(t, mainDir, "add", ".lfsconfig")
+		testutil.RunGit(t, mainDir, "commit", "-m", "add lfsconfig")
+
+		cmd := newAddCommandWith(t, mainDir, nil, nil, AddOptions{NoLFSFetchExclude: true})
+		if _, err := cmd.Run(t.Context(), "feat/lfsconfig"); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		wtPath := filepath.Join(repoDir, "feat", "lfsconfig")
+
+		for _, name := range []string{"big/a.bin", "big/b.bin"} {
+			if isLFSPointer(t, filepath.Join(wtPath, name)) {
+				t.Errorf("%s is an LFS pointer, want content despite .lfsconfig", name)
+			}
+		}
+	})
+
 	t.Run("DisablingBothChecksOutEverything", func(t *testing.T) {
 		t.Parallel()
 

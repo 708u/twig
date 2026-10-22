@@ -147,7 +147,7 @@ because git-lfs splits the value on commas. When
 `extensions.worktreeConfig` is enabled, the same value is also written
 with `git config --worktree`, so later merges, rebases, and branch
 switches in that worktree keep the exclusion. Otherwise only the initial
-checkout excludes the files, which `twig add --verbose` reports.
+checkout excludes the files, and `twig add` prints a warning.
 
 To fetch excluded files later, run in the worktree:
 
