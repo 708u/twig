@@ -100,8 +100,7 @@ func TestListCommand_Integration(t *testing.T) {
 		}
 
 		// Verify format contains path, hash, and branch
-		lines := strings.Split(strings.TrimSpace(formatted.Stdout), "\n")
-		for _, line := range lines {
+		for line := range strings.SplitSeq(strings.TrimSpace(formatted.Stdout), "\n") {
 			// Format: /path/to/worktree  abc1234 [branch]
 			if !strings.Contains(line, "[") || !strings.Contains(line, "]") {
 				t.Errorf("line should contain branch in brackets: %s", line)

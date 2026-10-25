@@ -2,6 +2,7 @@ package twig
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -163,10 +164,8 @@ func TestOverlayCommand_Apply(t *testing.T) {
 			}
 			switch {
 			case len(args) >= 2 && args[0] == "rev-parse":
-				for _, a := range args {
-					if a == "--git-dir" {
-						return []byte("/repo/main/.git\n"), nil
-					}
+				if slices.Contains(args, "--git-dir") {
+					return []byte("/repo/main/.git\n"), nil
 				}
 				if args[1] == "nonexistent" {
 					return nil, &testutil.MockExitError{Code: 128}
