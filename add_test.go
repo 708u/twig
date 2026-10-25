@@ -1664,8 +1664,8 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			}
 
 			if tt.wantErr == "" {
-				wantLFS := tt.lfsOverride.Resolve(tt.lfsFetchExclude)
-				wantSparse := tt.sparseOverride.Resolve(tt.sparseCheckout)
+				wantLFS, _ := tt.lfsOverride.Resolve(tt.lfsFetchExclude, validateLFSFetchExcludePattern)
+				wantSparse, _ := tt.sparseOverride.Resolve(tt.sparseCheckout, validateSparseCheckoutPattern)
 				if !slices.Equal(result.LFSFetchExclude, wantLFS) {
 					t.Errorf("LFSFetchExclude = %v, want %v", result.LFSFetchExclude, wantLFS)
 				}
@@ -1802,22 +1802,38 @@ func TestPatternOverride(t *testing.T) {
 	t.Parallel()
 
 	configured := []string{"assets/**"}
+	errRejected := errors.New("rejected")
+	rejectX := func(p string) error {
+		if p == "x/**" {
+			return errRejected
+		}
+		return nil
+	}
 	tests := []struct {
 		name         string
+		configured   []string
 		override     PatternOverride
 		want         []string
+		wantErr      error
 		wantDisabled bool
 	}{
-		{name: "zero_value_keeps_config", override: PatternOverride{}, want: configured},
-		{name: "unset_ignores_patterns", override: PatternOverride{Patterns: []string{"x/**"}}, want: configured},
-		{name: "set_replaces_config", override: PatternOverride{Patterns: []string{"x/**"}, Set: true}, want: []string{"x/**"}},
-		{name: "set_without_patterns_disables", override: PatternOverride{Set: true}, want: nil, wantDisabled: true},
+		{name: "zero_value_keeps_config", configured: configured, override: PatternOverride{}, want: configured},
+		{name: "unset_ignores_patterns", configured: configured, override: PatternOverride{Patterns: []string{"y/**"}}, want: configured},
+		{name: "set_replaces_config", configured: configured, override: PatternOverride{Patterns: []string{"y/**"}, Set: true}, want: []string{"y/**"}},
+		{name: "set_without_patterns_disables", configured: configured, override: PatternOverride{Set: true}, want: nil, wantDisabled: true},
+		{name: "validates_override_patterns", configured: configured, override: PatternOverride{Patterns: []string{"x/**"}, Set: true}, wantErr: errRejected},
+		{name: "validates_configured_patterns", configured: []string{"x/**"}, override: PatternOverride{}, wantErr: errRejected},
+		{name: "replaced_config_is_not_validated", configured: []string{"x/**"}, override: PatternOverride{Patterns: []string{"y/**"}, Set: true}, want: []string{"y/**"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := tt.override.Resolve(configured); !slices.Equal(got, tt.want) {
+			got, err := tt.override.Resolve(tt.configured, rejectX)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Resolve error = %v, want %v", err, tt.wantErr)
+			}
+			if !slices.Equal(got, tt.want) {
 				t.Errorf("Resolve = %v, want %v", got, tt.want)
 			}
 			if got := tt.override.Disabled(); got != tt.wantDisabled {

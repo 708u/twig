@@ -32,12 +32,37 @@ type PatternOverride struct {
 	Set      bool
 }
 
-// Resolve returns the patterns to apply in place of configured.
-func (o PatternOverride) Resolve(configured []string) []string {
-	if !o.Set {
-		return configured
+// Resolve returns the patterns to apply in place of configured, failing on
+// the first pattern that validate rejects.
+func (o PatternOverride) Resolve(configured []string, validate func(pattern string) error) ([]string, error) {
+	patterns := configured
+	if o.Set {
+		patterns = o.Patterns
 	}
-	return o.Patterns
+	for _, p := range patterns {
+		if err := validate(p); err != nil {
+			return nil, err
+		}
+	}
+	return patterns, nil
+}
+
+func validateLFSFetchExcludePattern(p string) error {
+	if strings.TrimSpace(p) == "" {
+		return fmt.Errorf("lfs_fetch_exclude pattern must not be empty")
+	}
+	// git-lfs splits lfs.fetchexclude on commas
+	if strings.Contains(p, ",") {
+		return fmt.Errorf("lfs_fetch_exclude pattern must not contain a comma: %q", p)
+	}
+	return nil
+}
+
+func validateSparseCheckoutPattern(p string) error {
+	if strings.TrimSpace(p) == "" {
+		return fmt.Errorf("sparse_checkout pattern must not be empty")
+	}
+	return nil
 }
 
 // Disabled reports whether the override turns the setting off.
@@ -287,21 +312,13 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	wtPath := filepath.Join(c.Config.WorktreeDestBaseDir, name)
 	result.WorktreePath = wtPath
 
-	lfsFetchExclude := c.LFSFetchExclude.Resolve(c.Config.LFSFetchExclude)
-	sparseCheckout := c.SparseCheckout.Resolve(c.Config.SparseCheckout)
-	for _, p := range lfsFetchExclude {
-		if strings.TrimSpace(p) == "" {
-			return result, fmt.Errorf("lfs_fetch_exclude pattern must not be empty")
-		}
-		// git-lfs splits lfs.fetchexclude on commas
-		if strings.Contains(p, ",") {
-			return result, fmt.Errorf("lfs_fetch_exclude pattern must not contain a comma: %q", p)
-		}
+	lfsFetchExclude, err := c.LFSFetchExclude.Resolve(c.Config.LFSFetchExclude, validateLFSFetchExcludePattern)
+	if err != nil {
+		return result, err
 	}
-	for _, p := range sparseCheckout {
-		if strings.TrimSpace(p) == "" {
-			return result, fmt.Errorf("sparse_checkout pattern must not be empty")
-		}
+	sparseCheckout, err := c.SparseCheckout.Resolve(c.Config.SparseCheckout, validateSparseCheckoutPattern)
+	if err != nil {
+		return result, err
 	}
 	if len(sparseCheckout) > 0 {
 		v, err := c.version(ctx)
