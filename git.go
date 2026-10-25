@@ -159,7 +159,18 @@ type GitRunner struct {
 	Dir      string
 	Log      *slog.Logger
 
-	configs []string // key=value pairs passed as -c to every command
+	configs []gitConfigOverride // passed as -c to every command
+}
+
+// gitConfigOverride is one -c option. An empty value sets the key to the
+// empty string, which differs from passing the key alone.
+type gitConfigOverride struct {
+	key   string
+	value string
+}
+
+func (o gitConfigOverride) arg() string {
+	return o.key + "=" + o.value
 }
 
 type gitRunnerOptions struct {
@@ -200,15 +211,15 @@ func (g *GitRunner) InDir(dir string) *GitRunner {
 // The value applies only to the spawned git process and its children
 // (e.g. LFS filters), leaving repository config untouched.
 func (g *GitRunner) WithConfig(key, value string) *GitRunner {
-	configs := append(slices.Clone(g.configs), key+"="+value)
+	configs := append(slices.Clone(g.configs), gitConfigOverride{key: key, value: value})
 	return &GitRunner{Executor: g.Executor, Dir: g.Dir, Log: g.Log, configs: configs}
 }
 
 // Run executes git command with -C flag.
 func (g *GitRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
 	fullArgs := []string{"-C", g.Dir}
-	for _, kv := range g.configs {
-		fullArgs = append(fullArgs, "-c", kv)
+	for _, o := range g.configs {
+		fullArgs = append(fullArgs, "-c", o.arg())
 	}
 	fullArgs = append(fullArgs, args...)
 	g.Log.Debug(strings.Join(append([]string{"git"}, fullArgs...), " "), "category", LogCategoryGit)

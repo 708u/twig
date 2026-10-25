@@ -561,3 +561,32 @@ func TestGitVersion_IsZero(t *testing.T) {
 		}
 	}
 }
+
+func TestGitRunner_WithConfig(t *testing.T) {
+	t.Parallel()
+
+	var calls [][]string
+	mock := &testutil.MockGitExecutor{
+		RunFunc: func(ctx context.Context, args ...string) ([]byte, error) {
+			calls = append(calls, args)
+			return nil, nil
+		},
+	}
+	base := &GitRunner{Executor: mock, Dir: "/repo", Log: NewNopLogger()}
+
+	configured := base.WithConfig("lfs.fetchexclude", "a/**,b/**").WithConfig("core.sparseCheckout", "")
+	if _, err := configured.InDir("/wt").Run(t.Context(), "checkout"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := base.Run(t.Context(), "status"); err != nil {
+		t.Fatal(err)
+	}
+
+	want := [][]string{
+		{"-C", "/wt", "-c", "lfs.fetchexclude=a/**,b/**", "-c", "core.sparseCheckout=", "checkout"},
+		{"-C", "/repo", "status"},
+	}
+	if !reflect.DeepEqual(calls, want) {
+		t.Errorf("calls = %v, want %v", calls, want)
+	}
+}
