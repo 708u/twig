@@ -416,19 +416,19 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		}
 	}
 
-	gitOutput, branchCreated, err := c.createWorktree(ctx, checkoutGit, name, wtPath, plan.noCheckout())
+	wt, err := c.createWorktree(ctx, checkoutGit, name, wtPath, plan.noCheckout())
 	if err != nil {
 		if stashHash != "" {
 			_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
 		}
 		return result, err
 	}
-	result.GitOutput = gitOutput
+	result.GitOutput = wt.gitOutput
 
 	if plan.active() {
 		err = c.applyCheckoutSettings(ctx, checkoutGit.InDir(wtPath), plan)
 		if err != nil {
-			rbErr := c.removeCreatedWorktree(ctx, wtPath, name, branchCreated)
+			rbErr := c.removeCreatedWorktree(ctx, wt)
 			if stashHash != "" {
 				_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
 			}
@@ -466,7 +466,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	if stashHash != "" {
 		_, err = c.Git.InDir(wtPath).StashApplyByHash(ctx, stashHash)
 		if err != nil {
-			rbErr := c.removeCreatedWorktree(ctx, wtPath, name, branchCreated)
+			rbErr := c.removeCreatedWorktree(ctx, wt)
 			_, _ = stashSourceGit.StashPopByHash(ctx, stashHash)
 			return result, rollbackError(fmt.Errorf("failed to apply changes to new worktree: %w", withGitStderr(err)), rbErr)
 		}
@@ -591,39 +591,49 @@ func (c *AddCommand) applyCheckoutSettings(ctx context.Context, wtGit *GitRunner
 	return nil
 }
 
-// createWorktree adds the worktree and reports whether its local branch did
-// not exist before, either created with -b or tracking a remote branch.
-func (c *AddCommand) createWorktree(ctx context.Context, addGit *GitRunner, branch, path string, noCheckout bool) (output []byte, branchCreated bool, err error) {
+// createdWorktree is a worktree added by createWorktree, with what a later
+// failure needs to undo it.
+type createdWorktree struct {
+	path      string
+	branch    string
+	gitOutput []byte
+	// branchCreated is true when the local branch did not exist before,
+	// either created with -b or tracking a remote branch.
+	branchCreated bool
+}
+
+// createWorktree adds the worktree at path for branch.
+func (c *AddCommand) createWorktree(ctx context.Context, addGit *GitRunner, branch, path string, noCheckout bool) (createdWorktree, error) {
 	if _, err := c.FS.Stat(path); err == nil {
-		return nil, false, fmt.Errorf("directory already exists: %s", path)
+		return createdWorktree{}, fmt.Errorf("directory already exists: %s", path)
 	}
 
 	var opts []WorktreeAddOption
 	exists, err := c.Git.LocalBranchExists(ctx, branch)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to check branch existence: %w", err)
+		return createdWorktree{}, fmt.Errorf("failed to check branch existence: %w", err)
 	}
 	if exists {
 		var branches []string
 		branches, err = c.Git.WorktreeListBranches(ctx)
 		if err != nil {
-			return nil, false, fmt.Errorf("failed to list worktree branches: %w", err)
+			return createdWorktree{}, fmt.Errorf("failed to list worktree branches: %w", err)
 		}
 		if slices.Contains(branches, branch) {
-			return nil, false, fmt.Errorf("branch %s is already checked out in another worktree", branch)
+			return createdWorktree{}, fmt.Errorf("branch %s is already checked out in another worktree", branch)
 		}
 	} else {
 		var remote string
 		remote, err = c.Git.FindRemoteForBranch(ctx, branch)
 		if err != nil {
-			return nil, false, err
+			return createdWorktree{}, err
 		}
 
 		if remote != "" {
 			// Remote branch found, fetch it
 			err = c.Git.Fetch(ctx, remote, branch)
 			if err != nil {
-				return nil, false, fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
+				return createdWorktree{}, fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
 			}
 			// After fetch, git worktree add will auto-track the remote branch
 		} else {
@@ -643,24 +653,24 @@ func (c *AddCommand) createWorktree(ctx context.Context, addGit *GitRunner, bran
 		opts = append(opts, WithNoCheckout())
 	}
 
-	output, err = addGit.WorktreeAdd(ctx, path, branch, opts...)
+	output, err := addGit.WorktreeAdd(ctx, path, branch, opts...)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to create worktree: %w", withGitStderr(err))
+		return createdWorktree{}, fmt.Errorf("failed to create worktree: %w", withGitStderr(err))
 	}
 
-	return output, !exists, nil
+	return createdWorktree{path: path, branch: branch, gitOutput: output, branchCreated: !exists}, nil
 }
 
 // removeCreatedWorktree undoes createWorktree after a later step fails.
 // --lock may have locked the worktree, so removal uses -f -f.
-func (c *AddCommand) removeCreatedWorktree(ctx context.Context, path, branch string, branchCreated bool) error {
-	if _, err := c.Git.WorktreeRemove(ctx, path, WithForceRemove(WorktreeForceLevelLocked)); err != nil {
-		return fmt.Errorf("failed to remove worktree %s: %w", path, err)
+func (c *AddCommand) removeCreatedWorktree(ctx context.Context, wt createdWorktree) error {
+	if _, err := c.Git.WorktreeRemove(ctx, wt.path, WithForceRemove(WorktreeForceLevelLocked)); err != nil {
+		return fmt.Errorf("failed to remove worktree %s: %w", wt.path, err)
 	}
-	removeEmptyParentDirs(c.FS, c.Config.WorktreeDestBaseDir, path)
-	if branchCreated {
-		if _, err := c.Git.BranchDelete(ctx, branch, WithForceDelete()); err != nil {
-			return fmt.Errorf("failed to delete branch %s: %w", branch, err)
+	removeEmptyParentDirs(c.FS, c.Config.WorktreeDestBaseDir, wt.path)
+	if wt.branchCreated {
+		if _, err := c.Git.BranchDelete(ctx, wt.branch, WithForceDelete()); err != nil {
+			return fmt.Errorf("failed to delete branch %s: %w", wt.branch, err)
 		}
 	}
 	return nil
