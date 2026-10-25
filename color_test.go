@@ -6,9 +6,8 @@ import (
 	"github.com/fatih/color"
 )
 
+// Not parallel: mutates the global color.NoColor.
 func TestSetColorMode(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name        string
 		mode        ColorMode
@@ -41,9 +40,8 @@ func TestSetColorMode(t *testing.T) {
 	}
 }
 
+// Not parallel: mutates the global color.NoColor.
 func TestIsColorEnabled(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name     string
 		noColor  bool
@@ -77,6 +75,7 @@ func TestIsColorEnabled(t *testing.T) {
 	}
 }
 
+// Not parallel: mutates the global color.NoColor.
 func TestColorFunctions(t *testing.T) {
 	// Save original state
 	original := color.NoColor
