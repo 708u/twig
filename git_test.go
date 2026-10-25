@@ -543,3 +543,21 @@ func TestGitVersion_AtLeast(t *testing.T) {
 		}
 	}
 }
+
+func TestGitVersion_IsZero(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		v    GitVersion
+		want bool
+	}{
+		{v: GitVersion{}, want: true},
+		{v: GitVersion{Major: 2, Minor: 36}, want: false},
+		{v: GitVersion{Major: 2}, want: false},
+	}
+	for _, tt := range tests {
+		if got := tt.v.IsZero(); got != tt.want {
+			t.Errorf("%v.IsZero() = %v, want %v", tt.v, got, tt.want)
+		}
+	}
+}

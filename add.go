@@ -685,10 +685,9 @@ func rollbackError(err, rollbackErr error) error {
 	return fmt.Errorf("%w (rollback failed: %v)", err, rollbackErr)
 }
 
-// version returns the git version, reading it once per AddCommand. No git
-// release has major version 0, so the zero value marks it as unread.
+// version returns the git version, reading it once per AddCommand.
 func (c *AddCommand) version(ctx context.Context) (GitVersion, error) {
-	if c.gitVersion == (GitVersion{}) {
+	if c.gitVersion.IsZero() {
 		v, err := c.Git.Version(ctx)
 		if err != nil {
 			return GitVersion{}, fmt.Errorf("failed to check git version: %w", err)

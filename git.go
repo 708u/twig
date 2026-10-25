@@ -1123,6 +1123,11 @@ func (v GitVersion) AtLeast(required GitVersion) bool {
 	return v.Major > required.Major || (v.Major == required.Major && v.Minor >= required.Minor)
 }
 
+// IsZero reports whether v is unset. No git release has major version 0.
+func (v GitVersion) IsZero() bool {
+	return v == GitVersion{}
+}
+
 func (v GitVersion) String() string {
 	return fmt.Sprintf("%d.%d", v.Major, v.Minor)
 }
