@@ -132,6 +132,23 @@ func WithCommandIDGenerator(gen func() string) Option {
 const carryFromCurrent = "<current>"
 
 // resolveCarryFrom resolves the --carry flag value to a worktree path.
+// patternOverrideFlags reads --<name> <pattern> and --no-<name> into a
+// PatternOverride. Without either flag, the configured patterns are kept.
+func patternOverrideFlags(cmd *cobra.Command, name string) (twig.PatternOverride, error) {
+	patterns, _ := cmd.Flags().GetStringArray(name)
+	disable, _ := cmd.Flags().GetBool("no-" + name)
+	switch {
+	case len(patterns) > 0 && disable:
+		return twig.PatternOverride{}, fmt.Errorf("--%s cannot be used with --no-%s", name, name)
+	case disable:
+		return twig.PatternOverride{Set: true}, nil
+	case len(patterns) > 0:
+		return twig.PatternOverride{Patterns: patterns, Set: true}, nil
+	default:
+		return twig.PatternOverride{}, nil
+	}
+}
+
 func resolveCarryFrom(ctx context.Context, carryValue, originalCwd string, git *twig.GitRunner) (string, error) {
 	switch carryValue {
 	case carryFromCurrent:
@@ -348,15 +365,13 @@ Use --file with --sync or --carry to target specific files:
 			// --submodule-reference forces enable, otherwise use config
 			submoduleReference := cmd.Flags().Changed("submodule-reference")
 
-			lfsFetchExclude, _ := cmd.Flags().GetStringArray("lfs-fetch-exclude")
-			noLFSFetchExclude, _ := cmd.Flags().GetBool("no-lfs-fetch-exclude")
-			if len(lfsFetchExclude) > 0 && noLFSFetchExclude {
-				return fmt.Errorf("--lfs-fetch-exclude cannot be used with --no-lfs-fetch-exclude")
+			lfsFetchExclude, err := patternOverrideFlags(cmd, "lfs-fetch-exclude")
+			if err != nil {
+				return err
 			}
-			sparseCheckout, _ := cmd.Flags().GetStringArray("sparse-checkout")
-			noSparseCheckout, _ := cmd.Flags().GetBool("no-sparse-checkout")
-			if len(sparseCheckout) > 0 && noSparseCheckout {
-				return fmt.Errorf("--sparse-checkout cannot be used with --no-sparse-checkout")
+			sparseCheckout, err := patternOverrideFlags(cmd, "sparse-checkout")
+			if err != nil {
+				return err
 			}
 
 			// --reason requires --lock
@@ -395,9 +410,7 @@ Use --file with --sync or --carry to target specific files:
 					InitSubmodules:     initSubmodules,
 					SubmoduleReference: submoduleReference,
 					LFSFetchExclude:    lfsFetchExclude,
-					NoLFSFetchExclude:  noLFSFetchExclude,
 					SparseCheckout:     sparseCheckout,
-					NoSparseCheckout:   noSparseCheckout,
 				})
 			}
 			result, err := addCmd.Run(cmd.Context(), args[0])

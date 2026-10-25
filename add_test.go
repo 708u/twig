@@ -1341,10 +1341,8 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 		name            string
 		lfsFetchExclude []string
 		sparseCheckout  []string
-		lfsFlag         []string // --lfs-fetch-exclude
-		noLFS           bool     // --no-lfs-fetch-exclude
-		sparseFlag      []string // --sparse-checkout
-		noSparse        bool     // --no-sparse-checkout
+		lfsOverride     PatternOverride
+		sparseOverride  PatternOverride
 		version         string
 		worktreeConfig  bool
 		inheritedConfig string
@@ -1409,8 +1407,8 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			lfsFetchExclude: []string{"assets/**", "images/**"},
 			sparseCheckout:  []string{"/*", "!/plans/"},
 			worktreeConfig:  true,
-			noLFS:           true,
-			noSparse:        true,
+			lfsOverride:     PatternOverride{Set: true},
+			sparseOverride:  PatternOverride{Set: true},
 			wantCalls: [][]string{
 				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
 			},
@@ -1426,8 +1424,8 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			sparseCheckout:  []string{"/*", "!/plans/"},
 			worktreeConfig:  true,
 			inheritedConfig: inheritedCfg,
-			noLFS:           true,
-			noSparse:        true,
+			lfsOverride:     PatternOverride{Set: true},
+			sparseOverride:  PatternOverride{Set: true},
 			wantCalls: [][]string{
 				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
 				{"-c", noLFSArg, GitCmdSparseCheckout, "disable"},
@@ -1473,8 +1471,8 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			name:            "no_flags_skip_reset_when_git_does_not_copy_config",
 			worktreeConfig:  true,
 			inheritedConfig: inheritedCfg,
-			noLFS:           true,
-			noSparse:        true,
+			lfsOverride:     PatternOverride{Set: true},
+			sparseOverride:  PatternOverride{Set: true},
 			version:         "2.35.1",
 			wantCalls: [][]string{
 				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
@@ -1489,7 +1487,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			name:            "no_sparse_checkout_keeps_disabled_sparse_checkout",
 			worktreeConfig:  true,
 			inheritedConfig: "core.sparsecheckout false\n",
-			noSparse:        true,
+			sparseOverride:  PatternOverride{Set: true},
 			wantCalls: [][]string{
 				{GitCmdWorktree, GitWorktreeAdd, "-b"},
 			},
@@ -1505,7 +1503,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			sparseCheckout:  []string{"/*", "!/plans/"},
 			worktreeConfig:  true,
 			inheritedConfig: "core.sparsecheckout true\n",
-			noSparse:        true,
+			sparseOverride:  PatternOverride{Set: true},
 			wantCalls: [][]string{
 				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
 				{"-c", lfsArg, GitCmdSparseCheckout, "disable"},
@@ -1523,7 +1521,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			sparseCheckout:  []string{"/*", "!/plans/"},
 			worktreeConfig:  true,
 			inheritedConfig: inheritedCfg,
-			noLFS:           true,
+			lfsOverride:     PatternOverride{Set: true},
 			wantCalls: [][]string{
 				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
 				{"-c", noLFSArg, GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/plans/"},
@@ -1539,7 +1537,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			name:            "no_lfs_fetch_exclude_resets_inherited_lfs_without_no_checkout",
 			worktreeConfig:  true,
 			inheritedConfig: "lfs.fetchexclude big/**\n",
-			noLFS:           true,
+			lfsOverride:     PatternOverride{Set: true},
 			wantCalls: [][]string{
 				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
 				{"-c", noLFSArg, GitCmdConfig, "--worktree", "--unset-all", "lfs.fetchexclude"},
@@ -1554,8 +1552,8 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			name:            "flags_replace_configured_patterns",
 			lfsFetchExclude: []string{"assets/**", "images/**"},
 			sparseCheckout:  []string{"/*", "!/plans/"},
-			lfsFlag:         []string{"videos/**"},
-			sparseFlag:      []string{"/*", "!/docs/"},
+			lfsOverride:     PatternOverride{Patterns: []string{"videos/**"}, Set: true},
+			sparseOverride:  PatternOverride{Patterns: []string{"/*", "!/docs/"}, Set: true},
 			wantCalls: [][]string{
 				{"-c", "lfs.fetchexclude=videos/**", GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
 				{"-c", "lfs.fetchexclude=videos/**", GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/docs/"},
@@ -1575,7 +1573,7 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 		{
 			name:            "lfs_fetch_exclude_rejects_empty_pattern",
 			lfsFetchExclude: []string{"assets/**"},
-			lfsFlag:         []string{""},
+			lfsOverride:     PatternOverride{Patterns: []string{""}, Set: true},
 			wantErr:         "lfs_fetch_exclude pattern must not be empty",
 			wantAbsent: [][]string{
 				{GitCmdWorktree, GitWorktreeAdd},
@@ -1622,11 +1620,9 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 					LFSFetchExclude:     tt.lfsFetchExclude,
 					SparseCheckout:      tt.sparseCheckout,
 				},
-				Log:               NewNopLogger(),
-				LFSFetchExclude:   tt.lfsFlag,
-				NoLFSFetchExclude: tt.noLFS,
-				SparseCheckout:    tt.sparseFlag,
-				NoSparseCheckout:  tt.noSparse,
+				Log:             NewNopLogger(),
+				LFSFetchExclude: tt.lfsOverride,
+				SparseCheckout:  tt.sparseOverride,
 			}
 
 			result, err := cmd.Run(t.Context(), "feature/checkout")
@@ -1668,19 +1664,8 @@ func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
 			}
 
 			if tt.wantErr == "" {
-				wantLFS, wantSparse := tt.lfsFetchExclude, tt.sparseCheckout
-				if len(tt.lfsFlag) > 0 {
-					wantLFS = tt.lfsFlag
-				}
-				if tt.noLFS {
-					wantLFS = nil
-				}
-				if len(tt.sparseFlag) > 0 {
-					wantSparse = tt.sparseFlag
-				}
-				if tt.noSparse {
-					wantSparse = nil
-				}
+				wantLFS := tt.lfsOverride.Resolve(tt.lfsFetchExclude)
+				wantSparse := tt.sparseOverride.Resolve(tt.sparseCheckout)
 				if !slices.Equal(result.LFSFetchExclude, wantLFS) {
 					t.Errorf("LFSFetchExclude = %v, want %v", result.LFSFetchExclude, wantLFS)
 				}
@@ -1810,5 +1795,34 @@ func TestAddCommand_Run_RollbackFailureIsReported(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("err = %v, want containing %q", err, want)
 		}
+	}
+}
+
+func TestPatternOverride(t *testing.T) {
+	t.Parallel()
+
+	configured := []string{"assets/**"}
+	tests := []struct {
+		name         string
+		override     PatternOverride
+		want         []string
+		wantDisabled bool
+	}{
+		{name: "zero_value_keeps_config", override: PatternOverride{}, want: configured},
+		{name: "unset_ignores_patterns", override: PatternOverride{Patterns: []string{"x/**"}}, want: configured},
+		{name: "set_replaces_config", override: PatternOverride{Patterns: []string{"x/**"}, Set: true}, want: []string{"x/**"}},
+		{name: "set_without_patterns_disables", override: PatternOverride{Set: true}, want: nil, wantDisabled: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tt.override.Resolve(configured); !slices.Equal(got, tt.want) {
+				t.Errorf("Resolve = %v, want %v", got, tt.want)
+			}
+			if got := tt.override.Disabled(); got != tt.wantDisabled {
+				t.Errorf("Disabled = %v, want %v", got, tt.wantDisabled)
+			}
+		})
 	}
 }

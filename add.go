@@ -27,6 +27,28 @@ const (
 	minConfigCopyGitMinor = 36
 )
 
+// PatternOverride overrides a pattern setting for one twig add run. The zero
+// value keeps the configured patterns. With Set, Patterns replace them, and
+// no Patterns disables the setting, also resetting the value the new
+// worktree would inherit from the source worktree.
+type PatternOverride struct {
+	Patterns []string
+	Set      bool
+}
+
+// Resolve returns the patterns to apply in place of configured.
+func (o PatternOverride) Resolve(configured []string) []string {
+	if !o.Set {
+		return configured
+	}
+	return o.Patterns
+}
+
+// Disabled reports whether the override turns the setting off.
+func (o PatternOverride) Disabled() bool {
+	return o.Set && len(o.Patterns) == 0
+}
+
 // AddCommand creates git worktrees with symlinks.
 type AddCommand struct {
 	FS                 FileSystem
@@ -40,10 +62,8 @@ type AddCommand struct {
 	LockReason         string
 	InitSubmodules     bool
 	SubmoduleReference bool
-	LFSFetchExclude    []string
-	NoLFSFetchExclude  bool
-	SparseCheckout     []string
-	NoSparseCheckout   bool
+	LFSFetchExclude    PatternOverride
+	SparseCheckout     PatternOverride
 
 	gitVersion *[2]int // major and minor, cached by gitAtLeast
 }
@@ -57,10 +77,8 @@ type AddOptions struct {
 	LockReason         string
 	InitSubmodules     bool
 	SubmoduleReference bool
-	LFSFetchExclude    []string // non-empty: replaces lfs_fetch_exclude for this run
-	NoLFSFetchExclude  bool     // disable lfs_fetch_exclude and reset an inherited one
-	SparseCheckout     []string // non-empty: replaces sparse_checkout for this run
-	NoSparseCheckout   bool     // disable sparse_checkout and reset an inherited one
+	LFSFetchExclude    PatternOverride
+	SparseCheckout     PatternOverride
 }
 
 // NewAddCommand creates an AddCommand with explicit dependencies (for testing).
@@ -81,9 +99,7 @@ func NewAddCommand(fs FileSystem, git *GitRunner, cfg *Config, log *slog.Logger,
 		InitSubmodules:     opts.InitSubmodules,
 		SubmoduleReference: opts.SubmoduleReference,
 		LFSFetchExclude:    opts.LFSFetchExclude,
-		NoLFSFetchExclude:  opts.NoLFSFetchExclude,
 		SparseCheckout:     opts.SparseCheckout,
-		NoSparseCheckout:   opts.NoSparseCheckout,
 	}
 }
 
@@ -275,8 +291,8 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	wtPath := filepath.Join(c.Config.WorktreeDestBaseDir, name)
 	result.WorktreePath = wtPath
 
-	lfsFetchExclude := overridePatterns(c.Config.LFSFetchExclude, c.LFSFetchExclude, c.NoLFSFetchExclude)
-	sparseCheckout := overridePatterns(c.Config.SparseCheckout, c.SparseCheckout, c.NoSparseCheckout)
+	lfsFetchExclude := c.LFSFetchExclude.Resolve(c.Config.LFSFetchExclude)
+	sparseCheckout := c.SparseCheckout.Resolve(c.Config.SparseCheckout)
 	for _, p := range lfsFetchExclude {
 		if strings.TrimSpace(p) == "" {
 			return result, fmt.Errorf("lfs_fetch_exclude pattern must not be empty")
@@ -306,7 +322,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		sparseCheckout:  sparseCheckout,
 		lfsFetchExclude: strings.Join(lfsFetchExclude, ","),
 	}
-	if c.NoLFSFetchExclude || c.NoSparseCheckout || plan.lfsFetchExclude != "" {
+	if c.LFSFetchExclude.Disabled() || c.SparseCheckout.Disabled() || plan.lfsFetchExclude != "" {
 		var err error
 		plan.worktreeConfig, err = c.Git.WorktreeConfigEnabled(ctx)
 		if err != nil {
@@ -316,13 +332,13 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	// git worktree add copies the source worktree's config.worktree into the
 	// new worktree. That inheritance is kept unless a --no-* flag turns the
 	// setting off.
-	if (c.NoLFSFetchExclude || c.NoSparseCheckout) && plan.worktreeConfig {
+	if (c.LFSFetchExclude.Disabled() || c.SparseCheckout.Disabled()) && plan.worktreeConfig {
 		inherited, err := c.inheritedCheckoutConfig(ctx)
 		if err != nil {
 			return result, err
 		}
-		plan.resetSparse = c.NoSparseCheckout && inherited.SparseCheckout
-		plan.resetLFS = c.NoLFSFetchExclude && inherited.LFSFetchExclude != ""
+		plan.resetSparse = c.SparseCheckout.Disabled() && inherited.SparseCheckout
+		plan.resetLFS = c.LFSFetchExclude.Disabled() && inherited.LFSFetchExclude != ""
 	}
 
 	// Runs worktree add and the first checkout. -c reaches the git-lfs smudge
@@ -331,7 +347,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	switch {
 	case plan.lfsFetchExclude != "":
 		checkoutGit = c.Git.WithConfig(lfsFetchExcludeKey, plan.lfsFetchExclude)
-	case c.NoLFSFetchExclude:
+	case c.LFSFetchExclude.Disabled():
 		// The empty value also overrides .lfsconfig and the shared or global
 		// config, which resetting config.worktree cannot reach.
 		checkoutGit = c.Git.WithConfig(lfsFetchExcludeKey, "")
@@ -614,19 +630,6 @@ func (c *AddCommand) createWorktree(ctx context.Context, addGit *GitRunner, bran
 	}
 
 	return output, !exists, nil
-}
-
-// overridePatterns resolves a pattern setting for one run: disable wins, then
-// patterns given on the command line replace the configured ones.
-func overridePatterns(configured, override []string, disable bool) []string {
-	switch {
-	case disable:
-		return nil
-	case len(override) > 0:
-		return override
-	default:
-		return configured
-	}
 }
 
 // removeCreatedWorktree undoes createWorktree after a later step fails.

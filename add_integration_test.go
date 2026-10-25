@@ -2339,9 +2339,9 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		t.Helper()
 
 		return newAddCommandWith(t, mainDir, lfsFetchExclude, sparseCheckout, AddOptions{
-			CarryFrom:         carryFrom,
-			NoLFSFetchExclude: disableAll,
-			NoSparseCheckout:  disableAll,
+			CarryFrom:       carryFrom,
+			LFSFetchExclude: PatternOverride{Set: disableAll},
+			SparseCheckout:  PatternOverride{Set: disableAll},
 		})
 	}
 
@@ -2606,7 +2606,7 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 
 		repoDir, mainDir := setupLFSRepo(t)
 
-		cmd := newAddCommandWith(t, mainDir, lfsFetchExclude, sparseCheckout, AddOptions{NoSparseCheckout: true})
+		cmd := newAddCommandWith(t, mainDir, lfsFetchExclude, sparseCheckout, AddOptions{SparseCheckout: PatternOverride{Set: true}})
 		if _, err := cmd.Run(t.Context(), "feat/no-sparse"); err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
@@ -2626,8 +2626,8 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		repoDir, mainDir := setupLFSRepo(t)
 
 		cmd := newAddCommandWith(t, mainDir, lfsFetchExclude, sparseCheckout, AddOptions{
-			LFSFetchExclude: []string{"other/**"},
-			SparseCheckout:  []string{"/*", "!/README"},
+			LFSFetchExclude: PatternOverride{Patterns: []string{"other/**"}, Set: true},
+			SparseCheckout:  PatternOverride{Patterns: []string{"/*", "!/README"}, Set: true},
 		})
 		if _, err := cmd.Run(t.Context(), "feat/flags"); err != nil {
 			t.Fatalf("Run failed: %v", err)
@@ -2663,7 +2663,7 @@ func TestAddCommand_CheckoutSettings_Integration(t *testing.T) {
 		testutil.RunGit(t, mainDir, "add", ".lfsconfig")
 		testutil.RunGit(t, mainDir, "commit", "-m", "add lfsconfig")
 
-		cmd := newAddCommandWith(t, mainDir, nil, nil, AddOptions{NoLFSFetchExclude: true})
+		cmd := newAddCommandWith(t, mainDir, nil, nil, AddOptions{LFSFetchExclude: PatternOverride{Set: true}})
 		if _, err := cmd.Run(t.Context(), "feat/lfsconfig"); err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
