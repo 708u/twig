@@ -332,9 +332,9 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 
 	plan := checkoutPlan{
 		sparseCheckout:  sparseCheckout,
-		lfsFetchExclude: strings.Join(lfsFetchExclude, ","),
+		lfsFetchExclude: lfsFetchExclude,
 	}
-	if c.LFSFetchExclude.Disabled() || c.SparseCheckout.Disabled() || plan.lfsFetchExclude != "" {
+	if c.LFSFetchExclude.Disabled() || c.SparseCheckout.Disabled() || len(plan.lfsFetchExclude) > 0 {
 		var err error
 		plan.worktreeConfig, err = c.Git.WorktreeConfigEnabled(ctx)
 		if err != nil {
@@ -357,8 +357,8 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 	// filter, so excluded LFS files are written as pointers.
 	checkoutGit := c.Git
 	switch {
-	case plan.lfsFetchExclude != "":
-		checkoutGit = c.Git.WithConfig(lfsFetchExcludeKey, plan.lfsFetchExclude)
+	case len(plan.lfsFetchExclude) > 0:
+		checkoutGit = c.Git.WithConfig(lfsFetchExcludeKey, plan.lfsFetchExcludeValue())
 	case c.LFSFetchExclude.Disabled():
 		// The empty value also overrides .lfsconfig and the shared or global
 		// config, which resetting config.worktree cannot reach.
@@ -435,7 +435,7 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 			return result, rollbackError(err, rbErr)
 		}
 		result.LFSFetchExclude = lfsFetchExclude
-		result.LFSFetchExcludeInitialOnly = plan.lfsFetchExclude != "" && !plan.persistLFS()
+		result.LFSFetchExcludeInitialOnly = len(plan.lfsFetchExclude) > 0 && !plan.persistLFS()
 		result.SparseCheckout = sparseCheckout
 	}
 
@@ -523,14 +523,21 @@ func (c *AddCommand) runHooks(ctx context.Context, dir string) []HookResult {
 // plain git worktree add.
 type checkoutPlan struct {
 	sparseCheckout  []string
-	lfsFetchExclude string // comma-joined lfs_fetch_exclude
-	worktreeConfig  bool   // extensions.worktreeConfig before the worktree is added
-	resetSparse     bool   // sparse checkout inherited from the source worktree
-	resetLFS        bool   // lfs.fetchexclude inherited from the source worktree
+	lfsFetchExclude []string
+	worktreeConfig  bool // extensions.worktreeConfig before the worktree is added
+	resetSparse     bool // sparse checkout inherited from the source worktree
+	resetLFS        bool // lfs.fetchexclude inherited from the source worktree
 }
 
 func (p checkoutPlan) active() bool {
-	return len(p.sparseCheckout) > 0 || p.lfsFetchExclude != "" || p.resetSparse || p.resetLFS
+	return len(p.sparseCheckout) > 0 || len(p.lfsFetchExclude) > 0 || p.resetSparse || p.resetLFS
+}
+
+// lfsFetchExcludeValue encodes the patterns as the single lfs.fetchexclude
+// value git-lfs reads, a comma-separated list. git-lfs reads only the last
+// value of a key set more than once, so the patterns cannot be separate values.
+func (p checkoutPlan) lfsFetchExcludeValue() string {
+	return strings.Join(p.lfsFetchExclude, ",")
 }
 
 // persistLFS reports whether git config --worktree can keep lfs.fetchexclude.
@@ -563,11 +570,11 @@ func (c *AddCommand) applyCheckoutSettings(ctx context.Context, wtGit *GitRunner
 	// linked worktree exists, and twig does not enable it because that
 	// rewrites repository-wide config.
 	switch {
-	case p.lfsFetchExclude != "" && p.persistLFS():
-		if _, err := wtGit.SetWorktreeConfig(ctx, lfsFetchExcludeKey, p.lfsFetchExclude); err != nil {
+	case len(p.lfsFetchExclude) > 0 && p.persistLFS():
+		if _, err := wtGit.SetWorktreeConfig(ctx, lfsFetchExcludeKey, p.lfsFetchExcludeValue()); err != nil {
 			return fmt.Errorf("failed to set %s: %w", lfsFetchExcludeKey, withGitStderr(err))
 		}
-	case p.lfsFetchExclude != "":
+	case len(p.lfsFetchExclude) > 0:
 		c.Log.DebugContext(ctx, "skip worktree config: extensions.worktreeConfig is not enabled",
 			"key", lfsFetchExcludeKey)
 	case p.resetLFS:
