@@ -132,6 +132,29 @@ func WithCommandIDGenerator(gen func() string) Option {
 const carryFromCurrent = "<current>"
 
 // resolveCarryFrom resolves the --carry flag value to a worktree path.
+// patternOverrideFlags reads the patterns flag and the disable flag into a
+// PatternOverride. Without either flag, the configured patterns are kept.
+func patternOverrideFlags(cmd *cobra.Command, patternsFlag, disableFlag string) (twig.PatternOverride, error) {
+	patterns, err := cmd.Flags().GetStringArray(patternsFlag)
+	if err != nil {
+		return twig.PatternOverride{}, err
+	}
+	disable, err := cmd.Flags().GetBool(disableFlag)
+	if err != nil {
+		return twig.PatternOverride{}, err
+	}
+	switch {
+	case len(patterns) > 0 && disable:
+		return twig.PatternOverride{}, fmt.Errorf("--%s cannot be used with --%s", patternsFlag, disableFlag)
+	case disable:
+		return twig.PatternOverride{Set: true}, nil
+	case len(patterns) > 0:
+		return twig.PatternOverride{Patterns: patterns, Set: true}, nil
+	default:
+		return twig.PatternOverride{}, nil
+	}
+}
+
 func resolveCarryFrom(ctx context.Context, carryValue, originalCwd string, git *twig.GitRunner) (string, error) {
 	switch carryValue {
 	case carryFromCurrent:
@@ -348,6 +371,15 @@ Use --file with --sync or --carry to target specific files:
 			// --submodule-reference forces enable, otherwise use config
 			submoduleReference := cmd.Flags().Changed("submodule-reference")
 
+			lfsFetchExclude, err := patternOverrideFlags(cmd, "lfs-fetch-exclude", "no-lfs-fetch-exclude")
+			if err != nil {
+				return err
+			}
+			sparseCheckout, err := patternOverrideFlags(cmd, "sparse-checkout", "no-sparse-checkout")
+			if err != nil {
+				return err
+			}
+
 			// --reason requires --lock
 			if lockReason != "" && !lock {
 				return fmt.Errorf("--reason requires --lock")
@@ -383,6 +415,8 @@ Use --file with --sync or --carry to target specific files:
 					LockReason:         lockReason,
 					InitSubmodules:     initSubmodules,
 					SubmoduleReference: submoduleReference,
+					LFSFetchExclude:    lfsFetchExclude,
+					SparseCheckout:     sparseCheckout,
 				})
 			}
 			result, err := addCmd.Run(cmd.Context(), args[0])
@@ -667,6 +701,10 @@ stop processing of remaining branches.`,
 	addCmd.Flags().StringArrayP("file", "F", nil, "File patterns to sync/carry (requires --sync or --carry)")
 	addCmd.Flags().Bool("init-submodules", false, "Initialize submodules in new worktree")
 	addCmd.Flags().Bool("submodule-reference", false, "Use main worktree as reference for submodule init")
+	addCmd.Flags().StringArray("lfs-fetch-exclude", nil, "LFS path pattern to leave as pointers, replacing lfs_fetch_exclude (repeatable)")
+	addCmd.Flags().Bool("no-lfs-fetch-exclude", false, "Check out all LFS files, ignoring lfs_fetch_exclude")
+	addCmd.Flags().StringArray("sparse-checkout", nil, "Sparse checkout pattern, replacing sparse_checkout (repeatable)")
+	addCmd.Flags().Bool("no-sparse-checkout", false, "Check out all paths, ignoring sparse_checkout")
 	addCmd.RegisterFlagCompletionFunc("file", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		// Resolve target directory from -C flag
 		dir, err := resolveCompletionDirectory(cmd)

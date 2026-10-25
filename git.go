@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -47,6 +49,13 @@ const (
 	GitCmdReset      = "reset"
 	GitCmdMergeBase  = "merge-base"
 	GitCmdCommitTree = "commit-tree"
+)
+
+// Git command names used to set up a new worktree.
+const (
+	GitCmdSparseCheckout = "sparse-checkout"
+	GitCmdConfig         = "config"
+	GitCmdVersion        = "version"
 )
 
 // Git worktree subcommands.
@@ -115,11 +124,33 @@ func newGitError(op GitOp, err error) *GitError {
 		Op:  op,
 		Err: err,
 	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
-		gitErr.Stderr = strings.TrimSpace(string(exitErr.Stderr))
-	}
+	gitErr.Stderr = gitStderr(err)
 	return gitErr
+}
+
+// gitStderr returns the trimmed stderr captured in an exec.ExitError.
+func gitStderr(err error) string {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return strings.TrimSpace(string(exitErr.Stderr))
+	}
+	return ""
+}
+
+// withGitStderr appends git's stderr to err, which exec.ExitError leaves out
+// of its message.
+func withGitStderr(err error) error {
+	if stderr := gitStderr(err); stderr != "" {
+		return fmt.Errorf("%w: %s", err, stderr)
+	}
+	return err
+}
+
+// isExitCode reports whether err is git exiting with code, as opposed to
+// failing to run.
+func isExitCode(err error, code int) bool {
+	var exitErr interface{ ExitCode() int }
+	return errors.As(err, &exitErr) && exitErr.ExitCode() == code
 }
 
 // GitRunner provides git operations using GitExecutor.
@@ -127,6 +158,19 @@ type GitRunner struct {
 	Executor GitExecutor
 	Dir      string
 	Log      *slog.Logger
+
+	configs []gitConfigOverride // passed as -c to every command
+}
+
+// gitConfigOverride is one -c option. An empty value sets the key to the
+// empty string, which differs from passing the key alone.
+type gitConfigOverride struct {
+	key   string
+	value string
+}
+
+func (o gitConfigOverride) arg() string {
+	return o.key + "=" + o.value
 }
 
 type gitRunnerOptions struct {
@@ -160,20 +204,40 @@ func NewGitRunner(dir string, opts ...GitRunnerOption) *GitRunner {
 
 // InDir returns a GitRunner that executes commands in the specified directory.
 func (g *GitRunner) InDir(dir string) *GitRunner {
-	return &GitRunner{Executor: g.Executor, Dir: dir, Log: g.Log}
+	return &GitRunner{Executor: g.Executor, Dir: dir, Log: g.Log, configs: g.configs}
+}
+
+// WithConfig returns a GitRunner that passes -c key=value to every command.
+// The value applies only to the spawned git process and its children
+// (e.g. LFS filters), leaving repository config untouched.
+func (g *GitRunner) WithConfig(key, value string) *GitRunner {
+	configs := append(slices.Clone(g.configs), gitConfigOverride{key: key, value: value})
+	return &GitRunner{Executor: g.Executor, Dir: g.Dir, Log: g.Log, configs: configs}
 }
 
 // Run executes git command with -C flag.
 func (g *GitRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
-	fullArgs := append([]string{"-C", g.Dir}, args...)
+	fullArgs := []string{"-C", g.Dir}
+	for _, o := range g.configs {
+		fullArgs = append(fullArgs, "-c", o.arg())
+	}
+	fullArgs = append(fullArgs, args...)
 	g.Log.Debug(strings.Join(append([]string{"git"}, fullArgs...), " "), "category", LogCategoryGit)
 	return g.Executor.Run(ctx, fullArgs...)
 }
 
 type worktreeAddOptions struct {
 	createBranch bool
+	noCheckout   bool
 	lock         bool
 	lockReason   string
+}
+
+func (o worktreeAddOptions) checkoutArgs() []string {
+	if o.noCheckout {
+		return []string{"--no-checkout"}
+	}
+	return nil
 }
 
 func (o worktreeAddOptions) lockArgs() []string {
@@ -193,6 +257,14 @@ type WorktreeAddOption func(*worktreeAddOptions)
 func WithCreateBranch() WorktreeAddOption {
 	return func(o *worktreeAddOptions) {
 		o.createBranch = true
+	}
+}
+
+// WithNoCheckout skips populating the working tree, leaving room to
+// configure sparse checkout before the first checkout.
+func WithNoCheckout() WorktreeAddOption {
+	return func(o *worktreeAddOptions) {
+		o.noCheckout = true
 	}
 }
 
@@ -561,8 +633,11 @@ func (g *GitRunner) StashPush(ctx context.Context, message string, pathspecs ...
 }
 
 // StashApplyByHash applies the stash with the given hash without dropping it.
+// The stash holds the user's own edits, but an lfs.fetchexclude in the
+// worktree's config makes git-lfs write matching files back as pointers.
+// The empty -c value lifts it for this command only.
 func (g *GitRunner) StashApplyByHash(ctx context.Context, hash string) ([]byte, error) {
-	return g.Run(ctx, GitCmdStash, GitStashApply, hash)
+	return g.WithConfig(lfsFetchExcludeKey, "").Run(ctx, GitCmdStash, GitStashApply, hash)
 }
 
 // StashPopByHash applies and drops the stash with the given hash.
@@ -592,6 +667,7 @@ func (g *GitRunner) StashDropByHash(ctx context.Context, hash string) ([]byte, e
 
 func (g *GitRunner) worktreeAdd(ctx context.Context, path, branch string, o worktreeAddOptions) ([]byte, error) {
 	args := []string{GitCmdWorktree, GitWorktreeAdd}
+	args = append(args, o.checkoutArgs()...)
 	args = append(args, o.lockArgs()...)
 	args = append(args, path, branch)
 	return g.Run(ctx, args...)
@@ -599,6 +675,7 @@ func (g *GitRunner) worktreeAdd(ctx context.Context, path, branch string, o work
 
 func (g *GitRunner) worktreeAddWithNewBranch(ctx context.Context, branch, path string, o worktreeAddOptions) ([]byte, error) {
 	args := []string{GitCmdWorktree, GitWorktreeAdd}
+	args = append(args, o.checkoutArgs()...)
 	args = append(args, o.lockArgs()...)
 	args = append(args, "-b", branch, path)
 	return g.Run(ctx, args...)
@@ -1046,6 +1123,136 @@ func (g *GitRunner) MainWorktreePath(ctx context.Context) (string, error) {
 	return filepath.Dir(gitDir), nil
 }
 
+// GitVersion is a git release, compared by major and minor version.
+type GitVersion struct {
+	Major int
+	Minor int
+}
+
+// AtLeast reports whether v is required or later.
+func (v GitVersion) AtLeast(required GitVersion) bool {
+	return v.Major > required.Major || (v.Major == required.Major && v.Minor >= required.Minor)
+}
+
+// IsZero reports whether v is unset. No git release has major version 0.
+func (v GitVersion) IsZero() bool {
+	return v == GitVersion{}
+}
+
+func (v GitVersion) String() string {
+	return fmt.Sprintf("%d.%d", v.Major, v.Minor)
+}
+
+// Version returns the major and minor version of git.
+func (g *GitRunner) Version(ctx context.Context) (GitVersion, error) {
+	out, err := g.Run(ctx, GitCmdVersion)
+	if err != nil {
+		return GitVersion{}, err
+	}
+	unexpected := fmt.Errorf("unexpected git version output: %q", out)
+	// Vendor builds append suffixes: "git version 2.39.5 (Apple Git-154)",
+	// "git version 2.45.1.windows.1".
+	fields := strings.Fields(string(out))
+	if len(fields) < 3 {
+		return GitVersion{}, unexpected
+	}
+	parts := strings.Split(fields[2], ".")
+	if len(parts) < 2 {
+		return GitVersion{}, unexpected
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return GitVersion{}, unexpected
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return GitVersion{}, unexpected
+	}
+	return GitVersion{Major: major, Minor: minor}, nil
+}
+
+// SparseCheckoutSet sets non-cone sparse checkout patterns for the worktree.
+// git enables extensions.worktreeConfig for the repository as a side effect.
+func (g *GitRunner) SparseCheckoutSet(ctx context.Context, patterns []string) ([]byte, error) {
+	args := append([]string{GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options"}, patterns...)
+	return g.Run(ctx, args...)
+}
+
+// CheckoutHEAD populates a worktree created with WithNoCheckout.
+// Without an index, git treats this as the initial checkout and writes every
+// file allowed by the sparse checkout patterns. Submodules are left alone,
+// as git worktree add does, regardless of submodule.recurse.
+func (g *GitRunner) CheckoutHEAD(ctx context.Context) ([]byte, error) {
+	return g.Run(ctx, GitCmdCheckout, "--no-recurse-submodules")
+}
+
+// WorktreeConfigEnabled reports whether extensions.worktreeConfig is true,
+// which is required for `git config --worktree` to stay per-worktree.
+// git honors extensions only in the repository config, hence --local.
+func (g *GitRunner) WorktreeConfigEnabled(ctx context.Context) (bool, error) {
+	out, err := g.Run(ctx, GitCmdConfig, "--local", "--bool", "--get", "extensions.worktreeConfig")
+	if err != nil {
+		// git config --get exits 1 when the key is not set
+		if isExitCode(err, 1) {
+			return false, nil
+		}
+		return false, err
+	}
+	return strings.TrimSpace(string(out)) == "true", nil
+}
+
+// WorktreeCheckoutConfig holds the checkout-related keys of a worktree's
+// config.worktree.
+type WorktreeCheckoutConfig struct {
+	SparseCheckout  bool
+	LFSFetchExclude string
+}
+
+// WorktreeCheckoutConfig reads core.sparseCheckout and lfs.fetchexclude from
+// the worktree-specific config. Call only when extensions.worktreeConfig is
+// enabled; otherwise git reads the shared config instead.
+func (g *GitRunner) WorktreeCheckoutConfig(ctx context.Context) (WorktreeCheckoutConfig, error) {
+	var cfg WorktreeCheckoutConfig
+	// --bool applies git's own boolean rules, including a valueless key
+	out, err := g.Run(ctx, GitCmdConfig, "--worktree", "--bool", "--get", "core.sparseCheckout")
+	if err != nil && !isExitCode(err, 1) {
+		return cfg, err
+	}
+	cfg.SparseCheckout = strings.TrimSpace(string(out)) == "true"
+
+	out, err = g.Run(ctx, GitCmdConfig, "--worktree", "--get-all", lfsFetchExcludeKey)
+	if err != nil && !isExitCode(err, 1) {
+		return cfg, err
+	}
+	cfg.LFSFetchExclude = strings.TrimSpace(string(out))
+	return cfg, nil
+}
+
+// SparseCheckoutDisable turns off sparse checkout for the worktree.
+func (g *GitRunner) SparseCheckoutDisable(ctx context.Context) ([]byte, error) {
+	return g.Run(ctx, GitCmdSparseCheckout, "disable")
+}
+
+// UnsetWorktreeConfig removes every value of key from the worktree-specific
+// config. A missing key is not an error.
+func (g *GitRunner) UnsetWorktreeConfig(ctx context.Context, key string) ([]byte, error) {
+	out, err := g.Run(ctx, GitCmdConfig, "--worktree", "--unset-all", key)
+	if err != nil {
+		// git config --unset-all exits 5 when the key is not set
+		if isExitCode(err, 5) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
+// SetWorktreeConfig writes key=value to the worktree-specific config,
+// replacing every existing value of key.
+func (g *GitRunner) SetWorktreeConfig(ctx context.Context, key, value string) ([]byte, error) {
+	return g.Run(ctx, GitCmdConfig, "--worktree", "--replace-all", key, value)
+}
+
 // IsAncestor reports whether commit is reachable from target, including
 // reachability through the second parent of a merge commit.
 //
@@ -1056,8 +1263,7 @@ func (g *GitRunner) MainWorktreePath(ctx context.Context) (string, error) {
 func (g *GitRunner) IsAncestor(ctx context.Context, commit, target string) (bool, error) {
 	if _, err := g.Run(ctx, GitCmdMergeBase, "--is-ancestor", commit, target); err != nil {
 		// git reports "not an ancestor" as exit 1; other codes are real failures
-		var exitErr interface{ ExitCode() int }
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		if isExitCode(err, 1) {
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to check ancestry: %w", err)

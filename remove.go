@@ -501,27 +501,36 @@ func (c *RemoveCommand) removePrunable(ctx context.Context, branch string, opts 
 // Returns the list of directories that were removed. Errors are ignored since
 // cleanup failures should not fail the overall remove operation.
 func (c *RemoveCommand) cleanupEmptyParentDirs(ctx context.Context, wtPath string) []string {
+	cleaned := removeEmptyParentDirs(c.FS, c.Config.WorktreeDestBaseDir, wtPath)
+	for _, dir := range cleaned {
+		c.Log.DebugContext(ctx, "removed empty dir",
+			"category", LogCategoryRemove,
+			"dir", dir)
+	}
+	return cleaned
+}
+
+// removeEmptyParentDirs removes the empty parent directories of wtPath below
+// baseDir, stopping at the first directory that is not empty or cannot be
+// removed. Returns the removed directories.
+func removeEmptyParentDirs(fs FileSystem, baseDir, wtPath string) []string {
 	var cleaned []string
-	baseDir := c.Config.WorktreeDestBaseDir
 	if baseDir == "" {
 		return cleaned
 	}
 
 	current := filepath.Dir(wtPath)
 	for current != baseDir && strings.HasPrefix(current, baseDir) {
-		entries, err := c.FS.ReadDir(current)
+		entries, err := fs.ReadDir(current)
 		if err != nil {
 			break
 		}
 		if len(entries) > 0 {
 			break
 		}
-		if err := c.FS.Remove(current); err != nil {
+		if err := fs.Remove(current); err != nil {
 			break
 		}
-		c.Log.DebugContext(ctx, "removed empty dir",
-			"category", LogCategoryRemove,
-			"dir", current)
 		cleaned = append(cleaned, current)
 		current = filepath.Dir(current)
 	}

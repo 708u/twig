@@ -1,6 +1,7 @@
 package twig
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"path/filepath"
@@ -1254,4 +1255,590 @@ func TestAddResult_Format_Hooks(t *testing.T) {
 			t.Errorf("Stdout = %q, want %q", got.Stdout, want)
 		}
 	})
+}
+
+// checkoutSettingsExecutor records every git command (without -C) and answers
+// the commands that MockGitExecutor does not model.
+type checkoutSettingsExecutor struct {
+	inner             *testutil.MockGitExecutor
+	version           string
+	worktreeConfig    bool
+	inheritedConfig   string // "key value" lines of the source config.worktree
+	sparseCheckoutErr error
+	calls             [][]string
+}
+
+func (e *checkoutSettingsExecutor) Run(ctx context.Context, args ...string) ([]byte, error) {
+	cmd := args
+	if len(cmd) >= 2 && cmd[0] == "-C" {
+		cmd = cmd[2:]
+	}
+	e.calls = append(e.calls, cmd)
+
+	sub := cmd
+	for len(sub) >= 2 && sub[0] == "-c" {
+		sub = sub[2:]
+	}
+	switch {
+	case len(sub) > 0 && sub[0] == GitCmdVersion:
+		return []byte("git version " + e.version + "\n"), nil
+	case slices.Equal(sub, []string{GitCmdConfig, "--local", "--bool", "--get", "extensions.worktreeConfig"}):
+		if !e.worktreeConfig {
+			return nil, &testutil.MockExitError{Code: 1}
+		}
+		return []byte("true\n"), nil
+	case slices.Equal(sub, []string{GitCmdConfig, "--worktree", "--bool", "--get", "core.sparseCheckout"}):
+		return e.inheritedValues("core.sparsecheckout")
+	case slices.Equal(sub, []string{GitCmdConfig, "--worktree", "--get-all", "lfs.fetchexclude"}):
+		return e.inheritedValues("lfs.fetchexclude")
+	case len(sub) > 0 && sub[0] == GitCmdSparseCheckout:
+		return nil, e.sparseCheckoutErr
+	}
+	return e.inner.Run(ctx, args...)
+}
+
+// inheritedValues answers git config --get-all for key from inheritedConfig,
+// exiting 1 like git when the key is absent.
+func (e *checkoutSettingsExecutor) inheritedValues(key string) ([]byte, error) {
+	var values []string
+	for line := range strings.SplitSeq(e.inheritedConfig, "\n") {
+		if k, v, ok := strings.Cut(line, " "); ok && k == key {
+			values = append(values, v)
+		}
+	}
+	if len(values) == 0 {
+		return nil, &testutil.MockExitError{Code: 1}
+	}
+	return []byte(strings.Join(values, "\n") + "\n"), nil
+}
+
+// find returns the index of the first recorded call that starts with prefix
+// after skipping -c options, or -1.
+func (e *checkoutSettingsExecutor) find(prefix ...string) int {
+	for i, call := range e.calls {
+		sub := call
+		for len(sub) >= 2 && sub[0] == "-c" {
+			sub = sub[2:]
+		}
+		if len(sub) >= len(prefix) && slices.Equal(sub[:len(prefix)], prefix) {
+			return i
+		}
+	}
+	return -1
+}
+
+func TestAddCommand_Run_CheckoutSettings(t *testing.T) {
+	t.Parallel()
+
+	const (
+		lfsArg       = "lfs.fetchexclude=assets/**,images/**"
+		noLFSArg     = "lfs.fetchexclude="
+		inheritedCfg = "core.sparsecheckout true\nlfs.fetchexclude big/**\n"
+	)
+	setLFS := []string{GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude"}
+
+	tests := []struct {
+		name            string
+		lfsFetchExclude []string
+		sparseCheckout  []string
+		lfsOverride     PatternOverride
+		sparseOverride  PatternOverride
+		version         string
+		worktreeConfig  bool
+		inheritedConfig string
+		// wantCalls lists command prefixes that must appear in this order.
+		wantCalls [][]string
+		// wantAbsent lists command prefixes that must not appear.
+		wantAbsent [][]string
+		wantErr    string
+	}{
+		{
+			name:            "lfs_fetch_exclude_only",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			wantCalls: [][]string{
+				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
+			},
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
+				{GitCmdSparseCheckout},
+				setLFS,
+				{GitCmdCheckout},
+			},
+		},
+		{
+			name:            "lfs_fetch_exclude_kept_when_worktree_config_enabled",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			worktreeConfig:  true,
+			wantCalls: [][]string{
+				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
+				{"-c", lfsArg, GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "assets/**,images/**"},
+			},
+			wantAbsent: [][]string{
+				{GitCmdSparseCheckout},
+			},
+		},
+		{
+			name:           "sparse_checkout_only",
+			sparseCheckout: []string{"/*", "!/plans/"},
+			wantCalls: [][]string{
+				{GitCmdVersion},
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/plans/"},
+				{GitCmdCheckout, "--no-recurse-submodules"},
+			},
+			wantAbsent: [][]string{
+				{"-c"},
+				setLFS,
+			},
+		},
+		{
+			name:            "both",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			wantCalls: [][]string{
+				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{"-c", lfsArg, GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/plans/"},
+				{"-c", lfsArg, GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "assets/**,images/**"},
+				{"-c", lfsArg, GitCmdCheckout},
+			},
+		},
+		{
+			name:            "no_flags_ignore_both",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			worktreeConfig:  true,
+			lfsOverride:     PatternOverride{Set: true},
+			sparseOverride:  PatternOverride{Set: true},
+			wantCalls: [][]string{
+				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
+			},
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
+				{GitCmdSparseCheckout},
+				setLFS,
+			},
+		},
+		{
+			name:            "no_flags_reset_inherited_settings",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			worktreeConfig:  true,
+			inheritedConfig: inheritedCfg,
+			lfsOverride:     PatternOverride{Set: true},
+			sparseOverride:  PatternOverride{Set: true},
+			wantCalls: [][]string{
+				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{"-c", noLFSArg, GitCmdSparseCheckout, "disable"},
+				{"-c", noLFSArg, GitCmdConfig, "--worktree", "--unset-all", "lfs.fetchexclude"},
+				{"-c", noLFSArg, GitCmdCheckout},
+			},
+			wantAbsent: [][]string{
+				{GitCmdSparseCheckout, "set"},
+			},
+		},
+		{
+			name:            "settings_override_inherited_values",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			worktreeConfig:  true,
+			inheritedConfig: inheritedCfg,
+			wantCalls: [][]string{
+				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{"-c", lfsArg, GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/plans/"},
+				{"-c", lfsArg, GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "assets/**,images/**"},
+				{"-c", lfsArg, GitCmdCheckout},
+			},
+			wantAbsent: [][]string{
+				{GitCmdSparseCheckout, "disable"},
+				{GitCmdConfig, "--worktree", "--unset-all"},
+			},
+		},
+		{
+			name:            "inherited_settings_kept_without_no_flags",
+			worktreeConfig:  true,
+			inheritedConfig: inheritedCfg,
+			wantCalls: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd, "-b"},
+			},
+			wantAbsent: [][]string{
+				{GitCmdConfig},
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
+				{GitCmdSparseCheckout},
+				{GitCmdCheckout},
+			},
+		},
+		{
+			name:            "no_flags_skip_reset_when_git_does_not_copy_config",
+			worktreeConfig:  true,
+			inheritedConfig: inheritedCfg,
+			lfsOverride:     PatternOverride{Set: true},
+			sparseOverride:  PatternOverride{Set: true},
+			version:         "2.35.1",
+			wantCalls: [][]string{
+				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
+			},
+			wantAbsent: [][]string{
+				{GitCmdConfig, "--worktree"},
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
+				{GitCmdSparseCheckout},
+			},
+		},
+		{
+			name:            "no_sparse_checkout_keeps_disabled_sparse_checkout",
+			worktreeConfig:  true,
+			inheritedConfig: "core.sparsecheckout false\n",
+			sparseOverride:  PatternOverride{Set: true},
+			wantCalls: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd, "-b"},
+			},
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
+				{GitCmdSparseCheckout},
+				{GitCmdCheckout},
+			},
+		},
+		{
+			name:            "no_sparse_checkout_keeps_lfs_fetch_exclude",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			worktreeConfig:  true,
+			inheritedConfig: "core.sparsecheckout true\n",
+			sparseOverride:  PatternOverride{Set: true},
+			wantCalls: [][]string{
+				{"-c", lfsArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{"-c", lfsArg, GitCmdSparseCheckout, "disable"},
+				{"-c", lfsArg, GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "assets/**,images/**"},
+				{"-c", lfsArg, GitCmdCheckout},
+			},
+			wantAbsent: [][]string{
+				{GitCmdSparseCheckout, "set"},
+				{GitCmdConfig, "--worktree", "--unset-all"},
+			},
+		},
+		{
+			name:            "no_lfs_fetch_exclude_resets_only_lfs",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			worktreeConfig:  true,
+			inheritedConfig: inheritedCfg,
+			lfsOverride:     PatternOverride{Set: true},
+			wantCalls: [][]string{
+				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{"-c", noLFSArg, GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/plans/"},
+				{"-c", noLFSArg, GitCmdConfig, "--worktree", "--unset-all", "lfs.fetchexclude"},
+				{"-c", noLFSArg, GitCmdCheckout},
+			},
+			wantAbsent: [][]string{
+				{GitCmdSparseCheckout, "disable"},
+				setLFS,
+			},
+		},
+		{
+			name:            "no_lfs_fetch_exclude_resets_inherited_lfs_without_no_checkout",
+			worktreeConfig:  true,
+			inheritedConfig: "lfs.fetchexclude big/**\n",
+			lfsOverride:     PatternOverride{Set: true},
+			wantCalls: [][]string{
+				{"-c", noLFSArg, GitCmdWorktree, GitWorktreeAdd, "-b"},
+				{"-c", noLFSArg, GitCmdConfig, "--worktree", "--unset-all", "lfs.fetchexclude"},
+			},
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd, "--no-checkout"},
+				{GitCmdSparseCheckout},
+				{GitCmdCheckout},
+			},
+		},
+		{
+			name:            "flags_replace_configured_patterns",
+			lfsFetchExclude: []string{"assets/**", "images/**"},
+			sparseCheckout:  []string{"/*", "!/plans/"},
+			lfsOverride:     PatternOverride{Patterns: []string{"videos/**"}, Set: true},
+			sparseOverride:  PatternOverride{Patterns: []string{"/*", "!/docs/"}, Set: true},
+			wantCalls: [][]string{
+				{"-c", "lfs.fetchexclude=videos/**", GitCmdWorktree, GitWorktreeAdd, "--no-checkout", "-b"},
+				{"-c", "lfs.fetchexclude=videos/**", GitCmdSparseCheckout, "set", "--no-cone", "--end-of-options", "/*", "!/docs/"},
+				{"-c", "lfs.fetchexclude=videos/**", GitCmdConfig, "--worktree", "--replace-all", "lfs.fetchexclude", "videos/**"},
+				{"-c", "lfs.fetchexclude=videos/**", GitCmdCheckout},
+			},
+		},
+		{
+			name:           "sparse_checkout_requires_git_2_36",
+			sparseCheckout: []string{"/*", "!/plans/"},
+			version:        "2.35.1",
+			wantErr:        "sparse_checkout requires git 2.36 or later (found 2.35)",
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd},
+			},
+		},
+		{
+			name:            "lfs_fetch_exclude_rejects_empty_pattern",
+			lfsFetchExclude: []string{"assets/**"},
+			lfsOverride:     PatternOverride{Patterns: []string{""}, Set: true},
+			wantErr:         "lfs_fetch_exclude pattern must not be empty",
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd},
+			},
+		},
+		{
+			name:           "sparse_checkout_rejects_empty_pattern",
+			sparseCheckout: []string{"/*", " "},
+			wantErr:        "sparse_checkout pattern must not be empty",
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd},
+			},
+		},
+		{
+			name:            "lfs_fetch_exclude_rejects_comma",
+			lfsFetchExclude: []string{"assets/{png,jpg}/**"},
+			wantErr:         "must not contain a comma",
+			wantAbsent: [][]string{
+				{GitCmdWorktree, GitWorktreeAdd},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			version := tt.version
+			if version == "" {
+				version = "2.39.5 (Apple Git-154)"
+			}
+			exec := &checkoutSettingsExecutor{
+				inner:           &testutil.MockGitExecutor{},
+				version:         version,
+				worktreeConfig:  tt.worktreeConfig,
+				inheritedConfig: tt.inheritedConfig,
+			}
+			cmd := &AddCommand{
+				FS:  &testutil.MockFS{},
+				Git: &GitRunner{Executor: exec, Log: NewNopLogger()},
+				Config: &Config{
+					WorktreeSourceDir:   "/repo/main",
+					WorktreeDestBaseDir: "/repo/main-worktree",
+					LFSFetchExclude:     tt.lfsFetchExclude,
+					SparseCheckout:      tt.sparseCheckout,
+				},
+				Log:             NewNopLogger(),
+				LFSFetchExclude: tt.lfsOverride,
+				SparseCheckout:  tt.sparseOverride,
+			}
+
+			result, err := cmd.Run(t.Context(), "feature/checkout")
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("err = %v, want containing %q", err, tt.wantErr)
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			last := -1
+			for _, want := range tt.wantCalls {
+				idx := -1
+				for i := last + 1; i < len(exec.calls); i++ {
+					call := exec.calls[i]
+					if len(call) >= len(want) && slices.Equal(call[:len(want)], want) {
+						idx = i
+						break
+					}
+				}
+				if idx < 0 {
+					t.Fatalf("call %v not found after index %d in %v", want, last, exec.calls)
+				}
+				last = idx
+			}
+			for _, absent := range tt.wantAbsent {
+				if absent[0] == "-c" {
+					for _, call := range exec.calls {
+						if slices.Contains(call, "-c") {
+							t.Errorf("unexpected -c in %v", call)
+						}
+					}
+					continue
+				}
+				if i := exec.find(absent...); i >= 0 {
+					t.Errorf("unexpected call %v", exec.calls[i])
+				}
+			}
+
+			if tt.wantErr == "" {
+				wantLFS, _ := tt.lfsOverride.Resolve(tt.lfsFetchExclude, validateLFSFetchExcludePattern)
+				wantSparse, _ := tt.sparseOverride.Resolve(tt.sparseCheckout, validateSparseCheckoutPattern)
+				if !slices.Equal(result.LFSFetchExclude, wantLFS) {
+					t.Errorf("LFSFetchExclude = %v, want %v", result.LFSFetchExclude, wantLFS)
+				}
+				if !slices.Equal(result.SparseCheckout, wantSparse) {
+					t.Errorf("SparseCheckout = %v, want %v", result.SparseCheckout, wantSparse)
+				}
+			}
+		})
+	}
+}
+
+func TestAddCommand_Run_SparseCheckoutFailureRemovesWorktree(t *testing.T) {
+	t.Parallel()
+
+	exec := &checkoutSettingsExecutor{
+		inner:             &testutil.MockGitExecutor{HasChanges: true, StashHash: "abc123"},
+		version:           "2.53.0",
+		sparseCheckoutErr: errors.New("sparse-checkout failed"),
+	}
+	var removedDirs []string
+	cmd := &AddCommand{
+		FS: &testutil.MockFS{RemoveFunc: func(name string) error {
+			removedDirs = append(removedDirs, name)
+			return nil
+		}},
+		Git: &GitRunner{Executor: exec, Log: NewNopLogger()},
+		Config: &Config{
+			WorktreeSourceDir:   "/repo/main",
+			WorktreeDestBaseDir: "/repo/main-worktree",
+			SparseCheckout:      []string{"/*"},
+		},
+		Log:  NewNopLogger(),
+		Lock: true,
+		Sync: true,
+	}
+
+	_, err := cmd.Run(t.Context(), "feature/sparse")
+	if err == nil || !strings.Contains(err.Error(), "failed to set sparse checkout") {
+		t.Fatalf("err = %v, want sparse checkout failure", err)
+	}
+	// -f -f is required to remove a worktree created with --lock
+	if exec.find(GitCmdWorktree, GitWorktreeRemove, "-f", "-f") < 0 {
+		t.Errorf("locked worktree was not force removed: %v", exec.calls)
+	}
+	if exec.find(GitCmdBranch, "-D", "feature/sparse") < 0 {
+		t.Errorf("created branch was not deleted: %v", exec.calls)
+	}
+	if exec.find(GitCmdStash, GitStashApply, "abc123") < 0 {
+		t.Errorf("stash was not restored: %v", exec.calls)
+	}
+	if !slices.Equal(removedDirs, []string{"/repo/main-worktree/feature"}) {
+		t.Errorf("removed dirs = %v, want the empty parent directory", removedDirs)
+	}
+}
+
+func TestAddResult_Format_CheckoutSettings(t *testing.T) {
+	t.Parallel()
+
+	result := AddResult{
+		Branch:          "feat/x",
+		WorktreePath:    "/repo/feat/x",
+		LFSFetchExclude: []string{"assets/**"},
+		SparseCheckout:  []string{"/*", "!/plans/"},
+	}
+
+	got := result.Format(AddFormatOptions{}).Stdout
+	want := "twig add: feat/x (0 symlinks, 1 lfs excludes, 2 sparse patterns)\n"
+	if got != want {
+		t.Errorf("default stdout = %q, want %q", got, want)
+	}
+
+	verbose := result.Format(AddFormatOptions{Verbose: true}).Stdout
+	for _, line := range []string{
+		"Excluded LFS files: assets/**\n",
+		"Applied sparse checkout: /*, !/plans/\n",
+	} {
+		if !strings.Contains(verbose, line) {
+			t.Errorf("verbose stdout = %q, want to contain %q", verbose, line)
+		}
+	}
+}
+
+func TestAddResult_Format_LFSFetchExcludeInitialOnly(t *testing.T) {
+	t.Parallel()
+
+	const warning = "warning: lfs_fetch_exclude covers the initial checkout only: extensions.worktreeConfig is not enabled\n"
+	for _, initialOnly := range []bool{true, false} {
+		result := AddResult{
+			Branch:                     "feat/x",
+			WorktreePath:               "/repo/feat/x",
+			LFSFetchExclude:            []string{"assets/**"},
+			LFSFetchExcludeInitialOnly: initialOnly,
+		}
+		for _, verbose := range []bool{false, true} {
+			stderr := result.Format(AddFormatOptions{Verbose: verbose}).Stderr
+			if got := strings.Contains(stderr, warning); got != initialOnly {
+				t.Errorf("initialOnly=%v verbose=%v: stderr = %q, contains warning = %v", initialOnly, verbose, stderr, got)
+			}
+		}
+	}
+}
+
+func TestAddCommand_Run_RollbackFailureIsReported(t *testing.T) {
+	t.Parallel()
+
+	exec := &checkoutSettingsExecutor{
+		inner:             &testutil.MockGitExecutor{WorktreeRemoveErr: errors.New("permission denied")},
+		version:           "2.53.0",
+		sparseCheckoutErr: errors.New("sparse-checkout failed"),
+	}
+	cmd := &AddCommand{
+		FS:  &testutil.MockFS{},
+		Git: &GitRunner{Executor: exec, Log: NewNopLogger()},
+		Config: &Config{
+			WorktreeSourceDir:   "/repo/main",
+			WorktreeDestBaseDir: "/repo/main-worktree",
+			SparseCheckout:      []string{"/*"},
+		},
+		Log: NewNopLogger(),
+	}
+
+	_, err := cmd.Run(t.Context(), "feature/rollback")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	for _, want := range []string{"failed to set sparse checkout", "rollback failed", "permission denied"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want containing %q", err, want)
+		}
+	}
+}
+
+func TestPatternOverride(t *testing.T) {
+	t.Parallel()
+
+	configured := []string{"assets/**"}
+	errRejected := errors.New("rejected")
+	rejectX := func(p string) error {
+		if p == "x/**" {
+			return errRejected
+		}
+		return nil
+	}
+	tests := []struct {
+		name         string
+		configured   []string
+		override     PatternOverride
+		want         []string
+		wantErr      error
+		wantDisabled bool
+	}{
+		{name: "zero_value_keeps_config", configured: configured, override: PatternOverride{}, want: configured},
+		{name: "unset_ignores_patterns", configured: configured, override: PatternOverride{Patterns: []string{"y/**"}}, want: configured},
+		{name: "set_replaces_config", configured: configured, override: PatternOverride{Patterns: []string{"y/**"}, Set: true}, want: []string{"y/**"}},
+		{name: "set_without_patterns_disables", configured: configured, override: PatternOverride{Set: true}, want: nil, wantDisabled: true},
+		{name: "validates_override_patterns", configured: configured, override: PatternOverride{Patterns: []string{"x/**"}, Set: true}, wantErr: errRejected},
+		{name: "validates_configured_patterns", configured: []string{"x/**"}, override: PatternOverride{}, wantErr: errRejected},
+		{name: "replaced_config_is_not_validated", configured: []string{"x/**"}, override: PatternOverride{Patterns: []string{"y/**"}, Set: true}, want: []string{"y/**"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tt.override.Resolve(tt.configured, rejectX)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Resolve error = %v, want %v", err, tt.wantErr)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("Resolve = %v, want %v", got, tt.want)
+			}
+			if got := tt.override.Disabled(); got != tt.wantDisabled {
+				t.Errorf("Disabled = %v, want %v", got, tt.wantDisabled)
+			}
+		})
+	}
 }
