@@ -132,8 +132,8 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			t.Fatal("expected error for uncommitted changes without --force")
 		}
 
-		var skipErr *SkipError
-		if !errors.As(err, &skipErr) {
+		skipErr, ok := errors.AsType[*SkipError](err)
+		if !ok {
 			t.Fatalf("expected SkipError, got %T: %v", err, err)
 		}
 		if skipErr.Reason != SkipHasChanges {
@@ -180,8 +180,8 @@ func TestRemoveCommand_Integration(t *testing.T) {
 			t.Fatal("expected error for locked worktree without --force")
 		}
 
-		var skipErr *SkipError
-		if !errors.As(err, &skipErr) {
+		skipErr, ok := errors.AsType[*SkipError](err)
+		if !ok {
 			t.Fatalf("expected SkipError, got %T: %v", err, err)
 		}
 		if skipErr.Reason != SkipLocked {
@@ -242,8 +242,8 @@ func TestRemoveCommand_Integration(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when inside worktree, got nil")
 		}
-		var skipErr *SkipError
-		if !errors.As(err, &skipErr) {
+		skipErr, ok := errors.AsType[*SkipError](err)
+		if !ok {
 			t.Fatalf("expected SkipError, got %T: %v", err, err)
 		}
 		if skipErr.Reason != SkipCurrentDir {
@@ -1240,8 +1240,8 @@ func TestRemoveCommand_Check_Integration(t *testing.T) {
 			t.Fatal("expected error for dirty submodule")
 		}
 
-		var skipErr *SkipError
-		if !errors.As(err, &skipErr) {
+		skipErr, ok := errors.AsType[*SkipError](err)
+		if !ok {
 			t.Fatalf("expected SkipError, got %T: %v", err, err)
 		}
 		if skipErr.Reason != SkipDirtySubmodule {

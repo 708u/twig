@@ -324,10 +324,8 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 		// Launch parallel check.
 		// Each Check() runs git status which is slow for large repos.
 		// Parallelizing gives ~3x speedup.
-		wg.Add(1)
-		go func(idx int, wt Worktree) {
-			defer wg.Done()
-
+		idx := candidateIndex
+		wg.Go(func() {
 			c.Log.DebugContext(ctx, "checking worktree",
 				LogAttrKeyCategory.String(), LogCategoryClean,
 				"branch", wt.Branch,
@@ -386,7 +384,7 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			mu.Lock()
 			candidates = append(candidates, indexedCandidate{index: idx, candidate: candidate})
 			mu.Unlock()
-		}(candidateIndex, wt)
+		})
 		candidateIndex++
 	}
 
@@ -448,10 +446,8 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			continue
 		}
 
-		removeWg.Add(1)
-		go func(idx int, candidate CleanCandidate) {
-			defer removeWg.Done()
-
+		idx := removeIndex
+		removeWg.Go(func() {
 			c.Log.DebugContext(ctx, "removing worktree",
 				LogAttrKeyCategory.String(), LogCategoryClean,
 				"branch", candidate.Branch,
@@ -489,7 +485,7 @@ func (c *CleanCommand) Run(ctx context.Context, cwd string, opts CleanOptions) (
 			removeMu.Lock()
 			removedResult = append(removedResult, indexedRemoved{index: idx, wt: wt})
 			removeMu.Unlock()
-		}(removeIndex, candidate)
+		})
 		removeIndex++
 	}
 

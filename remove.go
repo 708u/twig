@@ -221,12 +221,12 @@ func (r RemoveResult) Format(opts FormatOptions) FormatResult {
 // formatRemoveError formats an error from the remove operation.
 // It shows a short error message, and optionally the detailed git error.
 func formatRemoveError(w *strings.Builder, branch string, err error, verbose bool, changedFiles []FileStatus) {
-	var skipErr *SkipError
-	var gitErr *GitError
+	skipErr, isSkipErr := errors.AsType[*SkipError](err)
+	gitErr, isGitErr := errors.AsType[*GitError](err)
 
 	// Format error message
 	switch {
-	case errors.As(err, &gitErr):
+	case isGitErr:
 		fmt.Fprintf(w, "error: %s: failed to %s\n", branch, gitErr.Op)
 		if verbose && gitErr.Stderr != "" {
 			fmt.Fprintf(w, "       git: %s\n", gitErr.Stderr)
@@ -237,7 +237,7 @@ func formatRemoveError(w *strings.Builder, branch string, err error, verbose boo
 
 	// Show changed files in verbose mode for SkipHasChanges
 	if verbose && len(changedFiles) > 0 {
-		if errors.As(err, &skipErr) && skipErr.Reason == SkipHasChanges {
+		if isSkipErr && skipErr.Reason == SkipHasChanges {
 			fmt.Fprintf(w, "Uncommitted changes:\n")
 			for _, f := range changedFiles {
 				fmt.Fprintf(w, "  %s %s\n", f.Status, f.Path)
@@ -248,14 +248,14 @@ func formatRemoveError(w *strings.Builder, branch string, err error, verbose boo
 	// Format hint based on error type
 	var hint string
 	switch {
-	case errors.As(err, &skipErr):
+	case isSkipErr:
 		switch skipErr.Reason {
 		case SkipHasChanges, SkipNotMerged, SkipDirtySubmodule:
 			hint = "use 'twig remove --force' to force removal"
 		case SkipLocked:
 			hint = "run 'git worktree unlock <path>' first, or use 'twig remove -f -f'"
 		}
-	case errors.As(err, &gitErr):
+	case isGitErr:
 		switch {
 		case strings.Contains(gitErr.Stderr, "modified or untracked files"):
 			hint = "use 'twig remove --force' to force removal"

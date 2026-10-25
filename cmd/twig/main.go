@@ -648,18 +648,16 @@ stop processing of remaining branches.`,
 			results := make([]indexedResult, 0, len(args))
 
 			for i, branch := range args {
-				wg.Add(1)
-				go func(idx int, branch string) {
-					defer wg.Done()
+				wg.Go(func() {
 					wt, err := removeCmdRunner.Run(cmd.Context(), branch, cwd, opts)
 					if err != nil {
 						wt.Branch = branch
 						wt.Err = err
 					}
 					mu.Lock()
-					results = append(results, indexedResult{index: idx, wt: wt})
+					results = append(results, indexedResult{index: i, wt: wt})
 					mu.Unlock()
-				}(i, branch)
+				})
 			}
 			wg.Wait()
 
