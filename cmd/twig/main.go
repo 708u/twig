@@ -132,14 +132,20 @@ func WithCommandIDGenerator(gen func() string) Option {
 const carryFromCurrent = "<current>"
 
 // resolveCarryFrom resolves the --carry flag value to a worktree path.
-// patternOverrideFlags reads --<name> <pattern> and --no-<name> into a
+// patternOverrideFlags reads the patterns flag and the disable flag into a
 // PatternOverride. Without either flag, the configured patterns are kept.
-func patternOverrideFlags(cmd *cobra.Command, name string) (twig.PatternOverride, error) {
-	patterns, _ := cmd.Flags().GetStringArray(name)
-	disable, _ := cmd.Flags().GetBool("no-" + name)
+func patternOverrideFlags(cmd *cobra.Command, patternsFlag, disableFlag string) (twig.PatternOverride, error) {
+	patterns, err := cmd.Flags().GetStringArray(patternsFlag)
+	if err != nil {
+		return twig.PatternOverride{}, err
+	}
+	disable, err := cmd.Flags().GetBool(disableFlag)
+	if err != nil {
+		return twig.PatternOverride{}, err
+	}
 	switch {
 	case len(patterns) > 0 && disable:
-		return twig.PatternOverride{}, fmt.Errorf("--%s cannot be used with --no-%s", name, name)
+		return twig.PatternOverride{}, fmt.Errorf("--%s cannot be used with --%s", patternsFlag, disableFlag)
 	case disable:
 		return twig.PatternOverride{Set: true}, nil
 	case len(patterns) > 0:
@@ -365,11 +371,11 @@ Use --file with --sync or --carry to target specific files:
 			// --submodule-reference forces enable, otherwise use config
 			submoduleReference := cmd.Flags().Changed("submodule-reference")
 
-			lfsFetchExclude, err := patternOverrideFlags(cmd, "lfs-fetch-exclude")
+			lfsFetchExclude, err := patternOverrideFlags(cmd, "lfs-fetch-exclude", "no-lfs-fetch-exclude")
 			if err != nil {
 				return err
 			}
-			sparseCheckout, err := patternOverrideFlags(cmd, "sparse-checkout")
+			sparseCheckout, err := patternOverrideFlags(cmd, "sparse-checkout", "no-sparse-checkout")
 			if err != nil {
 				return err
 			}

@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/708u/twig"
 	"github.com/708u/twig/internal/testutil"
+	"github.com/spf13/cobra"
 )
 
 func TestResolveDirectory(t *testing.T) {
@@ -1547,6 +1549,59 @@ func TestInitCmd(t *testing.T) {
 
 		if !strings.Contains(stdout.String(), "Created") {
 			t.Errorf("stdout = %q, want to contain 'Created'", stdout.String())
+		}
+	})
+}
+
+func TestPatternOverrideFlags(t *testing.T) {
+	t.Parallel()
+
+	newCmd := func(args ...string) *cobra.Command {
+		cmd := &cobra.Command{Use: "test"}
+		cmd.Flags().StringArray("patterns", nil, "")
+		cmd.Flags().Bool("no-patterns", false, "")
+		if err := cmd.Flags().Parse(args); err != nil {
+			t.Fatal(err)
+		}
+		return cmd
+	}
+
+	tests := []struct {
+		name    string
+		args    []string
+		want    twig.PatternOverride
+		wantErr string
+	}{
+		{name: "neither_flag", want: twig.PatternOverride{}},
+		{name: "patterns", args: []string{"--patterns", "a/**", "--patterns", "b/**"}, want: twig.PatternOverride{Patterns: []string{"a/**", "b/**"}, Set: true}},
+		{name: "disable", args: []string{"--no-patterns"}, want: twig.PatternOverride{Set: true}},
+		{name: "both", args: []string{"--patterns", "a/**", "--no-patterns"}, wantErr: "--patterns cannot be used with --no-patterns"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := patternOverrideFlags(newCmd(tt.args...), "patterns", "no-patterns")
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("err = %v, want containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Set != tt.want.Set || !slices.Equal(got.Patterns, tt.want.Patterns) {
+				t.Errorf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("unknown_flag_name_is_an_error", func(t *testing.T) {
+		t.Parallel()
+
+		if _, err := patternOverrideFlags(newCmd(), "patterns", "no-pattern"); err == nil {
+			t.Error("expected an error for a flag that is not registered")
 		}
 	})
 }
