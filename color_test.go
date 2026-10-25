@@ -1,89 +1,64 @@
 package twig
 
 import (
+	"strings"
 	"testing"
-
-	"github.com/fatih/color"
 )
 
-func TestSetColorMode(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name        string
-		mode        ColorMode
-		wantNoColor bool
-	}{
-		{
-			name:        "always_enables_color",
-			mode:        ColorModeAlways,
-			wantNoColor: false,
-		},
-		{
-			name:        "never_disables_color",
-			mode:        ColorModeNever,
-			wantNoColor: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Save original state
-			original := color.NoColor
-			defer func() { color.NoColor = original }()
-
-			SetColorMode(tt.mode)
-
-			if color.NoColor != tt.wantNoColor {
-				t.Errorf("color.NoColor = %v, want %v", color.NoColor, tt.wantNoColor)
-			}
-		})
-	}
-}
-
-func TestIsColorEnabled(t *testing.T) {
+func TestColorMode_Enabled(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name     string
-		noColor  bool
-		wantBool bool
+		mode     ColorMode
+		detected bool
+		want     bool
 	}{
 		{
-			name:     "returns_true_when_color_enabled",
-			noColor:  false,
-			wantBool: true,
+			name:     "always_enables_color_without_tty",
+			mode:     ColorModeAlways,
+			detected: false,
+			want:     true,
 		},
 		{
-			name:     "returns_false_when_color_disabled",
-			noColor:  true,
-			wantBool: false,
+			name:     "never_disables_color_with_tty",
+			mode:     ColorModeNever,
+			detected: true,
+			want:     false,
+		},
+		{
+			name:     "auto_follows_detection_enabled",
+			mode:     ColorModeAuto,
+			detected: true,
+			want:     true,
+		},
+		{
+			name:     "auto_follows_detection_disabled",
+			mode:     ColorModeAuto,
+			detected: false,
+			want:     false,
+		},
+		{
+			name:     "unknown_mode_follows_detection",
+			mode:     ColorMode("unknown"),
+			detected: true,
+			want:     true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save original state
-			original := color.NoColor
-			defer func() { color.NoColor = original }()
+			t.Parallel()
 
-			color.NoColor = tt.noColor
-			got := IsColorEnabled()
-
-			if got != tt.wantBool {
-				t.Errorf("IsColorEnabled() = %v, want %v", got, tt.wantBool)
+			if got := tt.mode.enabled(tt.detected); got != tt.want {
+				t.Errorf("enabled(%v) = %v, want %v", tt.detected, got, tt.want)
 			}
 		})
 	}
 }
 
 func TestColorFunctions(t *testing.T) {
-	// Save original state
-	original := color.NoColor
-	defer func() { color.NoColor = original }()
-
-	// Test with color enabled
-	color.NoColor = false
+	t.Parallel()
 
 	tests := []struct {
 		name string
@@ -99,28 +74,16 @@ func TestColorFunctions(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name+"_with_color", func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := tt.fn(tt.text)
-			// With color enabled, result should contain ANSI codes
+			// Color functions add ANSI codes regardless of color.NoColor
 			if result == tt.text {
-				t.Errorf("%s should add ANSI codes when color is enabled", tt.name)
+				t.Errorf("%s should add ANSI codes", tt.name)
 			}
-			// Result should still contain the original text
-			if len(result) < len(tt.text) {
+			if !strings.Contains(result, tt.text) {
 				t.Errorf("%s result should contain original text", tt.name)
-			}
-		})
-	}
-
-	// Test with color disabled
-	color.NoColor = true
-
-	for _, tt := range tests {
-		t.Run(tt.name+"_without_color", func(t *testing.T) {
-			result := tt.fn(tt.text)
-			// With color disabled, result should equal original text
-			if result != tt.text {
-				t.Errorf("%s() = %q, want %q when color disabled", tt.name, result, tt.text)
 			}
 		})
 	}

@@ -13,34 +13,42 @@ const (
 
 var (
 	// Section headers
-	colorClean = color.New(color.FgGreen, color.Bold).SprintFunc()
-	colorSkip  = color.New(color.FgYellow, color.Bold).SprintFunc()
+	colorClean = newColorFunc(color.FgGreen, color.Bold)
+	colorSkip  = newColorFunc(color.FgYellow, color.Bold)
 
 	// Status markers
-	colorSuccess = color.New(color.FgGreen).SprintFunc() // ✓
-	colorFailure = color.New(color.FgRed).SprintFunc()   // ✗
+	colorSuccess = newColorFunc(color.FgGreen) // ✓
+	colorFailure = newColorFunc(color.FgRed)   // ✗
 
 	// Reasons
-	colorReason = color.New(color.FgHiBlack).SprintFunc() // (merged)
+	colorReason = newColorFunc(color.FgHiBlack) // (merged)
 
 	// Errors
-	colorError = color.New(color.FgRed).SprintFunc()
+	colorError = newColorFunc(color.FgRed)
 )
 
-// SetColorMode configures color output based on mode.
-func SetColorMode(mode ColorMode) {
-	switch mode {
-	case ColorModeAlways:
-		color.NoColor = false
-	case ColorModeNever:
-		color.NoColor = true
-	case ColorModeAuto:
-		// Use fatih/color default behavior (TTY detection)
-	}
+// newColorFunc ignores the global color.NoColor, so FormatOptions.ColorEnabled
+// alone decides whether output is colored.
+func newColorFunc(attrs ...color.Attribute) func(a ...any) string {
+	c := color.New(attrs...)
+	c.EnableColor()
+	return c.SprintFunc()
 }
 
-// IsColorEnabled returns whether color output is enabled.
-// This should be called after SetColorMode.
-func IsColorEnabled() bool {
-	return !color.NoColor
+// Enabled reports whether output should be colored in mode. ColorModeAuto
+// follows fatih/color's detection of NO_COLOR, TERM=dumb, and whether stdout
+// is a terminal.
+func (m ColorMode) Enabled() bool {
+	return m.enabled(!color.NoColor)
+}
+
+func (m ColorMode) enabled(detected bool) bool {
+	switch m {
+	case ColorModeAlways:
+		return true
+	case ColorModeNever:
+		return false
+	default:
+		return detected
+	}
 }
