@@ -1112,29 +1112,47 @@ func (g *GitRunner) MainWorktreePath(ctx context.Context) (string, error) {
 	return filepath.Dir(gitDir), nil
 }
 
+// GitVersion is a git release, compared by major and minor version.
+type GitVersion struct {
+	Major int
+	Minor int
+}
+
+// AtLeast reports whether v is required or later.
+func (v GitVersion) AtLeast(required GitVersion) bool {
+	return v.Major > required.Major || (v.Major == required.Major && v.Minor >= required.Minor)
+}
+
+func (v GitVersion) String() string {
+	return fmt.Sprintf("%d.%d", v.Major, v.Minor)
+}
+
 // Version returns the major and minor version of git.
-func (g *GitRunner) Version(ctx context.Context) (major, minor int, err error) {
+func (g *GitRunner) Version(ctx context.Context) (GitVersion, error) {
 	out, err := g.Run(ctx, GitCmdVersion)
 	if err != nil {
-		return 0, 0, err
+		return GitVersion{}, err
 	}
+	unexpected := fmt.Errorf("unexpected git version output: %q", out)
 	// Vendor builds append suffixes: "git version 2.39.5 (Apple Git-154)",
 	// "git version 2.45.1.windows.1".
 	fields := strings.Fields(string(out))
 	if len(fields) < 3 {
-		return 0, 0, fmt.Errorf("unexpected git version output: %q", out)
+		return GitVersion{}, unexpected
 	}
 	parts := strings.Split(fields[2], ".")
 	if len(parts) < 2 {
-		return 0, 0, fmt.Errorf("unexpected git version output: %q", out)
+		return GitVersion{}, unexpected
 	}
-	if major, err = strconv.Atoi(parts[0]); err != nil {
-		return 0, 0, fmt.Errorf("unexpected git version output: %q", out)
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return GitVersion{}, unexpected
 	}
-	if minor, err = strconv.Atoi(parts[1]); err != nil {
-		return 0, 0, fmt.Errorf("unexpected git version output: %q", out)
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return GitVersion{}, unexpected
 	}
-	return major, minor, nil
+	return GitVersion{Major: major, Minor: minor}, nil
 }
 
 // SparseCheckoutSet sets non-cone sparse checkout patterns for the worktree.

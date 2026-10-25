@@ -12,19 +12,15 @@ import (
 
 const lfsFetchExcludeKey = "lfs.fetchexclude"
 
-// Older git enables extensions.worktreeConfig in git sparse-checkout set
-// without moving core.bare and core.worktree to the main worktree's config,
-// which breaks bare-repository layouts.
-const (
-	minSparseGitMajor = 2
-	minSparseGitMinor = 36
-)
+var (
+	// Older git enables extensions.worktreeConfig in git sparse-checkout set
+	// without moving core.bare and core.worktree to the main worktree's
+	// config, which breaks bare-repository layouts.
+	minSparseCheckoutGit = GitVersion{Major: 2, Minor: 36}
 
-// Version from which git worktree add copies the source worktree's
-// config.worktree.
-const (
-	minConfigCopyGitMajor = 2
-	minConfigCopyGitMinor = 36
+	// Version from which git worktree add copies the source worktree's
+	// config.worktree.
+	minConfigCopyGit = GitVersion{Major: 2, Minor: 36}
 )
 
 // PatternOverride overrides a pattern setting for one twig add run. The zero
@@ -65,7 +61,7 @@ type AddCommand struct {
 	LFSFetchExclude    PatternOverride
 	SparseCheckout     PatternOverride
 
-	gitVersion *[2]int // major and minor, cached by gitAtLeast
+	gitVersion GitVersion // cached by version; the zero value means not read yet
 }
 
 // AddOptions holds options for the add command.
@@ -308,13 +304,12 @@ func (c *AddCommand) Run(ctx context.Context, name string) (AddResult, error) {
 		}
 	}
 	if len(sparseCheckout) > 0 {
-		ok, found, err := c.gitAtLeast(ctx, minSparseGitMajor, minSparseGitMinor)
+		v, err := c.version(ctx)
 		if err != nil {
 			return result, err
 		}
-		if !ok {
-			return result, fmt.Errorf("sparse_checkout requires git %d.%d or later (found %s)",
-				minSparseGitMajor, minSparseGitMinor, found)
+		if !v.AtLeast(minSparseCheckoutGit) {
+			return result, fmt.Errorf("sparse_checkout requires git %s or later (found %s)", minSparseCheckoutGit, v)
 		}
 	}
 
@@ -656,26 +651,24 @@ func rollbackError(err, rollbackErr error) error {
 	return fmt.Errorf("%w (rollback failed: %v)", err, rollbackErr)
 }
 
-// gitAtLeast reports whether git is major.minor or later, along with the
-// version found. The version is read once per AddCommand.
-func (c *AddCommand) gitAtLeast(ctx context.Context, major, minor int) (bool, string, error) {
-	if c.gitVersion == nil {
-		gotMajor, gotMinor, err := c.Git.Version(ctx)
+// version returns the git version, reading it once per AddCommand. No git
+// release has major version 0, so the zero value marks it as unread.
+func (c *AddCommand) version(ctx context.Context) (GitVersion, error) {
+	if c.gitVersion == (GitVersion{}) {
+		v, err := c.Git.Version(ctx)
 		if err != nil {
-			return false, "", fmt.Errorf("failed to check git version: %w", err)
+			return GitVersion{}, fmt.Errorf("failed to check git version: %w", err)
 		}
-		c.gitVersion = &[2]int{gotMajor, gotMinor}
+		c.gitVersion = v
 	}
-	gotMajor, gotMinor := c.gitVersion[0], c.gitVersion[1]
-	ok := gotMajor > major || (gotMajor == major && gotMinor >= minor)
-	return ok, fmt.Sprintf("%d.%d", gotMajor, gotMinor), nil
+	return c.gitVersion, nil
 }
 
 // inheritedCheckoutConfig returns the checkout settings git worktree add will
 // copy from the source worktree. Older git copies nothing.
 func (c *AddCommand) inheritedCheckoutConfig(ctx context.Context) (WorktreeCheckoutConfig, error) {
-	copies, _, err := c.gitAtLeast(ctx, minConfigCopyGitMajor, minConfigCopyGitMinor)
-	if err != nil || !copies {
+	v, err := c.version(ctx)
+	if err != nil || !v.AtLeast(minConfigCopyGit) {
 		return WorktreeCheckoutConfig{}, err
 	}
 	inherited, err := c.Git.WorktreeCheckoutConfig(ctx)

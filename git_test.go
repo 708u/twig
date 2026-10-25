@@ -479,3 +479,67 @@ func TestGitRunner_IsBranchMerged_WithSquashMerge(t *testing.T) {
 		})
 	}
 }
+
+func TestGitRunner_Version(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		output  string
+		want    GitVersion
+		wantErr bool
+	}{
+		{output: "git version 2.53.0\n", want: GitVersion{Major: 2, Minor: 53}},
+		{output: "git version 2.39.5 (Apple Git-154)\n", want: GitVersion{Major: 2, Minor: 39}},
+		{output: "git version 2.45.1.windows.1\n", want: GitVersion{Major: 2, Minor: 45}},
+		{output: "git version\n", wantErr: true},
+		{output: "git version 2\n", wantErr: true},
+		{output: "git version x.y.z\n", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.output, func(t *testing.T) {
+			t.Parallel()
+
+			mock := &testutil.MockGitExecutor{
+				RunFunc: func(ctx context.Context, args ...string) ([]byte, error) {
+					return []byte(tt.output), nil
+				},
+			}
+			git := &GitRunner{Executor: mock, Log: NewNopLogger()}
+
+			got, err := git.Version(t.Context())
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("Version = %v, want error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("Version = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGitVersion_AtLeast(t *testing.T) {
+	t.Parallel()
+
+	required := GitVersion{Major: 2, Minor: 36}
+	tests := []struct {
+		v    GitVersion
+		want bool
+	}{
+		{v: GitVersion{Major: 2, Minor: 35}, want: false},
+		{v: GitVersion{Major: 2, Minor: 36}, want: true},
+		{v: GitVersion{Major: 2, Minor: 53}, want: true},
+		{v: GitVersion{Major: 3, Minor: 0}, want: true},
+		{v: GitVersion{Major: 1, Minor: 99}, want: false},
+	}
+	for _, tt := range tests {
+		if got := tt.v.AtLeast(required); got != tt.want {
+			t.Errorf("%v.AtLeast(%v) = %v, want %v", tt.v, required, got, tt.want)
+		}
+	}
+}
