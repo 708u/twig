@@ -229,11 +229,12 @@ func newRootCmd(opts ...Option) *cobra.Command {
 	}
 
 	var (
-		cfg         *twig.Config
-		cwd         string
-		originalCwd string
-		dirFlag     string
-		colorFlag   string
+		cfg          *twig.Config
+		cwd          string
+		originalCwd  string
+		dirFlag      string
+		colorFlag    string
+		colorEnabled bool
 	)
 
 	resolveCompletionDirectory := func(cmd *cobra.Command) (string, error) {
@@ -263,8 +264,7 @@ func newRootCmd(opts ...Option) *cobra.Command {
 				return err
 			}
 
-			// Set color mode based on flag
-			twig.SetColorMode(twig.ColorMode(colorFlag))
+			colorEnabled = twig.ColorMode(colorFlag).Enabled()
 
 			result, err := loadConfigWithMainWorktree(cmd.Context(), cwd)
 			if err != nil {
@@ -522,7 +522,7 @@ Safety checks (all must pass):
 			if check || result.CleanableCount() == 0 {
 				formatted := result.Format(twig.FormatOptions{
 					Verbose:      verbose,
-					ColorEnabled: twig.IsColorEnabled(),
+					ColorEnabled: colorEnabled,
 				})
 				if formatted.Stderr != "" {
 					fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
@@ -534,7 +534,7 @@ Safety checks (all must pass):
 			// Show candidates
 			formatted := result.Format(twig.FormatOptions{
 				Verbose:      verbose,
-				ColorEnabled: twig.IsColorEnabled(),
+				ColorEnabled: colorEnabled,
 			})
 			if formatted.Stderr != "" {
 				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)
@@ -569,7 +569,7 @@ Safety checks (all must pass):
 
 			formatted = result.Format(twig.FormatOptions{
 				Verbose:      verbose,
-				ColorEnabled: twig.IsColorEnabled(),
+				ColorEnabled: colorEnabled,
 			})
 			if formatted.Stderr != "" {
 				fmt.Fprint(cmd.ErrOrStderr(), formatted.Stderr)

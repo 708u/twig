@@ -786,6 +786,18 @@ func TestCleanResult_Format(t *testing.T) {
 			wantStdout: "clean:\n  feat/a (merged)\n\nskip:\n  feat/b\n    ✗ not merged\n",
 			wantStderr: "",
 		},
+		{
+			name: "color_enabled_adds_ansi_codes",
+			result: CleanResult{
+				Candidates: []CleanCandidate{
+					{Branch: "feat/a", Skipped: false, CleanReason: CleanMerged},
+				},
+				Check: true,
+			},
+			opts:       FormatOptions{ColorEnabled: true},
+			wantStdout: "\x1b[32;1mclean:\x1b[0;22m\n  feat/a \x1b[90m(merged)\x1b[0m\n",
+			wantStderr: "",
+		},
 	}
 
 	for _, tt := range tests {
