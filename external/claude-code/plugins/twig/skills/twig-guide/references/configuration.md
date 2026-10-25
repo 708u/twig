@@ -152,11 +152,17 @@ checkout excludes the files, and `twig add` prints a warning.
 To fetch excluded files later, run in the worktree:
 
 ```bash
+# Some paths, keeping the exclusion for later checkouts
 git lfs pull -I '<path>' -X ''
+
+# Every file, and stop excluding in this worktree
+git config --worktree --unset-all lfs.fetchexclude
+git lfs pull
 ```
 
 `-X ''` is required because the worktree config would otherwise exclude
-the path again.
+the path again. Worktrees share LFS objects, so `git lfs checkout` can
+replace `git lfs pull` when the objects are already stored locally.
 
 `twig add --lfs-fetch-exclude <pattern>` replaces the patterns and
 `twig add --no-lfs-fetch-exclude` disables the setting for one run.
@@ -178,6 +184,16 @@ Patterns use the gitignore-style syntax of `git sparse-checkout set
 `git sparse-checkout set` enables `extensions.worktreeConfig` in the
 shared repository config (`.git/config`). The setting applies to every
 worktree of the repository, and git understands it since 2.20.
+
+To check out excluded paths later, run in the worktree:
+
+```bash
+# One path; the added pattern overrides the earlier exclusion
+git sparse-checkout add /docs/archive/
+
+# Every path
+git sparse-checkout disable
+```
 
 `twig add --sparse-checkout <pattern>` replaces the patterns and
 `twig add --no-sparse-checkout` disables the setting for one run.
