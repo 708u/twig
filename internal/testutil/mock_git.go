@@ -475,8 +475,8 @@ func (m *MockGitExecutor) handleForEachRef(args []string) ([]byte, error) {
 	format := ""
 	ref := ""
 	for i, arg := range args {
-		if strings.HasPrefix(arg, "--format=") {
-			format = strings.TrimPrefix(arg, "--format=")
+		if after, ok := strings.CutPrefix(arg, "--format="); ok {
+			format = after
 		}
 		if i >= 2 && !strings.HasPrefix(arg, "--") {
 			ref = arg
@@ -695,8 +695,8 @@ func (m *MockGitExecutor) handleDiff(args []string) ([]byte, error) {
 	// Expected args: ["diff", "--name-only", "--diff-filter=X", "from", "to"]
 	var filter, fromRef, toRef string
 	for _, arg := range args[1:] {
-		if strings.HasPrefix(arg, "--diff-filter=") {
-			filter = strings.TrimPrefix(arg, "--diff-filter=")
+		if after, ok := strings.CutPrefix(arg, "--diff-filter="); ok {
+			filter = after
 		} else if !strings.HasPrefix(arg, "--") {
 			if fromRef == "" {
 				fromRef = arg

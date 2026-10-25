@@ -130,8 +130,7 @@ func newGitError(op GitOp, err error) *GitError {
 
 // gitStderr returns the trimmed stderr captured in an exec.ExitError.
 func gitStderr(err error) string {
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return strings.TrimSpace(string(exitErr.Stderr))
 	}
 	return ""
@@ -146,11 +145,17 @@ func withGitStderr(err error) error {
 	return err
 }
 
+// exitCodeError is an error from a git process that ran and exited non-zero.
+type exitCodeError interface {
+	error
+	ExitCode() int
+}
+
 // isExitCode reports whether err is git exiting with code, as opposed to
 // failing to run.
 func isExitCode(err error, code int) bool {
-	var exitErr interface{ ExitCode() int }
-	return errors.As(err, &exitErr) && exitErr.ExitCode() == code
+	exitErr, ok := errors.AsType[exitCodeError](err)
+	return ok && exitErr.ExitCode() == code
 }
 
 // GitRunner provides git operations using GitExecutor.
@@ -300,8 +305,7 @@ func (g *GitRunner) LocalBranchExists(ctx context.Context, branch string) (bool,
 	_, err := g.Run(ctx, GitCmdRevParse, "--verify", RefsHeadsPrefix+branch)
 	if err != nil {
 		// git rev-parse returns exit code 128 for non-existent refs
-		var exitErr interface{ ExitCode() int }
-		if errors.As(err, &exitErr) {
+		if _, ok := errors.AsType[exitCodeError](err); ok {
 			// ExitError means git ran but ref doesn't exist
 			return false, nil
 		}
@@ -318,7 +322,7 @@ func (g *GitRunner) BranchList(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	var branches []string
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
 		if line != "" {
 			branches = append(branches, line)
 		}
@@ -337,13 +341,13 @@ func (g *GitRunner) FindRemotesForBranch(ctx context.Context, branch string) ([]
 	}
 
 	remotes := []string{}
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		if line == "" {
 			continue
 		}
 		// Extract "origin" from "origin/branch"
-		if idx := strings.Index(line, "/"); idx > 0 {
-			remotes = append(remotes, line[:idx])
+		if remote, _, found := strings.Cut(line, "/"); found && remote != "" {
+			remotes = append(remotes, remote)
 		}
 	}
 	return remotes, nil
@@ -417,7 +421,7 @@ func (g *GitRunner) WorktreeList(ctx context.Context) ([]Worktree, error) {
 
 	var worktrees []Worktree
 	var current Worktree
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		switch {
 		case strings.HasPrefix(line, PorcelainWorktreePrefix):
 			current = Worktree{Path: strings.TrimPrefix(line, PorcelainWorktreePrefix)}
@@ -578,7 +582,7 @@ func (g *GitRunner) changedFiles(ctx context.Context, untrackedMode string) ([]F
 	}
 
 	files := make([]FileStatus, 0)
-	for _, line := range strings.Split(string(output), "\n") {
+	for line := range strings.SplitSeq(string(output), "\n") {
 		if len(line) < 3 {
 			continue
 		}
@@ -586,8 +590,8 @@ func (g *GitRunner) changedFiles(ctx context.Context, untrackedMode string) ([]F
 		status := line[:2]
 		path := strings.TrimSpace(line[2:])
 		// Handle renamed files "old -> new"
-		if idx := strings.Index(path, " -> "); idx != -1 {
-			path = path[idx+4:]
+		if _, renamed, found := strings.Cut(path, " -> "); found {
+			path = renamed
 		}
 		files = append(files, FileStatus{Status: status, Path: path})
 	}

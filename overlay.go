@@ -540,7 +540,7 @@ func mergeUnique(a, b []string) []string {
 // splitNonEmpty splits a newline-separated string and removes empty entries.
 func splitNonEmpty(s string) []string {
 	var result []string
-	for _, line := range strings.Split(strings.TrimSpace(s), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(s), "\n") {
 		if line != "" {
 			result = append(result, line)
 		}
